@@ -17,7 +17,7 @@ import {
 } from "@lucide/vue";
 import { api } from "../api";
 import type { Overview } from "../types";
-import { money, date, positive } from "../format";
+import { money, signedMoney, date, positive } from "../format";
 import AccountTable from "../components/AccountTable.vue";
 const search = ref("");
 const { data, error, isPending, isFetching, refetch } = useQuery({
@@ -119,7 +119,7 @@ const healthy = computed(
               negative: known && !positive(total.floating_net_profit),
             }"
           >
-            {{ known ? money(total.floating_net_profit) : "—"
+            {{ known ? signedMoney(total.floating_net_profit) : "—"
             }}<small>USD</small>
           </div>
           <p class="metric-note">含当前持仓的佣金、隔夜费及税费</p>
@@ -139,7 +139,7 @@ const healthy = computed(
       <div class="sampling-note">
         <Info :size="15" />
         <p>
-          美元小计仅纳入已确认的 USD / USC，账户净值含信用金。{{
+          美元小计仅纳入已确认的 USD / USC（100 USC = 1 USD），账户净值含信用金。{{
             data.missing_count ? `${data.missing_count} 个账户缺少快照；` : ""
           }}{{
             data.excluded_usd_count
@@ -184,12 +184,12 @@ const healthy = computed(
           <div class="panel-heading">
             <div>
               <h2>原币资金</h2>
-              <p class="muted small">独立展示，不将其他币种混入美元小计。</p>
+              <p class="muted small">按账户原币汇总净值，USC 保留美分原值。</p>
             </div>
             <span class="icon-box subtle"><CircleDollarSign :size="20" /></span>
           </div>
           <div v-if="!data.currency_totals.length" class="empty-inline">
-            完成币种确认和首次采集后，在这里查看原币资金。
+            首次完整采集后，在这里查看各币种的原始净值。
           </div>
           <div
             v-for="item in data.currency_totals"
@@ -216,8 +216,8 @@ const healthy = computed(
             <div class="text-right num">
               <strong>{{
                 item.included_accounts ? money(item.equity) : "—"
-              }}</strong
-              ><small>最近已知净值</small>
+              }} {{ item.currency }}</strong
+              ><small>最近已知净值 · 未换算</small>
             </div>
           </div>
         </div>

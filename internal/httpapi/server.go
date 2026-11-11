@@ -123,12 +123,14 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/servers/{id}/discovered-endpoints", s.protected(s.newDiscoveredEndpoint))
 	s.mux.HandleFunc("POST /api/servers", s.protected(s.createServer))
 	s.mux.HandleFunc("POST /api/servers/{id}/endpoints", s.protected(s.newEndpoint))
+	s.mux.HandleFunc("PUT /api/servers/{id}/time-zone", s.protected(s.confirmServerTime))
 	s.mux.HandleFunc("POST /api/endpoints/{id}/review", s.protected(s.review))
 	s.mux.HandleFunc("GET /api/accounts", s.protected(s.list))
 	s.mux.HandleFunc("POST /api/accounts", s.protected(s.createAccount))
 	s.mux.HandleFunc("GET /api/accounts/{id}", s.protected(s.detail))
 	s.mux.HandleFunc("PATCH /api/accounts/{id}", s.protected(s.patchAccount))
 	s.mux.HandleFunc("POST /api/accounts/{id}/sync", s.protected(s.syncAccount))
+	s.mux.HandleFunc("POST /api/accounts/{id}/daily/sync", s.protected(s.syncDaily))
 	s.mux.HandleFunc("GET /api/accounts/{id}/snapshots", s.protected(s.snapshots))
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		s.protected(func(w http.ResponseWriter, r *http.Request) {
@@ -215,6 +217,8 @@ func fail(w http.ResponseWriter, err error) {
 	case errors.Is(err, discovery.ErrUnavailable):
 		code, message = 502, err.Error()
 	case errors.Is(err, accounts.ErrEndpoint), errors.Is(err, accounts.ErrTarget), errors.Is(err, accounts.ErrPaused):
+		code, message = 409, err.Error()
+	case errors.Is(err, accounts.ErrServerTime):
 		code, message = 409, err.Error()
 	case errors.Is(err, vault.ErrUnavailable), errors.Is(err, vault.ErrDecrypt):
 		code, message = 503, "凭据密钥不可用，已停止接入；请检查独立密钥文件"

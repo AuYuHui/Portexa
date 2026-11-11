@@ -9,7 +9,7 @@ import {
 } from "@tanstack/vue-table";
 import { ArrowUpRight, Wallet, Plus } from "@lucide/vue";
 import type { Account } from "../types";
-import { money, date, positive } from "../format";
+import { money, signedMoney, date, positive, dailyLabel } from "../format";
 import StatusBadge from "./StatusBadge.vue";
 const props = defineProps<{ accounts: Account[]; search: string }>();
 const filtered = computed(() =>
@@ -19,6 +19,21 @@ const filtered = computed(() =>
       .includes(props.search.toLowerCase()),
   ),
 );
+function dailyCell(account: Account, field: "net_profit" | "balance_change") {
+  const daily = account.daily;
+  if (!daily) return "—";
+  const value = daily.report?.[field];
+  const label = dailyLabel(daily.state, daily.stale);
+  return h("span", {}, [
+    h(
+      "strong",
+      { class: value ? (positive(value) ? "positive" : "negative") : "" },
+      signedMoney(value),
+    ),
+    h("small", { class: "cell-note muted", title: `${daily.date} ${daily.time_zone}` },
+      daily.report ? `${daily.date}${daily.state !== "succeeded" || daily.stale ? ` · ${label}` : ""}` : label),
+  ]);
+}
 const columns: ColumnDef<Account>[] = [
   {
     id: "account",
@@ -74,8 +89,18 @@ const columns: ColumnDef<Account>[] = [
               : "negative"
             : "",
         },
-        money(a.snapshot?.floating_net_profit),
+        signedMoney(a.snapshot?.floating_net_profit),
       ),
+  },
+  {
+    id: "daily_profit",
+    header: "当日利润",
+    cell: ({ row: { original: a } }) => dailyCell(a, "net_profit"),
+  },
+  {
+    id: "daily_balance",
+    header: "当日结余",
+    cell: ({ row: { original: a } }) => dailyCell(a, "balance_change"),
   },
   {
     id: "state",
@@ -121,7 +146,7 @@ const table = useVueTable({
             v-for="header in group.headers"
             :key="header.id"
             :class="{
-              'text-right': ['balance', 'equity', 'profit'].includes(
+              'text-right': ['balance', 'equity', 'profit', 'daily_profit', 'daily_balance'].includes(
                 header.column.id,
               ),
             }"
@@ -139,7 +164,7 @@ const table = useVueTable({
             v-for="cell in row.getVisibleCells()"
             :key="cell.id"
             :class="{
-              'text-right num': ['balance', 'equity', 'profit'].includes(
+              'text-right num': ['balance', 'equity', 'profit', 'daily_profit', 'daily_balance'].includes(
                 cell.column.id,
               ),
             }"

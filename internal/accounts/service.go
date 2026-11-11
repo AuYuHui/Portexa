@@ -111,9 +111,11 @@ func (s *Service) createServer(ctx context.Context, input ServerInput, approval 
 		}
 		if input.TimeZone != "" {
 			rules, _ := json.Marshal([]map[string]any{{"from_utc_ms": now, "until_utc_ms": nil, "kind": "iana", "zone": input.TimeZone, "source_ref": "用户登记，尚未核验"}})
-			return tx.Exec("INSERT INTO server_time_rule_sets (id, server_id, revision, rules_json, created_at_ms) VALUES (?, ?, 1, ?, ?)", storage.NewID(), server.ID, string(rules), now).Error
+			if err := tx.Exec("INSERT INTO server_time_rule_sets (id, server_id, revision, rules_json, created_at_ms) VALUES (?, ?, 1, ?, ?)", storage.NewID(), server.ID, string(rules), now).Error; err != nil {
+				return err
+			}
 		}
-		return nil
+		return ensureAutomaticTime(tx, &server, s.Now())
 	})
 	return server, endpoint, err
 }
@@ -153,7 +155,10 @@ func (s *Service) newEndpoint(ctx context.Context, serverID string, input Endpoi
 		if err := tx.Model(&storage.Account{}).Where("server_id = ?", serverID).Updates(map[string]any{"sync_enabled": false, "config_version": gorm.Expr("config_version + 1")}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&endpoint).Error
+		if err := tx.Create(&endpoint).Error; err != nil {
+			return err
+		}
+		return refreshClockCalibration(tx, &server, s.Now())
 	})
 	return endpoint, paused, err
 }
@@ -284,6 +289,7 @@ func (s *Service) UpdateAccount(ctx context.Context, id string, patch AccountPat
 			account.Label = strings.TrimSpace(*patch.Label)
 		}
 		oldEndpoint := account.PinnedEndpointID
+		oldUnitRevision, wasEnabled := account.UnitRevision, account.SyncEnabled
 		if patch.EndpointID != nil {
 			account.PinnedEndpointID = *patch.EndpointID
 		}
@@ -345,11 +351,26 @@ func (s *Service) UpdateAccount(ctx context.Context, id string, patch AccountPat
 			}
 		}
 		account.ConfigVersion++
-		return tx.Model(&storage.Account{}).Where("id = ?", id).Updates(map[string]any{
+		dailyPaused, dailyFailures := account.DailySyncPaused, account.DailyFailureCount
+		clockPaused, clockFailures := account.ClockSyncPaused, account.ClockFailureCount
+		if patch.Password != nil || account.PinnedEndpointID != oldEndpoint || account.UnitRevision != oldUnitRevision || (!wasEnabled && account.SyncEnabled) {
+			dailyPaused, dailyFailures = false, 0
+			clockPaused, clockFailures = false, 0
+		}
+		if err := tx.Model(&storage.Account{}).Where("id = ?", id).Updates(map[string]any{
 			"label": account.Label, "pinned_endpoint_id": account.PinnedEndpointID, "credential_envelope": account.CredentialEnvelope,
 			"credential_key_id": account.CredentialKeyID, "credential_version": account.CredentialVersion, "config_version": account.ConfigVersion,
 			"currency": account.Currency, "usd_scale": account.USDScale, "unit_revision": account.UnitRevision, "unit_verified_at_ms": account.UnitVerifiedAtMS,
 			"sync_enabled": account.SyncEnabled, "next_sync_at_ms": now, "failure_count": 0,
-		}).Error
+			"next_daily_sync_at_ms": 0, "daily_failure_count": dailyFailures, "daily_sync_paused": dailyPaused,
+			"next_clock_sync_at_ms": 0, "clock_failure_count": clockFailures, "clock_sync_paused": clockPaused,
+		}).Error; err != nil {
+			return err
+		}
+		var server storage.Server
+		if err := tx.First(&server, "id = ?", account.ServerID).Error; err != nil {
+			return err
+		}
+		return refreshClockCalibration(tx, &server, s.Now())
 	})
 }

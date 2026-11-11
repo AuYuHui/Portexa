@@ -10,7 +10,6 @@ const broker = ref("");
 const name = ref("");
 const address = ref("");
 const port = ref(443);
-const zone = ref("");
 const busy = ref(false);
 const error = ref("");
 async function submit() {
@@ -28,7 +27,6 @@ async function submit() {
         server_name: name.value,
         ip_address: address.value,
         port: port.value,
-        time_zone: zone.value,
       });
     }
     await refreshAccounts();
@@ -76,14 +74,6 @@ async function submit() {
           max="65535"
       /></label>
     </div>
-    <label v-if="!server" class="field"
-      >服务器时区（可选）<input
-        v-model="zone"
-        placeholder="例如：Europe/Helsinki"
-      /><small
-        >仅登记线索，未核验前仍按服务器墙钟展示，不用于日报或月报。</small
-      ></label
-    >
     <p class="muted small">
       保存只登记配置，不发送账户凭据。下一步须登记独立核验依据并确认该修订的剩余风险。
     </p>

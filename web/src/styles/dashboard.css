@@ -101,6 +101,11 @@
   background: #eff6ff;
   border: 1px solid #bfdbfe;
 }
+.badge-danger {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
 .badge-neutral {
   color: #475569;
   background: #f1f5f9;
@@ -112,20 +117,44 @@
   border: 1px solid rgba(255, 255, 255, 0.25);
 }
 .metric-value {
-  font-size: clamp(22px, 1.95vw, 30px);
+  font-size: clamp(23px, 2vw, 32px);
   font-weight: 700;
   line-height: 1.3;
   margin: 18px 0 22px;
   white-space: nowrap;
   letter-spacing: -0.6px;
   color: var(--color-ink);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 .metric-value small {
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--color-muted);
-  margin-left: 7px;
   letter-spacing: 0;
+}
+.metric-value.positive,
+.metric-value .positive,
+.data-table .positive,
+strong.positive,
+span.positive {
+  color: #059669 !important;
+}
+.metric-value.positive small {
+  color: #059669;
+  opacity: 0.8;
+}
+.metric-value.negative,
+.metric-value .negative,
+.data-table .negative,
+strong.negative,
+span.negative {
+  color: #dc2626 !important;
+}
+.metric-value.negative small {
+  color: #dc2626;
+  opacity: 0.8;
 }
 .metric-note {
   font-size: 11px;
@@ -414,6 +443,7 @@
 }
 .currency-row > div:last-child {
   margin-left: auto;
+  flex-shrink: 0;
 }
 .currency-row strong {
   display: block;

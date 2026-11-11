@@ -14,9 +14,12 @@ import (
 
 type ServerView struct {
 	storage.Server
-	Endpoints        []storage.Endpoint `json:"endpoints"`
-	TimeZone         string             `json:"time_zone"`
-	TimeZoneVerified bool               `json:"time_zone_verified"`
+	Endpoints         []storage.Endpoint `json:"endpoints"`
+	TimeZone          string             `json:"time_zone"`
+	TimeZoneVerified  bool               `json:"time_zone_verified"`
+	TimeRulesetID     string             `json:"time_ruleset_id"`
+	TimeMode          string             `json:"time_mode"`
+	AutomaticTimeZone AutomaticTimeZone  `json:"automatic_time_zone"`
 }
 
 type PositionView struct {
@@ -45,6 +48,7 @@ type AccountView struct {
 	LastRun                 *storage.SyncRun  `json:"last_run"`
 	Stale                   bool              `json:"stale"`
 	CreatedAtMS             int64             `json:"created_at_ms"`
+	Daily                   DailyView         `json:"daily"`
 }
 
 type AccountDetail struct {
@@ -104,26 +108,50 @@ func (s *Service) Servers(ctx context.Context) ([]ServerView, error) {
 			return err
 		}
 		for _, server := range servers {
-			view := ServerView{Server: server, Endpoints: make([]storage.Endpoint, 0)}
+			automatic, err := automaticClockView(tx, server, s.Now())
+			if err != nil {
+				return err
+			}
+			view := ServerView{Server: server, Endpoints: make([]storage.Endpoint, 0), TimeMode: "unavailable",
+				AutomaticTimeZone: automatic}
 			if err := tx.Where("server_id = ?", server.ID).Order("revision DESC").Find(&view.Endpoints).Error; err != nil {
 				return err
 			}
-			var rule struct {
-				RulesJSON    string
-				VerifiedAtMS *int64
+			var rule serverTimeRule
+			query := tx.Where("server_id = ?", server.ID)
+			if server.ActiveTimeRulesetID != nil {
+				view.TimeRulesetID = *server.ActiveTimeRulesetID
+				query = query.Where("id = ?", *server.ActiveTimeRulesetID)
 			}
-			result := tx.Table("server_time_rule_sets").Where("server_id = ?", server.ID).Order("revision DESC").Limit(1).Find(&rule)
+			result := query.Order("revision DESC").Limit(1).Find(&rule)
 			if result.Error != nil {
 				return result.Error
 			}
 			if rule.RulesJSON != "" {
-				var entries []struct {
-					Zone string `json:"zone"`
-				}
+				var entries []timeRuleEntry
 				if json.Unmarshal([]byte(rule.RulesJSON), &entries) == nil && len(entries) > 0 {
 					view.TimeZone = entries[0].Zone
+					_, label, err := serverLocation(entries[0], s.Now())
+					if err == nil {
+						view.TimeZone = label
+						view.TimeZoneVerified = rule.VerifiedAtMS != nil && rule.ID == view.TimeRulesetID
+						if entries[0].Kind == "observed_offset" {
+							valid, err := measuredClockValid(tx, server, entries[0], s.Now())
+							if err != nil {
+								return err
+							}
+							view.TimeZoneVerified = view.TimeZoneVerified && valid
+						}
+						if view.TimeZoneVerified {
+							view.TimeMode = "manual"
+							if entries[0].Kind == "broker_us_dst" {
+								view.TimeMode = "automatic"
+							} else if entries[0].Kind == "observed_offset" {
+								view.TimeMode = "calibrated"
+							}
+						}
+					}
 				}
-				view.TimeZoneVerified = rule.VerifiedAtMS != nil && server.ActiveTimeRulesetID != nil
 			}
 			views = append(views, view)
 		}
@@ -172,7 +200,8 @@ func readView(tx *gorm.DB, account storage.Account, now int64) (AccountView, err
 	} else if view.SyncState != "running" && account.NextSyncAtMS <= now {
 		view.SyncState = "queued"
 	}
-	return view, nil
+	view.Daily, err = readDailyView(tx, account, server, time.UnixMilli(now))
+	return view, err
 }
 
 func (s *Service) List(ctx context.Context) ([]AccountView, error) {
@@ -210,6 +239,9 @@ func (s *Service) Detail(ctx context.Context, id, order string) (AccountDetail, 
 		}
 		var err error
 		detail.Account, err = readView(tx, account, s.Now().UnixMilli())
+		if detail.Account.Daily.TimeZone != "" {
+			detail.ServerTimeStatus = "verified"
+		}
 		if err != nil || account.CurrentSnapshotID == nil {
 			return err
 		}

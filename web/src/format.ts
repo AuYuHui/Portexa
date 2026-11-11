@@ -1,5 +1,9 @@
 // Format decimal strings directly. Formatting never feeds back into money calculations.
-export function money(value: string | null | undefined, places = 2): string {
+function formatDecimal(
+  value: string | null | undefined,
+  places: number,
+  grouped: boolean,
+): string {
   if (value === null || value === undefined) return "—";
   const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);
   if (!match) return "—";
@@ -14,11 +18,33 @@ export function money(value: string | null | undefined, places = 2): string {
     minor -= base;
   }
   const sign = negative && (whole > 0n || minor > 0n) ? "−" : "";
+  const integer = whole.toString();
   return (
     sign +
-    whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") +
+    (grouped ? integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",") : integer) +
     (places ? "." + minor.toString().padStart(places, "0") : "")
   );
+}
+export function money(value: string | null | undefined, places = 2): string {
+  return formatDecimal(value, places, true);
+}
+export function signedMoney(
+  value: string | null | undefined,
+  places = 2,
+): string {
+  if (value === null || value === undefined) return "—";
+  const str = formatDecimal(value, places, true);
+  if (str === "—") return "—";
+  if (!str.startsWith("−") && !str.startsWith("-")) {
+    const num = parseFloat(value);
+    if (!isNaN(num) && num > 0) {
+      return "+" + str;
+    }
+  }
+  return str;
+}
+export function price(value: string | null | undefined, digits: number): string {
+  return formatDecimal(value, digits, false);
 }
 export function date(value: number | null | undefined, seconds = true): string {
   if (!value) return "—";
@@ -77,4 +103,8 @@ export function failureLabel(code: string | null | undefined) {
       } as Record<string, string>
     )[code || ""] || (code ? "采集未完成" : "")
   );
+}
+export function dailyLabel(state: string, stale = false): string {
+  if (state === "time_zone_unconfirmed") return "时间校准中";
+  return runLabel(state, stale);
 }

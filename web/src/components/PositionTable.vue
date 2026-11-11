@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import type { Position } from "../types";
-import { money, positive, wallTime } from "../format";
+import { money, signedMoney, price, positive, wallTime } from "../format";
 defineProps<{ positions: Position[] }>();
 const commands = [
-  "买入",
-  "卖出",
-  "Buy Limit",
-  "Sell Limit",
-  "Buy Stop",
-  "Sell Stop",
+  "buy",
+  "sell",
+  "buy limit",
+  "sell limit",
+  "buy stop",
+  "sell stop",
 ];
 </script>
 <template>
@@ -17,7 +17,7 @@ const commands = [
       <thead>
         <tr>
           <th>订单号 / 品种</th>
-          <th>方向</th>
+          <th>类型</th>
           <th class="text-right">手数</th>
           <th class="text-right">开仓价</th>
           <th class="text-right">当前价</th>
@@ -34,16 +34,16 @@ const commands = [
           <td>
             <span
               class="badge"
-              :class="p.command % 2 === 0 ? 'badge-good' : 'badge-info'"
+              :class="p.command % 2 === 0 ? 'badge-info' : 'badge-danger'"
               >{{ commands[p.command] }}</span
             >
           </td>
           <td class="text-right num">{{ p.lots }}</td>
-          <td class="text-right num">{{ p.open_price }}</td>
-          <td class="text-right num">{{ p.current_price }}</td>
+          <td class="text-right num">{{ price(p.open_price, p.digits) }}</td>
+          <td class="text-right num">{{ price(p.current_price, p.digits) }}</td>
           <td class="text-right num">
             <strong :class="positive(p.net_profit) ? 'positive' : 'negative'">{{
-              p.command <= 1 ? money(p.net_profit) : "—"
+              p.command <= 1 ? signedMoney(p.net_profit) : "—"
             }}</strong
             ><small
               v-if="p.command <= 1"

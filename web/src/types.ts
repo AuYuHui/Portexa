@@ -41,6 +41,28 @@ export interface Account {
   snapshot: Snapshot | null;
   last_run: Run | null;
   stale: boolean;
+  daily: DailyView;
+}
+export interface DailyReport {
+  date: string;
+  time_zone: string;
+  observed_from_ms: number;
+  observed_to_ms: number;
+  native_currency: string;
+  net_profit: string;
+  balance_adjustment: string;
+  balance_change: string;
+  credit_change: string;
+  closed_trades: number;
+}
+export interface DailyView {
+  date: string;
+  time_zone: string;
+  state: string;
+  error_code: string | null;
+  raw_status: number | null;
+  stale: boolean;
+  report: DailyReport | null;
 }
 export interface Totals {
   currency: string;
@@ -88,11 +110,27 @@ export interface Server {
   endpoints: Endpoint[];
   time_zone: string;
   time_zone_verified: boolean;
+  time_ruleset_id: string;
+  time_mode?: "automatic" | "calibrated" | "manual" | "unavailable";
+  automatic_time_zone?: {
+    available: boolean;
+    time_zone: string;
+    description: string;
+    source_url: string;
+    source?: "official" | "events" | "learning";
+    status?: "learning" | "calibrated" | "conflict";
+    evidence_count?: number;
+    event_window_count?: number;
+    required_events?: number;
+    observed_at_ms?: number | null;
+    expires_at_ms?: number | null;
+  };
 }
 export interface Position {
   ticket: number;
   symbol: string;
   command: number;
+  digits: number;
   lots: string;
   open_time_wall: number;
   open_price: string;

@@ -124,11 +124,13 @@ small {
 .mono {
   font-family: var(--font-mono, monospace);
 }
-.positive {
-  color: #059669;
+.positive,
+.positive.num {
+  color: #059669 !important;
 }
-.negative {
-  color: #dc2626;
+.negative,
+.negative.num {
+  color: #dc2626 !important;
 }
 .warning-text {
   color: #d97706;

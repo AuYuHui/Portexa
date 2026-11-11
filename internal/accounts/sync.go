@@ -3,11 +3,10 @@ package accounts
 import (
 	"context"
 	"errors"
-	"net"
-	"strconv"
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"portexa/internal/storage"
 	"portexa/internal/vault"
 	"portexa/mt4"
@@ -47,9 +46,31 @@ func (s *Service) RequestSync(ctx context.Context, id string) error {
 
 func (s *Service) Recover(ctx context.Context) error {
 	return s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
-		return tx.Model(&storage.SyncRun{}).Where("state IN ('running', 'queued')").Updates(map[string]any{
+		if err := tx.Model(&storage.SyncRun{}).Where("state IN ('running', 'queued')").Updates(map[string]any{
 			"state": "interrupted", "finished_at_ms": s.Now().UnixMilli(), "completion_reason": "process_restart",
-		}).Error
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&storage.DailyReport{}).Where("state = 'running'").Updates(map[string]any{
+			"state": "interrupted", "finished_at_ms": s.Now().UnixMilli(), "completion_reason": "process_restart",
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&storage.ClockRun{}).Where("state = 'running'").Updates(map[string]any{
+			"state": "interrupted", "finished_at_ms": s.Now().UnixMilli(), "completion_reason": "process_restart",
+		}).Error; err != nil {
+			return err
+		}
+		var servers []storage.Server
+		if err := tx.Where("retired_at_ms IS NULL").Find(&servers).Error; err != nil {
+			return err
+		}
+		for i := range servers {
+			if err := refreshClockCalibration(tx, &servers[i], s.Now()); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
@@ -63,24 +84,20 @@ func (s *Service) Claim(ctx context.Context, id string) (Job, error) {
 		if !account.SyncEnabled || account.NextSyncAtMS > s.Now().UnixMilli() {
 			return ErrPaused
 		}
-		endpoint, err := s.validEndpoint(tx, account.PinnedEndpointID, account.ServerID)
+		busy, err := accountFetching(tx, id)
 		if err != nil {
 			return err
 		}
-		var server storage.Server
-		if err = tx.First(&server, "id = ? AND retired_at_ms IS NULL", account.ServerID).Error; err != nil {
-			return err
+		if busy {
+			return ErrPaused
 		}
-		password, err := s.Vault.Open(account.CredentialEnvelope, account.CredentialKeyID,
-			vault.AAD(account.ID, account.ServerID, endpoint.ID, account.CredentialVersion))
+		job.Config, err = s.fetchConfig(tx, account)
 		if err != nil {
 			return err
 		}
-		job.Config = mt4.Config{Address: net.JoinHostPort(endpoint.IPAddress, strconv.Itoa(endpoint.Port)),
-			Server: server.ServerName, Login: account.Login, Password: password, PasswordType: mt4.InvestorPassword}
 		now := s.Now().UnixMilli()
 		job.Run = storage.SyncRun{ID: storage.NewID(), AccountID: account.ID, ServerID: account.ServerID,
-			EndpointID: endpoint.ID, CredentialVersion: account.CredentialVersion, ConfigVersion: account.ConfigVersion,
+			EndpointID: account.PinnedEndpointID, CredentialVersion: account.CredentialVersion, ConfigVersion: account.ConfigVersion,
 			Kind: "snapshot", State: "running", DueAtMS: account.NextSyncAtMS, NotBeforeMS: now, StartedAtMS: &now, Attempt: account.FailureCount + 1}
 		return tx.Create(&job.Run).Error
 	})
@@ -113,6 +130,10 @@ func (s *Service) DisableBrokenGate(ctx context.Context, id string, version int6
 }
 
 func (s *Service) Publish(ctx context.Context, job Job, snapshot storage.Snapshot, positions []storage.Position, next int64) error {
+	observations, err := s.clockDisappearances(ctx, job, snapshot, positions)
+	if err != nil {
+		return err
+	}
 	return s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
 		var current storage.Account
 		if err := tx.First(&current, "id = ?", job.Account.ID).Error; err != nil {
@@ -130,6 +151,11 @@ func (s *Service) Publish(ctx context.Context, job Job, snapshot storage.Snapsho
 		}
 		if err := tx.Create(&snapshot).Error; err != nil {
 			return err
+		}
+		if len(observations) > 0 && current.CurrentSnapshotID != nil && job.Account.CurrentSnapshotID != nil && *current.CurrentSnapshotID == *job.Account.CurrentSnapshotID {
+			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(&observations, 100).Error; err != nil {
+				return err
+			}
 		}
 		if err := tx.Where("account_id = ?", current.ID).Delete(&storage.Position{}).Error; err != nil {
 			return err

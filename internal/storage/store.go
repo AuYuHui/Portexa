@@ -28,13 +28,19 @@ var initialSchema string
 //go:embed migrations/002_server_directory.sql
 var directorySchema string
 
+//go:embed migrations/003_daily_reports.sql
+var dailySchema string
+
+//go:embed migrations/004_trade_clock.sql
+var clockSchema string
+
 var ErrNotFound = gorm.ErrRecordNotFound
 var ErrConflict = errors.New("state conflict")
 var ErrDenied = errors.New("operation denied")
 var ErrClosed = errors.New("store closed")
 
 const ApplicationID = 0x50545841
-const SchemaVersion = 2
+const SchemaVersion = 4
 
 type Priority int
 
@@ -215,6 +221,16 @@ func migrate(db *sql.DB) error {
 	}
 	if version < 2 {
 		if _, err = tx.Exec(directorySchema); err != nil {
+			return err
+		}
+	}
+	if version < 3 {
+		if _, err = tx.Exec(dailySchema); err != nil {
+			return err
+		}
+	}
+	if version < 4 {
+		if _, err = tx.Exec(clockSchema); err != nil {
 			return err
 		}
 	}

@@ -16,10 +16,11 @@ import (
 type Fetcher func(context.Context, mt4.Config, mt4.Options) (mt4.Result, error)
 
 type Options struct {
-	Interval time.Duration
-	Timeout  time.Duration
-	Workers  int
-	Logger   *slog.Logger
+	Interval        time.Duration
+	Timeout         time.Duration
+	Workers         int
+	Logger          *slog.Logger
+	HistoryInterval time.Duration
 }
 
 type Engine struct {
@@ -33,6 +34,11 @@ type Engine struct {
 	wg                sync.WaitGroup
 	fatal             chan error
 	logger            *slog.Logger
+	historySem        chan struct{}
+	historyInterval   time.Duration
+	historyActive     map[string]bool
+	historyYielded    map[string]bool
+	nextTimeRefresh   time.Time
 }
 
 func New(service *accounts.Service, fetch Fetcher, options Options) *Engine {
@@ -51,9 +57,13 @@ func New(service *accounts.Service, fetch Fetcher, options Options) *Engine {
 	if options.Logger == nil {
 		options.Logger = slog.New(slog.DiscardHandler)
 	}
+	if options.HistoryInterval <= 0 {
+		options.HistoryInterval = 5 * time.Minute
+	}
 	return &Engine{accounts: service, fetch: fetch, interval: options.Interval, timeout: options.Timeout,
 		sem: make(chan struct{}, options.Workers), wake: make(chan struct{}, 1), active: map[string]context.CancelFunc{}, fatal: make(chan error, 1),
-		logger: options.Logger.With("component", "syncer")}
+		logger: options.Logger.With("component", "syncer"), historySem: make(chan struct{}, 2), historyInterval: options.HistoryInterval,
+		historyActive: map[string]bool{}, historyYielded: map[string]bool{}}
 }
 
 // Run is called once; cancellation drains every active Fetch before it returns.
@@ -63,6 +73,7 @@ func (e *Engine) Run(parent context.Context) error {
 	if err := e.accounts.Recover(ctx); err != nil {
 		return err
 	}
+	e.nextTimeRefresh = time.Now().Add(30 * time.Second)
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -95,6 +106,21 @@ func (e *Engine) Cancel(id string) {
 }
 
 func (e *Engine) schedule(ctx context.Context) {
+	if !time.Now().Before(e.nextTimeRefresh) {
+		if err := e.accounts.RefreshServerTimes(ctx); err != nil {
+			if ctx.Err() == nil {
+				e.stopForStorageFailure()
+			}
+			return
+		}
+		e.nextTimeRefresh = time.Now().Add(30 * time.Second)
+	}
+	e.scheduleSnapshots(ctx)
+	e.scheduleClock(ctx)
+	e.scheduleDaily(ctx)
+}
+
+func (e *Engine) scheduleSnapshots(ctx context.Context) {
 	ids, err := e.accounts.Due(ctx, time.Now().UnixMilli(), 200)
 	if err != nil {
 		if ctx.Err() == nil {
@@ -108,6 +134,10 @@ func (e *Engine) schedule(ctx context.Context) {
 		}
 		e.mu.Lock()
 		if _, exists := e.active[id]; exists {
+			if e.historyActive[id] {
+				e.historyYielded[id] = true
+				e.active[id]()
+			}
 			e.mu.Unlock()
 			continue
 		}

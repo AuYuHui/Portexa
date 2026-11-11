@@ -189,7 +189,17 @@ func RestoreNew(ctx context.Context, source, destination string) error {
 			if err := tx.Model(&Session{}).Where("revoked_at_ms IS NULL").Update("revoked_at_ms", now).Error; err != nil {
 				return err
 			}
-			return tx.Model(&SyncRun{}).Where("state IN ('running', 'queued')").Updates(map[string]any{"state": "interrupted", "finished_at_ms": now, "completion_reason": "restored"}).Error
+			if err := tx.Model(&SyncRun{}).Where("state IN ('running', 'queued')").Updates(map[string]any{"state": "interrupted", "finished_at_ms": now, "completion_reason": "restored"}).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&DailyReport{}).Where("state = 'running'").Updates(map[string]any{
+				"state": "interrupted", "finished_at_ms": now, "completion_reason": "restored",
+			}).Error; err != nil {
+				return err
+			}
+			return tx.Model(&ClockRun{}).Where("state = 'running'").Updates(map[string]any{
+				"state": "interrupted", "finished_at_ms": now, "completion_reason": "restored",
+			}).Error
 		})
 	}
 	err = errors.Join(err, store.Close())

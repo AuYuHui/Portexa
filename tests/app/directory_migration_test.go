@@ -46,7 +46,7 @@ func assertDirectoryUpgrade(t *testing.T, path string) {
 		t.Fatal("upgrade changed login settings", err)
 	}
 	var version int
-	if err = store.Read.Raw("PRAGMA user_version").Scan(&version).Error; err != nil || version != 2 {
+	if err = store.Read.Raw("PRAGMA user_version").Scan(&version).Error; err != nil || version != storage.SchemaVersion {
 		t.Fatal("schema version", version, err)
 	}
 	var count int64

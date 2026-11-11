@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -31,6 +32,9 @@ func main() {
 	}
 }
 func run() error {
+	automaticTime := flag.Bool("automatic-time", false, "use a synthetic server matching a published calendar")
+	tradeClock := flag.Bool("trade-clock", false, "calibrate an unknown synthetic server using newly closed trades")
+	flag.Parse()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	dir, err := os.MkdirTemp("", "portexa-e2e-")
@@ -66,9 +70,26 @@ func run() error {
 		if account.Currency != nil {
 			currency = *account.Currency
 		}
-		return testutil.Result(currency), nil
+		result := testutil.Result(currency)
+		if options.History != nil {
+			result.HistoryRead, result.HistoryComplete = true, true
+			result.HistoryCovered = []mt4.HistoryRange{*options.History}
+			start := options.History.Start
+			result.History = []mt4.Trade{
+				{Ticket: 70001, Command: 0, OpenTime: start - 100, CloseTime: start + 120, Profit: 12.34, Commission: -0.11, Swap: -0.11, Taxes: -0.02},
+				{Ticket: 70002, Command: 1, OpenTime: start + 60, CloseTime: start + 240, Profit: -2.50, Commission: -0.10},
+				{Ticket: 70003, Command: 6, OpenTime: start + 300, Profit: 100},
+				{Ticket: 70004, Command: 6, CloseTime: start + 360, Profit: -20},
+				{Ticket: 70005, Command: 7, OpenTime: start + 400, Profit: 25},
+			}
+		}
+		return result, nil
 	}
-	server, endpoint, err := service.CreateServer(ctx, accounts.ServerInput{BrokerName: "Synthetic Markets", ServerName: "Synthetic-Live01", IPAddress: "203.0.113.9", Port: 443, TimeZone: "Europe/Helsinki"})
+	brokerName, serverName := "Synthetic Markets", "Synthetic-Live01"
+	if *automaticTime {
+		brokerName, serverName = "D Prime Vanuatu Limited", "DPrimeVU-Demo 999"
+	}
+	server, endpoint, err := service.CreateServer(ctx, accounts.ServerInput{BrokerName: brokerName, ServerName: serverName, IPAddress: "203.0.113.9", Port: 443, TimeZone: "Europe/Helsinki"})
 	if err != nil {
 		return err
 	}
@@ -109,6 +130,11 @@ func run() error {
 			if err = service.UpdateAccount(ctx, account.ID, accounts.AccountPatch{SyncEnabled: &enabled}); err != nil {
 				return err
 			}
+		}
+	}
+	if *tradeClock {
+		if err := seedTradeClock(ctx, service); err != nil {
+			return err
 		}
 	}
 	engine := syncer.New(service, fetch, syncer.Options{Interval: time.Hour})

@@ -73,6 +73,12 @@ type Account struct {
 	SyncEnabled              bool             `gorm:"column:sync_enabled" json:"-"`
 	NextSyncAtMS             int64            `gorm:"column:next_sync_at_ms" json:"-"`
 	FailureCount             int64            `gorm:"column:failure_count" json:"-"`
+	NextDailySyncAtMS        int64            `gorm:"column:next_daily_sync_at_ms" json:"-"`
+	DailyFailureCount        int64            `gorm:"column:daily_failure_count" json:"-"`
+	DailySyncPaused          bool             `gorm:"column:daily_sync_paused" json:"-"`
+	NextClockSyncAtMS        int64            `gorm:"column:next_clock_sync_at_ms" json:"-"`
+	ClockFailureCount        int64            `gorm:"column:clock_failure_count" json:"-"`
+	ClockSyncPaused          bool             `gorm:"column:clock_sync_paused" json:"-"`
 	CurrentSnapshotID        *string          `gorm:"column:current_snapshot_id" json:"-"`
 	IncludedAtMS             *int64           `gorm:"column:included_at_ms" json:"-"`
 	InitialStatisticalEquity *decimal.Decimal `gorm:"column:initial_statistical_equity;type:text" json:"-"`

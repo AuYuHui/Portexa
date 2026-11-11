@@ -81,6 +81,63 @@
 .snapshot-panel {
   margin-top: 24px;
 }
+.daily-panel {
+  margin-bottom: 24px;
+}
+.daily-panel .panel-heading p .badge {
+  margin-left: 8px;
+}
+.daily-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  padding: 0 24px 22px;
+}
+.daily-metrics .metric-value {
+  margin: 12px 0;
+}
+.daily-note {
+  margin: 0;
+  padding: 0 24px 18px;
+  line-height: 1.7;
+}
+.server-card-actions {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.server-time-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-brand-50);
+}
+.server-time-result p {
+  margin: 7px 0;
+  line-height: 1.7;
+}
+.server-time-advanced summary {
+  cursor: pointer;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.server-time-advanced form {
+  margin-top: 16px;
+}
+@media (max-width: 767px) {
+  .daily-metrics {
+    grid-template-columns: 1fr;
+    padding: 0 16px 18px;
+    gap: 20px;
+  }
+  .daily-note {
+    padding: 0 16px 16px;
+  }
+}
 .setup-stepper {
   display: flex;
   align-items: center;

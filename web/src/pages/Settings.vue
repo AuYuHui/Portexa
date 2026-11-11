@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { useQuery } from "@tanstack/vue-query";
 import {
@@ -21,6 +21,7 @@ import AccountForm from "../components/AccountForm.vue";
 import ServerForm from "../components/ServerForm.vue";
 import ReviewForm from "../components/ReviewForm.vue";
 import PasswordForm from "../components/PasswordForm.vue";
+import ServerTimeForm from "../components/ServerTimeForm.vue";
 
 const route = useRoute();
 
@@ -31,12 +32,16 @@ const {
 } = useQuery({
   queryKey: ["servers"],
   queryFn: () => api<Server[]>("/servers"),
+  refetchInterval: 10_000,
 });
 
 const serverOpen = ref(false);
 const accountOpen = ref(false);
 const reviewOpen = ref(false);
 const passwordOpen = ref(false);
+const timeOpen = ref(false);
+const timeServer = ref<Server>();
+const currentTimeServer = computed(() => servers.value?.find((server) => server.id === timeServer.value?.id) || timeServer.value);
 const editServer = ref<Server>();
 const reviewEndpoint = ref<Endpoint>();
 
@@ -53,6 +58,10 @@ function newRevision(server: Server) {
 function newServer() {
   editServer.value = undefined;
   serverOpen.value = true;
+}
+function editTime(server: Server) {
+  timeServer.value = server;
+  timeOpen.value = true;
 }
 
 onMounted(() => {
@@ -150,14 +159,21 @@ onMounted(() => {
             <h3>{{ server.server_name }}</h3>
             <p class="muted small">
               {{ server.broker_name }} · MT4 <span class="divider-dot">·</span>
-              {{ server.time_zone || "时区未登记" }}（{{
-                server.time_zone_verified ? "已核验" : "未核验"
+              {{ server.time_zone_verified ? server.time_zone : "时间校准中" }}（{{
+                server.time_mode === "automatic"
+                  ? "自动识别"
+                  : server.time_mode === "calibrated" ? "交易时间校准"
+                  : server.time_zone_verified ? "手动校正" : "自动"
               }}）
             </p>
           </div>
-          <button class="text-button" @click="newRevision(server)">
-            新建接入修订 <ArrowUpRight :size="15" />
-          </button>
+          <div class="server-card-actions">
+            <button
+              v-if="typeof server.time_ruleset_id === 'string'"
+              class="text-button" @click="editTime(server)"
+            ><Clock :size="15" />服务器时间</button>
+            <button class="text-button" @click="newRevision(server)">新建接入修订 <ArrowUpRight :size="15" /></button>
+          </div>
         </div>
         <div
           v-for="endpoint in server.endpoints"
@@ -249,6 +265,10 @@ onMounted(() => {
         </div>
       </div>
     </section>
+
+    <Modal v-model:open="timeOpen" title="服务器时间" description="系统优先自动识别，用于统计服务器当日利润与结余。">
+      <ServerTimeForm v-if="currentTimeServer" :server="currentTimeServer" @saved="timeOpen = false" @cancel="timeOpen = false" />
+    </Modal>
 
     <!-- 独立弹窗：修改密码 -->
     <Modal
