@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"unicode/utf16"
@@ -13,8 +12,11 @@ import (
 )
 
 func DecodeLZO(input []byte, expected, limit int) ([]byte, error) {
-	if expected < 1 || expected > limit || len(input) < 1 || len(input) > 2*limit {
-		return nil, errors.New("compressed block exceeds experiment limits")
+	if expected < 1 || len(input) < 1 {
+		return nil, errors.New("compressed block has an invalid empty boundary")
+	}
+	if expected > limit || len(input) > 2*limit {
+		return nil, ErrResourceLimit
 	}
 	output := make([]byte, expected)
 	count, err := lzo.Decompress(input, output)
@@ -34,15 +36,18 @@ func ReadCompressed(reader io.Reader, state *StreamState, limit int) ([]byte, er
 		return nil, nil
 	}
 	if expected > limit {
-		return nil, errors.New("declared output exceeds experiment limit")
+		return nil, ErrResourceLimit
 	}
 	value, err = state.Read(reader, 4)
 	if err != nil {
 		return nil, err
 	}
 	count := int(binary.LittleEndian.Uint32(value))
-	if count < 1 || count > 2*limit {
-		return nil, errors.New("declared compressed input exceeds experiment limit")
+	if count < 1 {
+		return nil, errors.New("compressed input length is zero")
+	}
+	if count > 2*limit {
+		return nil, ErrResourceLimit
 	}
 	value, err = state.Read(reader, count)
 	if err != nil {
@@ -99,7 +104,7 @@ func ReadServerConfiguration(reader io.Reader, state *StreamState, expectedServe
 		return result, err
 	}
 	if status[0] != 0 {
-		return result, fmt.Errorf("server configuration status %d", status[0])
+		return result, &StatusError{Status: status[0]}
 	}
 	if _, err := state.Read(reader, 1); err != nil {
 		return result, err

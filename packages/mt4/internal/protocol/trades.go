@@ -14,6 +14,8 @@ type TradeInfo struct {
 	Digits, Command                 int32
 	VolumeHundredths                int32
 	Time20, Time40                  uint32
+	OpenPrice, ClosePrice           float64
+	MarginRate                      float64
 	Sl, Tp                          float64
 	Commission, Swap, Profit, Taxes float64
 }
@@ -34,16 +36,26 @@ func ParseTradeRecords(data []byte) ([]TradeInfo, error) {
 			Time20:           binary.LittleEndian.Uint32(item[0x20:]),
 			Time40:           binary.LittleEndian.Uint32(item[0x40:]),
 		}
+		if value.Command < 0 || value.Command > 7 {
+			return nil, ErrUnsupportedProtocol
+		}
 		for i, b := range []byte(value.Symbol) {
 			if b == 0 {
 				value.Symbol = value.Symbol[:i]
 				break
 			}
 		}
+		if value.Digits < 0 || value.Digits > 16 {
+			return nil, errors.New("trade price precision is outside the supported range")
+		}
+		if value.Command <= 5 && (value.Symbol == "" || value.VolumeHundredths <= 0 || value.Time20 > math.MaxInt32 || value.Time40 > math.MaxInt32) {
+			return nil, errors.New("trade has an invalid symbol, volume or timestamp")
+		}
 		for offset, target := range map[int]*float64{
-			0x30: &value.Sl, 0x38: &value.Tp,
+			0x28: &value.OpenPrice, 0x30: &value.Sl, 0x38: &value.Tp, 0x78: &value.ClosePrice,
 			0x60: &value.Commission, 0x70: &value.Swap,
 			0x80: &value.Profit, 0x88: &value.Taxes,
+			0xc0: &value.MarginRate,
 		} {
 			*target = math.Float64frombits(binary.LittleEndian.Uint64(item[offset:]))
 			if math.IsNaN(*target) || math.IsInf(*target, 0) {

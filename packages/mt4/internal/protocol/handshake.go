@@ -158,7 +158,7 @@ func RawDigest16(input []byte) [16]byte {
 func ChallengeKey(login uint32, digest [16]byte, field uint32, block [64]byte) ([16]byte, error) {
 	key := digest
 	if field == 0 {
-		return key, errors.New("legacy zero-field challenge is not implemented")
+		return key, fmt.Errorf("%w: zero-field challenge", ErrUnsupportedProtocol)
 	}
 	random := LegacyRandom(login + ((field >> 8) & 255) + 10)
 	for range 4 {
@@ -226,7 +226,7 @@ func DecodePayload(input []byte, mode uint16, key [16]byte) ([]byte, error) {
 	case 2:
 		return append([]byte{}, input...), nil
 	default:
-		return nil, errors.New("unsupported Record mode")
+		return nil, fmt.Errorf("%w: record mode", ErrUnsupportedProtocol)
 	}
 }
 
@@ -299,21 +299,31 @@ func ReadInitial(reader io.Reader, login uint32, password string) (InitialRespon
 		return result, err
 	}
 	if status[0] != 0 {
-		return result, fmt.Errorf("initial server status %d", status[0])
+		return result, &StatusError{Status: status[0]}
 	}
 	digest := PasswordDigest(password)
 	result.Rx.Key = digest
-	prefix, err := result.Rx.Read(reader, 71)
+	prefix, err := result.Rx.Read(reader, 7)
 	if err != nil {
 		return result, err
 	}
 	result.ServerBuild = binary.LittleEndian.Uint16(prefix[1:3])
 	result.Field = binary.LittleEndian.Uint32(prefix[3:7])
-	if result.ServerBuild < 1419 {
-		return result, errors.New("legacy server challenge is outside this experiment")
+	// The reference client's challenge branch is selected by signed build >1419.
+	// Newer builds use the same bounded capability/layout checks; broker names
+	// and individually enumerated build numbers do not select an implementation.
+	if int16(result.ServerBuild) <= 1419 {
+		return result, ErrUnsupportedBuild
+	}
+	if result.Field == 0 {
+		return result, fmt.Errorf("%w: zero-field challenge", ErrUnsupportedProtocol)
+	}
+	challenge, err := result.Rx.Read(reader, 64)
+	if err != nil {
+		return result, err
 	}
 	var block [64]byte
-	copy(block[:], prefix[7:])
+	copy(block[:], challenge)
 	result.Key, err = ChallengeKey(login, digest, result.Field, block)
 	if err != nil {
 		return result, err
@@ -325,8 +335,11 @@ func ReadInitial(reader io.Reader, login uint32, password string) (InitialRespon
 	length := int(binary.LittleEndian.Uint16(header))
 	kind := binary.LittleEndian.Uint16(header[2:])
 	mode := binary.LittleEndian.Uint16(header[4:])
-	if length < 1 || length > 4095 || kind != 2 || mode > 2 {
+	if length < 1 || length > 4095 || kind != 2 {
 		return result, errors.New("unexpected initial Record boundary")
+	}
+	if mode > 2 {
+		return result, fmt.Errorf("%w: initial record mode", ErrUnsupportedProtocol)
 	}
 	body, err := result.Rx.Read(reader, length)
 	if err != nil {

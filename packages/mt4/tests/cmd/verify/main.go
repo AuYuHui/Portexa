@@ -19,10 +19,11 @@ func run() error {
 		return errors.New("--vector is required")
 	}
 	var input struct {
-		Target   string `json:"target"`
-		Server   string `json:"server"`
-		Login    uint32 `json:"login"`
-		Password string `json:"password"`
+		Target       string `json:"target"`
+		Server       string `json:"server"`
+		Login        uint32 `json:"login"`
+		Password     string `json:"password"`
+		PasswordType string `json:"password_type"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(os.Stdin, 4096))
 	decoder.DisallowUnknownFields()

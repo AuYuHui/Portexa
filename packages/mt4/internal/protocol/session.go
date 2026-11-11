@@ -20,6 +20,7 @@ type TableResult struct {
 	Status  byte
 	Count   int
 	Records []TradeInfo
+	Data    []byte
 }
 
 type AccountInfo struct {
@@ -31,6 +32,10 @@ type AccountInfo struct {
 	TrailingBytes     int
 	Raw               []byte
 	Orders            []TradeInfo
+	Currency          string
+	Equity            float64
+	Margin            float64
+	MarginAvailable   bool
 }
 
 type SessionResult struct {
@@ -41,13 +46,17 @@ type SessionResult struct {
 	History         TableResult
 	HistoryRead     bool
 	AccountRead     bool
+	HistoryCovered  []HistoryInterval
 }
 
 func WriteCommand(writer io.Writer, state *StreamState, command []byte) error {
+	if err := validateReadOnlyCommand(command); err != nil {
+		return err
+	}
 	value := bytes.Clone(command)
 	state.Encode(value)
 	if _, err := io.Copy(writer, bytes.NewReader(value)); err != nil {
-		return errors.New("session command write failed")
+		return fmt.Errorf("session command write failed: %w", err)
 	}
 	return nil
 }
@@ -64,10 +73,10 @@ func ReadRecordBlock(reader io.Reader, state *StreamState, stride int, allowEmpt
 	}
 	result.Status = status[0]
 	if result.Status == 1 {
-		return result, nil // Unchanged; this response does not contain a block.
+		return result, nil // No body: unchanged for config tables, empty for history.
 	}
 	if result.Status != 0 {
-		return result, fmt.Errorf("table synchronization status %d", result.Status)
+		return result, &StatusError{Status: result.Status}
 	}
 	data, err := ReadCompressed(reader, state, SyncLimit)
 	if err != nil {
@@ -77,6 +86,9 @@ func ReadRecordBlock(reader io.Reader, state *StreamState, stride int, allowEmpt
 		return result, errors.New("synchronized table has an invalid Record boundary")
 	}
 	result.Count = len(data) / stride
+	if stride == 1936 {
+		result.Data = data
+	}
 	if stride == TradeRecordSize {
 		result.Records, err = ParseTradeRecords(data)
 		if err != nil {
@@ -154,12 +166,48 @@ func ParseAccount(data []byte) (AccountInfo, error) {
 	}
 	result.TradeRecords = (len(data) - AccountBaseSize) / TradeRecordSize
 	result.TrailingBytes = (len(data) - AccountBaseSize) % TradeRecordSize
+	if result.TrailingBytes != 0 {
+		return result, errors.New("account response contains a partial trade record")
+	}
 	var err error
 	result.Orders, err = ParseTradeRecords(data[AccountBaseSize : len(data)-result.TrailingBytes])
 	if err != nil {
 		return result, err
 	}
+	seen := make(map[int32]bool, len(result.Orders))
+	for _, order := range result.Orders {
+		if order.Ticket <= 0 || seen[order.Ticket] {
+			return result, errors.New("account has an invalid or repeated order ticket")
+		}
+		seen[order.Ticket] = true
+	}
 	result.Raw = data
+	// Group config is copied from wire+0x58 to AccountInfoBase+0x278.
+	// The official trade UI's currency pointer is AccountInfoBase+0x3714.
+	currency := data[0x34f4:0x3500]
+	if end := bytes.IndexByte(currency, 0); end >= 0 {
+		currency = currency[:end]
+	} else {
+		return result, errors.New("account currency is not terminated")
+	}
+	for _, ch := range currency {
+		if ch < 0x21 || ch > 0x7e {
+			return result, errors.New("account currency has an invalid character")
+		}
+	}
+	result.Currency = string(currency)
+	if result.Currency == "" {
+		return result, errors.New("account currency is empty")
+	}
+	result.Equity = result.Balance + result.Credit
+	for _, order := range result.Orders {
+		if order.Command == 0 || order.Command == 1 {
+			result.Equity += order.Profit + order.Commission + order.Swap + order.Taxes
+		}
+	}
+	if math.IsInf(result.Equity, 0) || math.IsNaN(result.Equity) {
+		return result, errors.New("calculated equity is not finite")
+	}
 	return result, nil
 }
 
@@ -169,7 +217,7 @@ func ReadAccount(reader io.Reader, state *StreamState) (AccountInfo, error) {
 		return AccountInfo{}, fmt.Errorf("account status read: %w", err)
 	}
 	if status[0] != 0 {
-		return AccountInfo{}, fmt.Errorf("account synchronization status %d", status[0])
+		return AccountInfo{}, &StatusError{Status: status[0]}
 	}
 	data, err := ReadCompressed(reader, state, SyncLimit)
 	if err != nil {
@@ -187,17 +235,19 @@ func HistoryRequest(start, end uint32) ([]byte, error) {
 }
 
 func ReadHistory(reader io.Reader, state *StreamState) (TableResult, error) {
+	// Unlike digest-based config queries, 0x22 carries only a time interval.
+	// The reference caller assigns a newly created empty array on status 1.
 	return ReadRecordBlock(reader, state, TradeRecordSize, true)
 }
 
-func ReadLiveAccount(conn io.ReadWriter, response *InitialResponse, historyStart, historyEnd uint32) (SessionResult, error) {
+func ReadLiveAccount(conn io.ReadWriter, response *InitialResponse, historyStart, historyEnd, historyWindow uint32) (SessionResult, error) {
 	var result SessionResult
 	var err error
 	for _, command := range []byte{0x08, 0x0a} {
 		request := make([]byte, 17) // No local table cache: the digest is all zero.
 		request[0] = command
 		if err := WriteCommand(conn, &response.Tx, request); err != nil {
-			return result, err
+			return result, operationError("tables", err)
 		}
 		stride := 1936
 		if command == 0x0a {
@@ -205,7 +255,7 @@ func ReadLiveAccount(conn io.ReadWriter, response *InitialResponse, historyStart
 		}
 		table, err := ReadTable(conn, &response.Rx, stride)
 		if err != nil {
-			return result, fmt.Errorf("command 0x%02x: %w", command, err)
+			return result, operationError("tables", err)
 		}
 		if command == 0x08 {
 			result.Symbols = table
@@ -214,33 +264,29 @@ func ReadLiveAccount(conn io.ReadWriter, response *InitialResponse, historyStart
 		}
 	}
 	if err := WriteCommand(conn, &response.Tx, []byte{0x21}); err != nil {
-		return result, err
+		return result, operationError("auxiliary", err)
 	}
 	result.Auxiliary, err = ReadAuxiliary(conn, &response.Rx)
 	if err != nil {
-		return result, fmt.Errorf("command 0x21: %w", err)
+		return result, operationError("auxiliary", err)
 	}
 	if historyStart < historyEnd {
-		request, err := HistoryRequest(historyStart, historyEnd)
+		result.History, result.HistoryCovered, err = synchronizeHistory(conn, response, historyStart, historyEnd, historyWindow)
 		if err != nil {
-			return result, err
-		}
-		if err := WriteCommand(conn, &response.Tx, request); err != nil {
-			return result, err
-		}
-		result.History, err = ReadHistory(conn, &response.Rx)
-		if err != nil {
-			return result, fmt.Errorf("command 0x22: %w", err)
+			return result, operationError("history", err)
 		}
 		result.HistoryRead = true
 	}
 	if err := WriteCommand(conn, &response.Tx, AccountRequest(response.ServerBuild)); err != nil {
-		return result, err
+		return result, operationError("account", err)
 	}
 	result.Account, err = ReadAccount(conn, &response.Rx)
 	if err != nil {
-		return result, fmt.Errorf("command 0x1e: %w", err)
+		return result, operationError("account", err)
 	}
 	result.AccountRead = true
+	if err := CalculateMargin(&result.Account, result.Symbols.Data); err != nil {
+		return result, operationError("margin", err)
+	}
 	return result, nil
 }

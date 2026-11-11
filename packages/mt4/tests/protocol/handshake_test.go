@@ -2,7 +2,9 @@ package protocol_test
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"io"
 	. "portexa/mt4/internal/protocol"
 	"testing"
@@ -16,6 +18,32 @@ func unhex(t *testing.T, value string) []byte {
 		t.Fatal(err)
 	}
 	return out
+}
+
+func TestUnsupportedChallengeClassifiedBeforeWaitingForItsBody(t *testing.T) {
+	prefix := make([]byte, 7)
+	binary.LittleEndian.PutUint16(prefix[1:], 1600)
+	state := StreamState{Key: PasswordDigest("fixture-only!")}
+	state.Encode(prefix)
+	result, err := ReadInitial(bytes.NewReader(append([]byte{0}, prefix...)), 123456, "fixture-only!")
+	if !errors.Is(err, ErrUnsupportedProtocol) || result.ServerBuild != 1600 {
+		t.Fatal("zero challenge was confused with a truncated socket")
+	}
+}
+
+func TestUnknownRecordModeIsAProtocolCapabilityError(t *testing.T) {
+	message := make([]byte, 79)
+	binary.LittleEndian.PutUint16(message[1:], 1600)
+	binary.LittleEndian.PutUint32(message[3:], 1)
+	binary.LittleEndian.PutUint16(message[71:], 1)
+	binary.LittleEndian.PutUint16(message[73:], 2)
+	binary.LittleEndian.PutUint16(message[75:], 3)
+	state := StreamState{Key: PasswordDigest("fixture-only!")}
+	state.Encode(message)
+	_, err := ReadInitial(bytes.NewReader(append([]byte{0}, message...)), 123456, "fixture-only!")
+	if !errors.Is(err, ErrUnsupportedProtocol) {
+		t.Fatalf("unknown record mode was confused with a short connection: %v", err)
+	}
 }
 
 func TestInitialPacketGolden(t *testing.T) {

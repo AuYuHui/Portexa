@@ -45,6 +45,11 @@ func TestAccountMinimumStructureAndFiniteMoney(t *testing.T) {
 	binary.LittleEndian.PutUint64(data[0x48:], math.Float64bits(1234.5))
 	binary.LittleEndian.PutUint64(data[0x50:], math.Float64bits(-0.25))
 	binary.LittleEndian.PutUint32(data[0x35d8:], 1)
+	copy(data[0x34f4:], "USD")
+	for i := 0; i < 2; i++ {
+		binary.LittleEndian.PutUint32(data[AccountBaseSize+i*TradeRecordSize:], uint32(i+1))
+		binary.LittleEndian.PutUint32(data[AccountBaseSize+i*TradeRecordSize+0x18:], 6)
+	}
 	got, err := ParseAccount(data)
 	if err != nil || got.Balance != 1234.5 || got.Credit != -0.25 || got.Leverage != 100 || got.InvestorIndicator != 1 || got.TradeRecords != 2 || got.TrailingBytes != 0 {
 		t.Fatalf("synthetic account fields did not match the external layout: %v", err)
@@ -74,5 +79,25 @@ func TestHistoryEmptyAndUnchangedResponses(t *testing.T) {
 	}
 	if _, err := HistoryRequest(100, math.MaxUint32); err == nil {
 		t.Fatal("unsupported history timestamp was accepted")
+	}
+}
+
+func TestAccountRejectsMissingCurrencyAndDuplicateOrderTickets(t *testing.T) {
+	data := make([]byte, AccountBaseSize+2*TradeRecordSize)
+	for i := 0; i < 2; i++ {
+		binary.LittleEndian.PutUint32(data[AccountBaseSize+i*TradeRecordSize:], 1)
+		binary.LittleEndian.PutUint32(data[AccountBaseSize+i*TradeRecordSize+0x18:], 6)
+	}
+	copy(data[0x34f4:], "USD")
+	if _, err := ParseAccount(data); err == nil {
+		t.Fatal("duplicate account order ticket was accepted")
+	}
+	binary.LittleEndian.PutUint32(data[AccountBaseSize+TradeRecordSize:], 2)
+	if _, err := ParseAccount(data); err != nil {
+		t.Fatal(err)
+	}
+	clear(data[0x34f4:0x3500])
+	if _, err := ParseAccount(data); err == nil {
+		t.Fatal("missing currency in an unknown account layout was accepted")
 	}
 }

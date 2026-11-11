@@ -27,8 +27,21 @@ const (
 const initialHex = "004714291ffa26eb14561c277f01d2ab76e382e7e5d57f4602b6fc275f01f2ab16a382e7e5355f4602d61ce7bf01d26b36a382a7a555bf4602f63ce7df01326b166382a7a575dfc6e179013049098ffc90be7c7f0f8e50b9bbd9dd880a6afda7142a1962c9384015d2e40c0c26ec8ec2"
 
 type Options struct {
-	Authenticate bool
-	History      bool
+	Authenticate  bool
+	History       bool
+	Build         uint16
+	InitialStatus byte
+	HistoryPages  []HistoryPage
+	HistoryBounds [][2]uint32
+	AccountTail   []byte
+}
+
+type HistoryPage struct {
+	Status       byte
+	Records      []byte
+	Disconnect   bool
+	WaitForClose bool
+	DeclaredSize uint32
 }
 
 // NewServer returns an ephemeral address and a channel reporting the peer result.
@@ -64,6 +77,22 @@ func serve(conn net.Conn, options Options) error {
 		return errors.New("initial request differs from independent golden vector")
 	}
 	response, _ := hex.DecodeString(initialHex)
+	if options.InitialStatus != 0 {
+		if _, err := conn.Write([]byte{options.InitialStatus}); err != nil {
+			return err
+		}
+		return expectClose(conn)
+	}
+	if options.Build != 0 {
+		state := protocol.StreamState{Key: protocol.PasswordDigest(Password)}
+		state.Decode(response[1:])
+		binary.LittleEndian.PutUint16(response[2:], options.Build)
+		state = protocol.StreamState{Key: protocol.PasswordDigest(Password)}
+		state.Encode(response[1:])
+		if int16(options.Build) <= 1419 {
+			response = response[:8]
+		}
+	}
 	if _, err := conn.Write(response); err != nil {
 		return err
 	}
@@ -107,7 +136,15 @@ func serve(conn net.Conn, options Options) error {
 		if err != nil || request[0] != command || !bytes.Equal(request[1:], make([]byte, 16)) {
 			return fmt.Errorf("invalid table request 0x%02x: %w", command, err)
 		}
-		if err := write([]byte{1}); err != nil {
+		reply := []byte{1}
+		if command == 0x08 {
+			symbol := make([]byte, 1936)
+			copy(symbol, "TEST.USD")
+			binary.LittleEndian.PutUint64(symbol[0x6a8:], math.Float64bits(100000))
+			binary.LittleEndian.PutUint64(symbol[0x6e8:], math.Float64bits(1))
+			reply = append([]byte{0}, compressed(symbol)...)
+		}
+		if err := write(reply); err != nil {
 			return err
 		}
 	}
@@ -118,12 +155,41 @@ func serve(conn net.Conn, options Options) error {
 		return err
 	}
 	if options.History {
-		request, err := read(9)
-		if err != nil || request[0] != 0x22 || binary.LittleEndian.Uint32(request[1:]) >= binary.LittleEndian.Uint32(request[5:]) {
-			return fmt.Errorf("invalid history interval: %w", err)
+		pages := options.HistoryPages
+		if pages == nil {
+			pages = []HistoryPage{{Records: tradeRecord(true)}}
 		}
-		if err := write(append([]byte{0}, compressed(tradeRecord(true))...)); err != nil {
-			return err
+		for index, page := range pages {
+			request, err := read(9)
+			if err != nil || request[0] != 0x22 || binary.LittleEndian.Uint32(request[1:]) >= binary.LittleEndian.Uint32(request[5:]) {
+				return fmt.Errorf("invalid history interval: %w", err)
+			}
+			if index < len(options.HistoryBounds) && (binary.LittleEndian.Uint32(request[1:]) != options.HistoryBounds[index][0] || binary.LittleEndian.Uint32(request[5:]) != options.HistoryBounds[index][1]) {
+				return errors.New("incorrect history window boundary")
+			}
+			if page.Disconnect {
+				return nil
+			}
+			if page.WaitForClose {
+				_, err := io.Copy(io.Discard, conn)
+				return err
+			}
+			var reply []byte
+			if page.Status != 0 {
+				reply = []byte{page.Status}
+			} else if page.DeclaredSize != 0 {
+				reply = binary.LittleEndian.AppendUint32([]byte{0}, page.DeclaredSize)
+			} else if len(page.Records) == 0 {
+				reply = []byte{0, 0, 0, 0, 0}
+			} else {
+				reply = append([]byte{0}, compressed(page.Records)...)
+			}
+			if err := write(reply); err != nil {
+				return err
+			}
+			if page.Status > 1 || page.DeclaredSize != 0 {
+				return expectClose(conn)
+			}
 		}
 	}
 	request, err := read(77)
@@ -147,11 +213,22 @@ func serve(conn net.Conn, options Options) error {
 	binary.LittleEndian.PutUint64(account[0x48:], math.Float64bits(1234.5))
 	binary.LittleEndian.PutUint64(account[0x50:], math.Float64bits(6.25))
 	binary.LittleEndian.PutUint32(account[0x35d8:], 1)
+	copy(account[0x34f4:], "USD")
 	account = append(account, tradeRecord(false)...)
+	account = append(account, options.AccountTail...)
 	if err := write(append([]byte{0}, compressed(account)...)); err != nil {
 		return err
 	}
 	return expectClose(conn)
+}
+
+// TradeBytes creates a complete synthetic history row for interval/replay tests.
+func TradeBytes(ticket int32, closeTime uint32, profit float64) []byte {
+	value := tradeRecord(true)
+	binary.LittleEndian.PutUint32(value, uint32(ticket))
+	binary.LittleEndian.PutUint32(value[0x40:], closeTime)
+	binary.LittleEndian.PutUint64(value[0x80:], math.Float64bits(profit))
+	return value
 }
 
 func expectClose(conn net.Conn) error {
@@ -195,7 +272,7 @@ func tradeRecord(history bool) []byte {
 		binary.LittleEndian.PutUint32(value[0x18:], 1)
 		binary.LittleEndian.PutUint32(value[0x40:], 1700003000)
 	}
-	for offset, money := range map[int]float64{0x30: 1.125, 0x38: 1.25, 0x60: -1.5, 0x70: -0.25, 0x80: 12.5} {
+	for offset, money := range map[int]float64{0x28: 1.15, 0x30: 1.125, 0x38: 1.25, 0x60: -1.5, 0x70: -0.25, 0x78: 1.16, 0x80: 12.5, 0xc0: 1} {
 		binary.LittleEndian.PutUint64(value[offset:], math.Float64bits(money))
 	}
 	return value

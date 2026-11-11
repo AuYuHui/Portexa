@@ -32,8 +32,11 @@ func Probe(ctx context.Context, config Config) (Result, error) {
 func Fetch(ctx context.Context, config Config, options Options) (Result, error) {
 	if options.History != nil {
 		if _, err := protocol.HistoryRequest(options.History.Start, options.History.End); err != nil {
-			return Result{}, err
+			return Result{}, &Error{Code: InvalidConfig, Operation: "history", cause: err}
 		}
+	}
+	if options.HistoryWindowSeconds == 1 || (options.History == nil && options.HistoryWindowSeconds != 0) {
+		return Result{}, &Error{Code: InvalidConfig, Operation: "history"}
 	}
 	conn, err := open(ctx, config, true)
 	if err != nil {
@@ -43,21 +46,21 @@ func Fetch(ctx context.Context, config Config, options Options) (Result, error) 
 	result := initialResult(conn.response)
 	device, err := protocol.DefaultDeviceInfo()
 	if err != nil {
-		return result, err
+		return result, classifyError("authentication", result.ServerBuild, err)
 	}
 	auth, _, err := protocol.AuthenticationPacket(conn.response, config.Login, device)
 	if err != nil {
-		return result, err
+		return result, classifyError("authentication", result.ServerBuild, err)
 	}
 	if _, err := io.Copy(conn.socket, bytes.NewReader(auth)); err != nil {
-		return result, conn.error(err)
+		return result, conn.error("authentication", err)
 	}
 	if err := protocol.WriteCommand(conn.socket, &conn.response.Tx, []byte{0x10}); err != nil {
-		return result, conn.error(err)
+		return result, conn.error("configuration", err)
 	}
 	configuration, err := protocol.ReadServerConfiguration(conn.socket, &conn.response.Rx, config.Server)
 	if err != nil {
-		return result, conn.error(err)
+		return result, conn.error("configuration", err)
 	}
 	result.Server = ServerInfo{configuration.Name, len(configuration.Data), configuration.AccessCount}
 	result.SessionConfirmed = true
@@ -65,9 +68,9 @@ func Fetch(ctx context.Context, config Config, options Options) (Result, error) 
 	if options.History != nil {
 		start, end = options.History.Start, options.History.End
 	}
-	session, err := protocol.ReadLiveAccount(conn.socket, &conn.response, start, end)
+	session, err := protocol.ReadLiveAccount(conn.socket, &conn.response, start, end, options.HistoryWindowSeconds)
 	applySession(&result, session)
-	return result, conn.error(err)
+	return result, conn.error("synchronization", err)
 }
 
 type connection struct {
@@ -79,22 +82,25 @@ type connection struct {
 }
 
 func open(ctx context.Context, config Config, requireServer bool) (*connection, error) {
+	if config.PasswordType != InvestorPassword {
+		return nil, &Error{Code: ReadOnlyRequired, Operation: "config"}
+	}
 	if config.Login == 0 || len(config.Password) < 1 || len(config.Password) > 16 || strings.ContainsRune(config.Password, 0) {
-		return nil, errors.New("login and a password of 1 to 16 bytes are required")
+		return nil, &Error{Code: InvalidConfig, Operation: "config", cause: errors.New("login and a password of 1 to 16 bytes are required")}
 	}
 	if requireServer && config.Server == "" {
-		return nil, errors.New("a verified server display name is required")
+		return nil, &Error{Code: InvalidConfig, Operation: "config", cause: errors.New("a verified server display name is required")}
 	}
 	host, port, splitErr := net.SplitHostPort(config.Address)
 	number, portErr := strconv.Atoi(port)
 	if splitErr != nil || net.ParseIP(host) == nil || portErr != nil || number < 1 || number > 65535 {
-		return nil, errors.New("target must be an independently observed IP address and TCP port")
+		return nil, &Error{Code: InvalidConfig, Operation: "config", cause: errors.New("target must be an independently observed IP address and TCP port")}
 	}
 	ctx, cancel := context.WithTimeout(ctx, sessionTimeout)
 	socket, err := (&net.Dialer{}).DialContext(ctx, "tcp", config.Address)
 	if err != nil {
 		cancel()
-		return nil, err
+		return nil, classifyError("connect", 0, err)
 	}
 	conn := &connection{socket: socket, ctx: ctx, cancel: cancel}
 	conn.stop = context.AfterFunc(ctx, func() { _ = socket.Close() })
@@ -106,18 +112,22 @@ func open(ctx context.Context, config Config, requireServer bool) (*connection, 
 		conn.response, err = protocol.ReadInitial(socket, config.Login, config.Password)
 	}
 	if err != nil {
-		err = conn.error(err)
+		err = conn.error("initial", err)
 		conn.close()
 		return nil, err
 	}
 	return conn, nil
 }
 
-func (c *connection) error(err error) error {
-	if err != nil && c.ctx.Err() != nil {
-		return c.ctx.Err()
+func (c *connection) error(operation string, err error) error {
+	var phase *protocol.OperationError
+	if errors.As(err, &phase) {
+		operation = phase.Operation
 	}
-	return err
+	if err != nil && c.ctx.Err() != nil {
+		err = c.ctx.Err()
+	}
+	return classifyError(operation, c.response.ServerBuild, err)
 }
 
 func (c *connection) close() {
@@ -139,11 +149,17 @@ func applySession(result *Result, session protocol.SessionResult) {
 	result.Account = Account{
 		Leverage: session.Account.Leverage, Balance: session.Account.Balance, Credit: session.Account.Credit,
 		InvestorIndicator: session.Account.InvestorIndicator, DemoIndicator: session.Account.DemoIndicator,
+		Currency: session.Account.Currency, Equity: session.Account.Equity,
+		Margin: session.Account.Margin, MarginAvailable: session.Account.MarginAvailable,
 	}
 	result.AccountBaseBytes = min(protocol.AccountBaseSize, len(session.Account.Raw))
 	result.TradeTrailingBytes = session.Account.TrailingBytes
 	result.Trades, result.History = trades(session.Account.Orders), trades(session.History.Records)
 	result.HistoryStatus = session.History.Status
+	result.HistoryComplete = session.HistoryRead
+	for _, interval := range session.HistoryCovered {
+		result.HistoryCovered = append(result.HistoryCovered, HistoryRange{Start: interval.Start, End: interval.End})
+	}
 	result.Symbols = Table{session.Symbols.Status, session.Symbols.Count}
 	result.Groups = Table{session.Groups.Status, session.Groups.Count}
 	result.Optional = Table{session.Auxiliary.Status, session.Auxiliary.Count}
@@ -155,6 +171,7 @@ func trades(values []protocol.TradeInfo) []Trade {
 		result = append(result, Trade{
 			Ticket: v.Ticket, Symbol: v.Symbol, Digits: v.Digits, Command: v.Command,
 			VolumeHundredths: v.VolumeHundredths, Time20: v.Time20, Time40: v.Time40,
+			OpenTime: v.Time20, CloseTime: v.Time40, OpenPrice: v.OpenPrice, ClosePrice: v.ClosePrice,
 			SL: v.Sl, TP: v.Tp, Commission: v.Commission, Swap: v.Swap, Profit: v.Profit, Taxes: v.Taxes,
 		})
 	}

@@ -28,14 +28,18 @@ func Summary(result mt4.Result) map[string]any {
 		"broker_name_verified":     result.Server.Name != "",
 		"account_response_decoded": result.AccountRead, "account_base_bytes": result.AccountBaseBytes,
 		"account_money_fields_finite": result.AccountRead, "investor_indicator_set": result.Account.InvestorIndicator != 0,
+		"margin_available":              result.Account.MarginAvailable,
 		"read_only_permission_verified": false,
+		"query_only_profile":            true,
 		"trade_order_records":           len(result.Trades), "trade_order_trailing_bytes": result.TradeTrailingBytes,
 		"trade_order_kinds": tradeKinds(result.Trades), "trade_time_checks": tradeTimeEvidence(result.Trades),
 		"symbol_records": result.Symbols.Count, "group_records": result.Groups.Count,
 		"optional_table_status":    result.Optional.Status,
 		"history_response_decoded": result.HistoryRead, "history_records": len(result.History),
+		"history_complete": result.HistoryComplete, "history_completed_windows": len(result.HistoryCovered),
 		"history_order_kinds": tradeKinds(result.History), "history_time_checks": tradeTimeEvidence(result.History),
-		"local_reference_matches": map[string]bool{},
+		"local_reference_matches":    map[string]bool{},
+		"account_reference_verified": false,
 	}
 }
 
@@ -45,13 +49,22 @@ func compareAccount(actual mt4.Account, expected *expectedAccount) map[string]bo
 		return result
 	}
 	if expected.Balance != nil {
-		result["balance_at_two_decimals"] = math.Abs(actual.Balance-*expected.Balance) < 0.00501
+		result["balance_at_two_decimals"] = math.Round(actual.Balance*100) == math.Round(*expected.Balance*100)
 	}
 	if expected.Credit != nil {
-		result["credit_at_two_decimals"] = math.Abs(actual.Credit-*expected.Credit) < 0.00501
+		result["credit_at_two_decimals"] = math.Round(actual.Credit*100) == math.Round(*expected.Credit*100)
 	}
 	if expected.Leverage != nil {
 		result["leverage"] = actual.Leverage == *expected.Leverage
+	}
+	if expected.Equity != nil {
+		result["equity_at_two_decimals"] = math.Round(actual.Equity*100) == math.Round(*expected.Equity*100)
+	}
+	if expected.Currency != nil {
+		result["currency"] = actual.Currency == *expected.Currency
+	}
+	if expected.Margin != nil {
+		result["margin_at_two_decimals"] = actual.MarginAvailable && math.Round(actual.Margin*100) == math.Round(*expected.Margin*100)
 	}
 	return result
 }

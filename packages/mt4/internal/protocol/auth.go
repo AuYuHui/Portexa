@@ -64,7 +64,7 @@ func AuthenticationPacket(response InitialResponse, login uint32, device []byte)
 		}
 	}
 	if !foundProgram {
-		return nil, sessionKey, errors.New("server feature program is absent")
+		return nil, sessionKey, ErrUnsupportedProtocol
 	}
 	mix := (uint64(login) << 32) | uint64(int64(int32(response.Field)))
 	token ^= mix

@@ -21,9 +21,42 @@ func read(ctx context.Context, config mt4.Config) (mt4.Result, error) {
 }
 ```
 
-`Config` 包含 `Address`、`Server`、`Login`、`Password`，由调用方在本地提供；地址必须是已独立核验的 IP 和端口。密码限制为1–16个 UTF-8 字节。代码不读取环境变量、标准输入、配置文件或数据库，不打印结果。业务方自行决定凭据管理、数据使用及持久化。
+`Config` 包含 `Address`、`Server`、`Login`、`Password`、`PasswordType`，由调用方在本地提供。必须明确设置 `PasswordType: mt4.InvestorPassword`；缺省、主密码及其他类型在连接前拒绝。此项是调用方对密码来源的声明，不是服务端权限证明。地址必须是已独立核验的 IP 和端口，密码限制为1–16个 UTF-8 字节。代码不读取环境变量、标准输入、配置文件或数据库，不打印结果。
 
-每次调用重新生成安装随机材料和认证。连接在调用结束时关闭，上限20秒，调用方更早的 deadline 或取消会中断连接。历史区间使用递增的 Unix 秒值，单个解压体最大16 MiB；没有自动重试、交易命令、实时订阅或后台连接。
+每次调用重新生成安装随机材料和认证。连接在调用结束时关闭，上限20秒，调用方更早的 deadline 或取消会中断连接。没有自动重试、交易命令、实时订阅或后台连接；认证后的写入还受固定只读查询形状白名单保护。
+
+## 账户与订单
+
+`Account` 提供 `Balance`、`Credit`、`Currency`、`Equity`、`Margin`、杠杆及原始指示。金额保留账户原始币种单位，例如 USC 不会换算成 USD。净值按同一账户响应的余额、信用及持仓净盈亏计算；保证金使用同期订单价格、转换率、品种规则和账户组覆盖，包含五种保证金模式及锁仓处理。只有 `MarginAvailable=true` 才能使用保证金；缺少所需配置或遇到未知模式返回错误。
+
+`Trade` 包含品种、操作类型、整数百分之一手、`Lots()`、`OpenTime/CloseTime`、开/平价格、SL/TP、利润、佣金、隔夜费和税费；`NetProfit()` 汇总各项费用。当前持仓的 `CloseTime` 为0，`ClosePrice` 是当前价格；历史订单对应实际平仓字段。`Time20/Time40` 保留为旧字段别名。
+
+时间是 MT4 服务器墙钟秒值，不自动转换为 UTC，也不推测服务器时区。活动账户的净值和浮盈随报价变化，对照官方客户端时需要相同买卖报价和相同持仓集合；不能比较不同时刻后声称逐分相等。
+
+## 历史同步
+
+`HistoryRange` 的起止秒值原样发送，满足 `Start < End <= 2147483647`。全历史可用 `Start: 0, End: 2147483647`，避免本机 UTC 终点漏掉服务器时区超前的近期订单。调用方负责具体日期到服务器时间的转换。
+
+`HistoryWindowSeconds` 为0时请求单块，设置为至少2时分窗查询，相邻窗口重叠一秒。结果按订单号归并并排序；重叠重复不增加条数，后窗修订覆盖前窗，同一响应内相互冲突的重复记录报错。历史命令状态1表示本区间为空，与配置表状态1的“未变化”不同；空窗不会清空其他窗口的记录。
+
+`HistoryRead/HistoryComplete=true` 表示请求窗口全部得到完整响应，包括明确空响应。`HistoryCovered` 只包含已成功的窗口；中途失败保留此前记录及覆盖范围，并返回错误。失败或未完成结果不能替换持久化快照。重连会新建会话；调用方可重查原区间，或重查未完成范围并按订单号更新存储。协议模块不落库，不提供业务同步游标。
+
+单块解压及合并结果保留16 MiB上限，超限返回 `resource_limit`，不会把截断结果标记为完成。分窗仍共用20秒期限。这里的完整性限于服务器提供的历史，无法恢复服务器已经删除的数据，也没有未经验证的分页或自动重试承诺。
+
+## 错误分类与版本
+
+错误可通过 `errors.As(err, &failure)` 取得 `*mt4.Error`：`Code`、`Operation`、`ServerBuild`、原始 `Status`。错误文本脱敏；`errors.Is` 仍可检查 `context.Canceled`、超时及底层连接错误。直接展开底层 `net.OpError` 可能包含接入地址，调用方应记录结构化字段。
+
+| Code | 含义 |
+| --- | --- |
+| `invalid_config` / `read_only_required` | 参数非法 / 未声明投资者密码，均在连接前拒绝 |
+| `unsupported_build` | 已知不支持的旧挑战版本 |
+| `unsupported_protocol` | 零挑战、未知记录模式、订单/保证金类型或缺少必要能力 |
+| `timeout` / `canceled` / `connection` | 超时 / 取消 / 断开、重置或截断；附失败阶段 |
+| `server_rejected` | 服务端非成功状态，保留原码，不猜测密码错误或权限原因 |
+| `invalid_response` / `resource_limit` | 响应数据、边界或金额非法 / 超出资源上限 |
+
+build 用于诊断及官方协议分支判断，不按券商或逐个 build 白名单适配。当前实现尝试 signed build>1419 的普通非零挑战 profile，并检查后续响应、记录布局和能力；兼容的新 build 无需增加分支。已实测版本不等于保证所有未来版本兼容。
 
 ## 结构与测试
 
@@ -46,9 +79,9 @@ go run ./tests/cmd/verify --vector /absolute/path/to/private-vector.json < /abso
 
 ## 已验证范围
 
-已有 macOS arm64、Linux arm64 的独立直连验证，详情与原日期见[验证报告](../../docs/research/mt4-native-validation.md)。当前只覆盖移动协议 build1478、已观测服务端 build1470的非零挑战分支。
+2026-11-11 本轮在 macOS arm64 对 EC Markets（1492）、DPrime 与 DLSMarkets（1470）完成新的直连和官方客户端对照，见[当前验收记录](../../docs/research/mt4-readonly-acceptance.md)。早先 Linux arm64 的独立运行证据仍保留原日期，见[历史验证报告](../../docs/research/mt4-native-validation.md)，不能视为本次新运行。
 
-投资者字段只作为原始指示保留，不推断全部权限。`Trade.Time20/Time40` 暂保留线格式命名，样本支持开/平仓解释，但 UI 逐项核验尚未完成。净值、币种、保证金全字段、历史完整性、增量恢复、自动发现、OTP和其他版本均未验收。
+投资者字段只保留原值，不推断全部权限。自动发现、OTP、旧版零挑战、实时订阅、业务持久化及服务器保留范围之外的数据仍不在此次实现内。
 
 C28 已含账号和密码派生材料；首段、报文、向量和真实数据都不能作为公开示例。公开应用兼容标识属于所分析协议 profile，不是用户硬件或个人托管账户标识。
 

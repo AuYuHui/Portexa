@@ -1,0 +1,642 @@
+[
+  {
+    "mode": 0,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 781.25
+  },
+  {
+    "mode": 0,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 656.25
+  },
+  {
+    "mode": 0,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 359.6984375
+  },
+  {
+    "mode": 0,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 0.3375
+  },
+  {
+    "mode": 0,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 781.25
+  },
+  {
+    "mode": 0,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 656.25
+  },
+  {
+    "mode": 0,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 781.25
+  },
+  {
+    "mode": 0,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 656.25
+  },
+  {
+    "mode": 0,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 0.625
+  },
+  {
+    "mode": 0,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 0.525
+  },
+  {
+    "mode": 0,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 0.6109375
+  },
+  {
+    "mode": 0,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 0.3375
+  },
+  {
+    "mode": 0,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 0.625
+  },
+  {
+    "mode": 0,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 0.525
+  },
+  {
+    "mode": 0,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 0.625
+  },
+  {
+    "mode": 0,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 0.525
+  },
+  {
+    "mode": 1,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 87890.625
+  },
+  {
+    "mode": 1,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 90234.375
+  },
+  {
+    "mode": 1,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 43838.2470703125
+  },
+  {
+    "mode": 1,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 42.1875
+  },
+  {
+    "mode": 1,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 87890.625
+  },
+  {
+    "mode": 1,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 90234.375
+  },
+  {
+    "mode": 1,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 90234.375
+  },
+  {
+    "mode": 1,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 90234.375
+  },
+  {
+    "mode": 1,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 62.5
+  },
+  {
+    "mode": 1,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 52.5
+  },
+  {
+    "mode": 1,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 61.09375
+  },
+  {
+    "mode": 1,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 33.75
+  },
+  {
+    "mode": 1,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 62.5
+  },
+  {
+    "mode": 1,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 52.5
+  },
+  {
+    "mode": 1,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 62.5
+  },
+  {
+    "mode": 1,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 52.5
+  },
+  {
+    "mode": 2,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 50.78125
+  },
+  {
+    "mode": 2,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 42.65625
+  },
+  {
+    "mode": 2,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 55.703125
+  },
+  {
+    "mode": 2,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 33.75
+  },
+  {
+    "mode": 2,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 50.78125
+  },
+  {
+    "mode": 2,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 42.65625
+  },
+  {
+    "mode": 2,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 50.78125
+  },
+  {
+    "mode": 2,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 42.65625
+  },
+  {
+    "mode": 2,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 50.78125
+  },
+  {
+    "mode": 2,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 42.65625
+  },
+  {
+    "mode": 2,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 55.703125
+  },
+  {
+    "mode": 2,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 33.75
+  },
+  {
+    "mode": 2,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 50.78125
+  },
+  {
+    "mode": 2,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 42.65625
+  },
+  {
+    "mode": 2,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 50.78125
+  },
+  {
+    "mode": 2,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 42.65625
+  },
+  {
+    "mode": 3,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 2197265.625
+  },
+  {
+    "mode": 3,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 2255859.375
+  },
+  {
+    "mode": 3,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 1095956.1767578125
+  },
+  {
+    "mode": 3,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 1054.6875
+  },
+  {
+    "mode": 3,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 2197265.625
+  },
+  {
+    "mode": 3,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 2255859.375
+  },
+  {
+    "mode": 3,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 2255859.375
+  },
+  {
+    "mode": 3,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 2255859.375
+  },
+  {
+    "mode": 3,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 62.5
+  },
+  {
+    "mode": 3,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 52.5
+  },
+  {
+    "mode": 3,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 61.09375
+  },
+  {
+    "mode": 3,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 33.75
+  },
+  {
+    "mode": 3,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 62.5
+  },
+  {
+    "mode": 3,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 52.5
+  },
+  {
+    "mode": 3,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 62.5
+  },
+  {
+    "mode": 3,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 52.5
+  },
+  {
+    "mode": 4,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 878.90625
+  },
+  {
+    "mode": 4,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 902.34375
+  },
+  {
+    "mode": 4,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 438.382470703125
+  },
+  {
+    "mode": 4,
+    "initial": 0.0,
+    "largest_side": false,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 0.421875
+  },
+  {
+    "mode": 4,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 878.90625
+  },
+  {
+    "mode": 4,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 902.34375
+  },
+  {
+    "mode": 4,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 902.34375
+  },
+  {
+    "mode": 4,
+    "initial": 0.0,
+    "largest_side": true,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 902.34375
+  },
+  {
+    "mode": 4,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 0.625
+  },
+  {
+    "mode": 4,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 0.525
+  },
+  {
+    "mode": 4,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 0.6109375
+  },
+  {
+    "mode": 4,
+    "initial": 80.0,
+    "largest_side": false,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 0.3375
+  },
+  {
+    "mode": 4,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 0,
+    "expected": 0.625
+  },
+  {
+    "mode": 4,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 0,
+    "sell_volume": 75,
+    "expected": 0.525
+  },
+  {
+    "mode": 4,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 125,
+    "sell_volume": 75,
+    "expected": 0.625
+  },
+  {
+    "mode": 4,
+    "initial": 80.0,
+    "largest_side": true,
+    "buy_volume": 75,
+    "sell_volume": 75,
+    "expected": 0.525
+  }
+]

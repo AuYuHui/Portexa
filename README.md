@@ -33,4 +33,4 @@ make build
 GOWORK=off go -C packages/mt4 test ./...
 ```
 
-既有真实环境验证及限制见[验证报告](docs/research/mt4-native-validation.md)。凭据、接入地址、设备材料、抓包和真实数值均不进入源码、文档或测试。
+当前已完成 EC Markets、DPrime、DLSMarkets 的原生只读兼容性实测及官方字段对照，范围与方法见[本轮验收记录](docs/research/mt4-readonly-acceptance.md)；早先 Linux 运行保留在[历史验证报告](docs/research/mt4-native-validation.md)。凭据、接入地址、设备材料、抓包和真实数值均不进入源码、文档或测试。

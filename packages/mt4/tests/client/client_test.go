@@ -16,7 +16,7 @@ func TestFetchThroughPublicInterface(t *testing.T) {
 	address, completed := support.NewServer(t, support.Options{Authenticate: true, History: true})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	result, err := mt4.Fetch(ctx, mt4.Config{Address: address, Server: support.Server, Login: support.Login, Password: support.Password}, mt4.Options{History: &mt4.HistoryRange{Start: 1700000000, End: 1700003600}})
+	result, err := mt4.Fetch(ctx, mt4.Config{Address: address, Server: support.Server, Login: support.Login, Password: support.Password, PasswordType: mt4.InvestorPassword}, mt4.Options{History: &mt4.HistoryRange{Start: 1700000000, End: 1700003600}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,11 +29,14 @@ func TestFetchThroughPublicInterface(t *testing.T) {
 	if len(result.Trades) != 1 || len(result.History) != 1 || result.Trades[0].Command != 0 || result.History[0].Command != 1 || result.Trades[0].SL != 1.125 || result.History[0].Commission != -1.5 || result.TradeTrailingBytes != 0 {
 		t.Fatal("public snapshot lost trade fields or record boundaries")
 	}
+	if result.Account.Currency != "USD" || result.Account.Equity != 1251.5 || !result.Account.MarginAvailable || result.Account.Margin != 1250 || result.Trades[0].Lots() != 1.25 || result.Trades[0].NetProfit() != 10.75 || result.Trades[0].OpenTime != 1700000000 || result.History[0].CloseTime != 1700003000 || result.Trades[0].OpenPrice != 1.15 || result.History[0].ClosePrice != 1.16 {
+		t.Fatal("public financial/position semantics lost precision or charges")
+	}
 }
 
 func TestProbeClosesWithoutAuthentication(t *testing.T) {
 	address, completed := support.NewServer(t, support.Options{})
-	result, err := mt4.Probe(context.Background(), mt4.Config{Address: address, Login: support.Login, Password: support.Password})
+	result, err := mt4.Probe(context.Background(), mt4.Config{Address: address, Login: support.Login, Password: support.Password, PasswordType: mt4.InvestorPassword})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +72,7 @@ func TestContextCancellationInterruptsRead(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		_, err := mt4.Probe(ctx, mt4.Config{Address: listener.Addr().String(), Login: support.Login, Password: support.Password})
+		_, err := mt4.Probe(ctx, mt4.Config{Address: listener.Addr().String(), Login: support.Login, Password: support.Password, PasswordType: mt4.InvestorPassword})
 		done <- err
 	}()
 	select {
@@ -90,8 +93,9 @@ func TestContextCancellationInterruptsRead(t *testing.T) {
 }
 
 func TestInvalidHistoryRejectedBeforeDial(t *testing.T) {
-	_, err := mt4.Fetch(context.Background(), mt4.Config{Address: "127.0.0.1:1", Server: support.Server, Login: support.Login, Password: support.Password}, mt4.Options{History: &mt4.HistoryRange{Start: 200, End: 100}})
-	if err == nil || err.Error() != "history interval must be a valid increasing Unix time range" {
+	_, err := mt4.Fetch(context.Background(), mt4.Config{Address: "127.0.0.1:1", Server: support.Server, Login: support.Login, Password: support.Password, PasswordType: mt4.InvestorPassword}, mt4.Options{History: &mt4.HistoryRange{Start: 200, End: 100}})
+	var failure *mt4.Error
+	if !errors.As(err, &failure) || failure.Code != mt4.InvalidConfig || failure.Operation != "history" {
 		t.Fatal("invalid history was not rejected before network setup")
 	}
 }
