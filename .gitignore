@@ -1,0 +1,9 @@
+# 原始抓包与本地分析结果可能包含凭据、会话和账户数据。
+.local/
+*.pcap
+*.pcapng
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+*.pyc
+.DS_Store

@@ -1,0 +1,4 @@
+github.com/digineat/go-metatrader4 v1.1.1-0.20261020233353-5a6b109a920a h1:GaF74kpak1F8TNGC5XDVSw76iVaGEHlXmd2r4guRzO0=
+github.com/digineat/go-metatrader4 v1.1.1-0.20261020233353-5a6b109a920a/go.mod h1:EsdDcTeHrf6pkrLNO403n+OhO0Gn2ZOiAqaVXM1eUy4=
+golang.org/x/text v0.43.0 h1:1QivrlhwAsnMOcqgOdl9my7s9OyZl8O5/UGUTJVXoWc=
+golang.org/x/text v0.43.0/go.mod h1:hbSIYA/amXcRXTFSZqh8tWHEoqRvvbKPJ2uz/KU+a+s=
