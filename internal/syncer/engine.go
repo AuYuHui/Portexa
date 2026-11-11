@@ -1,0 +1,208 @@
+package syncer
+
+import (
+	"context"
+	"errors"
+	"hash/fnv"
+	"sync"
+	"time"
+
+	"portexa/internal/accounts"
+	"portexa/internal/storage"
+	"portexa/mt4"
+)
+
+type Fetcher func(context.Context, mt4.Config, mt4.Options) (mt4.Result, error)
+
+type Options struct {
+	Interval time.Duration
+	Timeout  time.Duration
+	Workers  int
+}
+
+type Engine struct {
+	accounts          *accounts.Service
+	fetch             Fetcher
+	interval, timeout time.Duration
+	sem               chan struct{}
+	wake              chan struct{}
+	mu                sync.Mutex
+	active            map[string]context.CancelFunc
+	wg                sync.WaitGroup
+	fatal             chan error
+}
+
+func New(service *accounts.Service, fetch Fetcher, options Options) *Engine {
+	if fetch == nil {
+		fetch = mt4.Fetch
+	}
+	if options.Interval <= 0 {
+		options.Interval = time.Minute
+	}
+	if options.Timeout <= 0 {
+		options.Timeout = 20 * time.Second
+	}
+	if options.Workers <= 0 {
+		options.Workers = 10
+	}
+	return &Engine{accounts: service, fetch: fetch, interval: options.Interval, timeout: options.Timeout,
+		sem: make(chan struct{}, options.Workers), wake: make(chan struct{}, 1), active: map[string]context.CancelFunc{}, fatal: make(chan error, 1)}
+}
+
+// Run is called once; cancellation drains every active Fetch before it returns.
+func (e *Engine) Run(parent context.Context) error {
+	ctx, cancel := context.WithCancel(parent)
+	defer func() { cancel(); e.wg.Wait() }()
+	if err := e.accounts.Recover(ctx); err != nil {
+		return err
+	}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		e.schedule(ctx)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		case <-e.wake:
+		case err := <-e.fatal:
+			return err
+		}
+	}
+}
+
+func (e *Engine) Wake() {
+	select {
+	case e.wake <- struct{}{}:
+	default:
+	}
+}
+
+func (e *Engine) Cancel(id string) {
+	e.mu.Lock()
+	if cancel := e.active[id]; cancel != nil {
+		cancel()
+	}
+	e.mu.Unlock()
+	e.Wake()
+}
+
+func (e *Engine) schedule(ctx context.Context) {
+	ids, err := e.accounts.Due(ctx, time.Now().UnixMilli(), 200)
+	if err != nil {
+		if ctx.Err() == nil {
+			e.stopForStorageFailure()
+		}
+		return
+	}
+	for _, id := range ids {
+		if ctx.Err() != nil {
+			return
+		}
+		e.mu.Lock()
+		if _, exists := e.active[id]; exists {
+			e.mu.Unlock()
+			continue
+		}
+		select {
+		case e.sem <- struct{}{}:
+		default:
+			e.mu.Unlock()
+			return
+		}
+		jobCtx, cancel := context.WithTimeout(ctx, e.timeout)
+		e.active[id] = cancel
+		e.wg.Add(1)
+		e.mu.Unlock()
+		go e.runOne(jobCtx, id)
+	}
+}
+
+func (e *Engine) runOne(ctx context.Context, id string) {
+	defer func() {
+		e.mu.Lock()
+		e.active[id]()
+		delete(e.active, id)
+		e.mu.Unlock()
+		<-e.sem
+		e.wg.Done()
+	}()
+	job, err := e.accounts.Claim(ctx, id)
+	if err != nil {
+		if accounts.IsBrokenGate(err) {
+			endCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			if err := e.accounts.DisableBrokenGate(endCtx, id, job.Account.ConfigVersion); err != nil && !errors.Is(err, storage.ErrNotFound) {
+				e.stopForStorageFailure()
+			}
+		} else if !errors.Is(err, accounts.ErrPaused) && !errors.Is(err, storage.ErrNotFound) && ctx.Err() == nil {
+			e.stopForStorageFailure()
+		}
+		return
+	}
+	from := time.Now()
+	result, err := e.fetch(ctx, job.Config, mt4.Options{})
+	job.Config.Password = ""
+	finished := time.Now()
+	if err == nil {
+		err = ctx.Err()
+	}
+	if err == nil {
+		var snapshot storage.Snapshot
+		var positions []storage.Position
+		snapshot, positions, err = Convert(job, result, from.UnixMilli(), finished.UnixMilli())
+		if err == nil {
+			err = e.accounts.Publish(ctx, job, snapshot, positions, e.next(id, finished).UnixMilli())
+		}
+	}
+	if err != nil {
+		failure := classify(err)
+		endCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := e.accounts.Fail(endCtx, job, failure, finished.Add(accounts.RetryDelay(job.Account.FailureCount)).UnixMilli()); err != nil {
+			e.stopForStorageFailure()
+		}
+	}
+}
+
+func (e *Engine) stopForStorageFailure() {
+	// Do not leave an apparently running account stuck behind its durable lock.
+	// The supervisor restarts the service; Recover marks unfinished runs interrupted.
+	select {
+	case e.fatal <- errors.New("快照调度无法持久化状态，已停止；请检查数据库并重启服务"):
+	default:
+	}
+}
+
+func (e *Engine) next(id string, now time.Time) time.Time {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(id))
+	interval := e.interval.Milliseconds()
+	phase := int64(h.Sum32()) % interval
+	next := ((now.UnixMilli()-phase)/interval+1)*interval + phase
+	return time.UnixMilli(next)
+}
+
+func classify(err error) accounts.Failure {
+	failure := accounts.Failure{Code: "snapshot_invalid", Operation: "snapshot"}
+	var protocol *mt4.Error
+	if errors.As(err, &protocol) {
+		failure.Code, failure.Operation = string(protocol.Code), protocol.Operation
+		if protocol.Code == mt4.ServerRejected {
+			status := int(protocol.Status)
+			failure.Status = &status
+		}
+		switch protocol.Code {
+		case mt4.InvalidConfig, mt4.ReadOnlyRequired, mt4.UnsupportedBuild, mt4.UnsupportedProtocol, mt4.ServerRejected, mt4.ResourceLimit:
+			failure.Permanent = true
+		}
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, storage.ErrConflict) || errors.Is(err, accounts.ErrEndpoint) {
+		failure.Canceled = true
+		failure.Code = "configuration_changed"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		failure.Code = "timeout"
+	}
+	return failure
+}

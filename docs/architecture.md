@@ -4,8 +4,17 @@ Portexa 使用一个主工程和一个可独立提取的 MT4 Go 模块。模块�
 
 ```text
 Portexa/
+├── cmd/portexa/                  # 产品服务与本地管理入口
 ├── cmd/mt4probe/                 # 联网验证命令入口
+├── internal/appcli/              # 初始化、运行锁、启动、重置与备份恢复
+├── internal/auth/                # 单密码认证、会话和撤销
+├── internal/httpapi/             # 同源 API、Cookie、Origin、CSRF 与静态服务
+├── internal/accounts/            # 可信接入、加密凭据管理和资金聚合
+├── internal/syncer/              # 有界快照调度、SDK 适配与结果校验
+├── internal/storage/             # STRICT 迁移、GORM、单写队列与在线备份
+├── internal/vault/               # 独立 AES-GCM 密钥与持久化加密计数
 ├── internal/cli/                 # 本地输入、参数和脱敏输出
+├── web/                          # Vue 看板，静态构建到 .local/web
 ├── packages/mt4/                 # 独立模块 portexa/mt4
 │   ├── client.go                 # Probe / Fetch，连接生命周期与上下文
 │   ├── types.go                  # 对外协议数据类型
@@ -13,7 +22,7 @@ Portexa/
 │   ├── internal/verification/    # 离线样本核对，不进入 SDK 运行依赖
 │   └── tests/                    # 协议测试、公开接口测试和合成服务端
 │       └── cmd/verify/           # 离线验证命令
-├── tests/                        # 主工程 CLI 与采集范围测试
+├── tests/                        # 主工程接口、同步、CLI、浏览器与性能验收
 ├── tools/mt4-capture/            # 本地采集脚本
 ├── research/                     # 早期实验，隔离于运行代码
 ├── docs/research/                # 历史研究、版本依据和验证边界
@@ -27,16 +36,18 @@ Portexa/
 
 `cmd/mt4probe → internal/cli → portexa/mt4 → internal/protocol`。协议模块不依赖主工程或业务代码，不读配置文件，不打印日志，也不落库。调用方传入凭据和上下文，取得类型化结果；命令行层只输出脱敏检查结果。
 
+产品入口为 `cmd/portexa → internal/appcli`；HTTP 调用 auth/accounts，syncer 通过注入的 Fetcher 调用冻结 SDK。accounts 管理存储事务，storage 管理 GORM、SQLite 连接与写队列。网络等待在事务之外，快照发布前重新检查配置版本。前端仅接收脱敏 DTO，不接触投资者凭据密文或系统密码哈希。
+
 离线验证路径是 `packages/mt4/tests/cmd/verify → internal/verification → internal/protocol`。它读取私有样本且不联网，不能被当作运行中的连接器。`research/mt4-wire` 保留早期上游行为实验，有独立模块及测试，不作为原生协议依赖。
 
 ## 后续业务与独立发布
 
-业务调用 `mt4.Fetch` 取得协议快照，再在主工程完成多平台聚合、存储和调度。这些职责不加入协议模块。无需提前创建空的业务目录。
+业务通过 `mt4.Fetch` 取得协议快照，在主工程完成资金聚合、存储和调度。历史与 Analytics 按后续阶段独立增加，这些职责不加入协议模块。
 
 `packages/mt4` 自带 `go.mod/go.sum`、说明、第三方许可和测试，关闭 workspace 后可独立检查。未来迁入独立仓库时，保留这个目录的内容、设定正式发布模块地址并更新调用方即可；协议本身没有主工程耦合。
 
 ## 测试与约束
 
-`make check` 运行各模块 Go 测试、Python 范围测试、`go vet` 和结构检查。所有测试文件集中在 `tests` 目录下。合成服务端只监听本机回环地址；普通回归不会连接真实交易平台。
+`make check` 运行各模块 Go 测试、Python 范围测试、`go vet`、前端类型检查及构建和结构检查。浏览器、CLI 全流程与历史发布性能按[验收说明](phase1-validation.md)单独运行。所有测试文件集中在 `tests` 目录下，普通回归不会连接真实交易平台。
 
-源码、测试、脚本和文档单文件上限均为1000行；本地数据、依赖缓存及生成物由 Git 忽略，不进入该检查。真实材料只留在私有目录，历史线上证据保留原日期和未验证项，不能因目录调整改写成新的线上结果。
+源码、测试、脚本和文档单文件上限均为1000行；本地数据、依赖缓存及构建产物由 Git 忽略。npm 生成的 `web/package-lock.json` 保留标准排版和完整依赖锁，结构检查仅对这个生成锁文件豁免行数。真实材料只留在私有目录，历史线上证据保留原日期，不能因产品开发改写为本次线上结果。

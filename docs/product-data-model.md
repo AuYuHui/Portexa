@@ -108,13 +108,17 @@ CREATE TABLE accounts (
     credential_envelope BLOB NOT NULL,
     credential_key_id TEXT NOT NULL,
     credential_version INTEGER NOT NULL CHECK (credential_version > 0),
+    config_version INTEGER NOT NULL DEFAULT 1 CHECK (config_version > 0),
     sync_enabled INTEGER NOT NULL DEFAULT 0 CHECK (sync_enabled IN (0, 1)),
+    next_sync_at_ms INTEGER NOT NULL DEFAULT 0,
+    failure_count INTEGER NOT NULL DEFAULT 0 CHECK (failure_count >= 0),
     current_snapshot_id TEXT,
     included_at_ms INTEGER,
     initial_statistical_equity TEXT,
     removed_at_ms INTEGER,
     created_at_ms INTEGER NOT NULL,
     UNIQUE (server_id, login),
+    UNIQUE (id, server_id),
     FOREIGN KEY (server_id, pinned_endpoint_id)
         REFERENCES server_endpoints(server_id, id),
     FOREIGN KEY (id, current_snapshot_id)
@@ -124,7 +128,7 @@ CREATE TABLE accounts (
 CREATE TABLE history_coverage (
     id TEXT PRIMARY KEY,
     account_id TEXT NOT NULL REFERENCES accounts(id),
-    parent_id TEXT REFERENCES history_coverage(id),
+    parent_id TEXT,
     start_wall INTEGER NOT NULL CHECK (start_wall >= 0),
     end_wall INTEGER NOT NULL CHECK (end_wall <= 2147483647),
     state TEXT NOT NULL CHECK (state IN ('pending', 'complete', 'split', 'blocked')),
@@ -136,6 +140,8 @@ CREATE TABLE history_coverage (
         (checked_at_ms IS NOT NULL AND last_success_run_id IS NOT NULL)),
     UNIQUE (account_id, start_wall, end_wall),
     UNIQUE (id, account_id),
+    FOREIGN KEY (parent_id, account_id)
+        REFERENCES history_coverage(id, account_id),
     FOREIGN KEY (last_success_run_id, account_id)
         REFERENCES sync_runs(id, account_id)
 ) STRICT;
@@ -143,8 +149,10 @@ CREATE TABLE history_coverage (
 CREATE TABLE sync_runs (
     id TEXT PRIMARY KEY,
     account_id TEXT NOT NULL REFERENCES accounts(id),
-    endpoint_id TEXT NOT NULL REFERENCES server_endpoints(id),
+    server_id TEXT NOT NULL,
+    endpoint_id TEXT NOT NULL,
     credential_version INTEGER NOT NULL,
+    config_version INTEGER NOT NULL DEFAULT 1 CHECK (config_version > 0),
     kind TEXT NOT NULL CHECK (kind IN
         ('snapshot', 'history_recent', 'history_backfill', 'history_repair')),
     state TEXT NOT NULL CHECK (state IN
@@ -161,6 +169,8 @@ CREATE TABLE sync_runs (
     raw_status INTEGER,
     completion_reason TEXT,
     UNIQUE (id, account_id),
+    FOREIGN KEY (account_id, server_id) REFERENCES accounts(id, server_id),
+    FOREIGN KEY (server_id, endpoint_id) REFERENCES server_endpoints(server_id, id),
     FOREIGN KEY (coverage_id, account_id)
         REFERENCES history_coverage(id, account_id),
     CHECK ((kind = 'snapshot' AND coverage_id IS NULL) OR
@@ -354,6 +364,10 @@ CREATE INDEX sessions_expiry ON sessions(expires_at_ms);
 ```
 
 SQL 外键负责实体归属，业务事务还必须校验接入点核验状态、规则集归属、Decimal 格式、资金分类语义及调度状态转换。不得将建表成功当作这些业务约束已经实现。
+
+第一阶段的实际迁移为 [001_phase1.sql](../internal/storage/migrations/001_phase1.sql)。`config_version` 用于拒绝旧任务发布，`next_sync_at_ms` 与 `failure_count` 保存到期计划和重试进度；成功快照首次确认美元单位时保存原币首次统计权益及纳入时间。
+
+任务冗余保存 `server_id`，通过两条复合外键保证任务账户和接入点属于同一服务器；覆盖父子区间通过 `(parent_id, account_id)` 复合外键保证属于同一账户。第一阶段迁移仅包含快照业务，不引用尚未建立的历史表；第二阶段引入历史表及对应外键。
 
 账户已核验的币种不随新响应静默改写；SDK 历史订单没有逐笔币种字段，币种或单位变化必须核验其生效范围后再发布历史和归一化结果，不能把新单位套到旧订单。
 
