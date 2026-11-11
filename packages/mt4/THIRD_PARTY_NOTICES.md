@@ -1,4 +1,8 @@
-# 第三方许可
+# 第三方许可 / Third-party notices
+
+Portexa 自身代码遵循本目录 [MIT License](LICENSE)。下列依赖保留其原有版权与许可，不因项目开源而被替换。
+
+Portexa's own code is covered by the [MIT License](LICENSE). The dependency below retains its original copyright and license notice, which must accompany redistributions containing its code.
 
 运行依赖 `github.com/anchore/go-lzo` 固定为 `v0.1.2-0.20261030041440-c6cb39a30b97`，对应提交 `c6cb39a30b970a032659a16015a86d1eb6ffd666`。下文保留该版本 LICENSE 原文；分发包含其代码的程序时应一并保留。
 

@@ -1,5 +1,9 @@
 # Portexa 多账户聚合系统方案
 
+[English README](../README.md) · [中文 README](../README.zh-CN.md) · [文档索引](README.md)
+
+本文包含后续规划。当前可用功能、安装步骤和桌面示例以[项目说明](../README.zh-CN.md)、[启动指南](product-start.md)和[截图说明](screenshots.md)为入口；收益率、回撤与归档尚未交付。
+
 日期：2026-11-11，Asia/Shanghai。
 
 Portexa 从协议研究转向多经纪商、多交易账户的聚合系统。第一版协议作为冻结基线，产品功能在主工程实现，通过 `portexa/mt4` SDK 接入交易数据。

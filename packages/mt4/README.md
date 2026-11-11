@@ -1,6 +1,10 @@
 # MT4 原生协议模块
 
+[English overview](../../README.md#standalone-mt4-module) · [中文项目说明](../../README.zh-CN.md) · [文档索引](../../docs/README.md)
+
 模块名为 `portexa/mt4`，只依赖 Go 标准库和固定版本的 MIT 许可纯 Go LZO 解码器。它可脱离 Portexa 主工程独立编译、测试，运行时不依赖 MT4、Wine、EA、手机或第三方账户服务。第三方许可见[声明](THIRD_PARTY_NOTICES.md)。
+
+模块使用 [MIT License](LICENSE)，许可证与第三方声明随目录保留。当前模块路径用于仓库内本地开发，主工程通过 `replace` 引用；尚未配置可直接 `go get` 的公开模块地址。独立迁移时需设置正式模块路径并更新导入。
 
 ## 调用接口
 

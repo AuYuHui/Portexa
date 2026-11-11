@@ -1,57 +1,146 @@
 # Portexa
 
-多账户只读聚合系统。第一阶段提供单用户密码登录、可信服务器与账户接入、周期快照和浏览器看板。主工程使用 Go、GORM、SQLite 及 Vue；MT4 协议 SDK 可独立使用，业务分类留在主工程，无需 MT4 终端、Wine、EA 或第三方账户服务。
+**Your MT4 accounts, in one private workspace.**
 
-## 工程入口
+Portexa is a self-hosted, read-only dashboard for multiple MetaTrader 4 accounts. Track funds, positions, daily results, and cash flows through a native Go protocol client, without an MT4 terminal, Wine, an Expert Advisor, or a third-party account aggregation service.
 
-| 路径 | 职责 |
-| --- | --- |
-| cmd/portexa、internal/appcli | 产品服务、本地初始化、密码重置、备份恢复 |
-| internal/accounts、internal/syncer | 可信账户管理、快照采集、Decimal 聚合 |
-| internal/auth、internal/httpapi、internal/vault | 会话、受保护 API 与独立凭据密钥 |
-| internal/storage | STRICT 迁移、GORM 映射、单写队列与在线备份 |
-| internal/logging | JSONL 文件日志、大小及每日轮转、gzip 压缩与七天保留 |
-| web | Vue 3 / TypeScript 中英文账户看板 |
-| [packages/mt4](packages/mt4/README.md) | 独立协议模块 portexa/mt4 |
-| [cmd/mt4probe](cmd/mt4probe/README.md) | 联网验证命令，输出脱敏结果 |
-| packages/mt4/tests、tests | 协议、公开接口、CLI 和采集测试 |
-| [tools/mt4-capture](tools/mt4-capture/README.md) | 本地采集工具 |
-| [research](research/README.md) | 保留的早期实验 |
-| [docs/architecture.md](docs/architecture.md) | 目录、依赖方向及独立发布方式 |
-| [docs/product-plan.md](docs/product-plan.md) | 多账户聚合产品方案、Analytics 口径及单用户登录规则 |
-| [docs/product-start.md](docs/product-start.md) | 第一阶段启动、部署与本地管理 |
-| [docs/account-statistics.md](docs/account-statistics.md) | 当日胜负、保证金水平、历史回填与自动识别出入金 |
-| [docs/phase1-validation.md](docs/phase1-validation.md) | 合成验收与历史发布性能结果 |
-| [docs/research](docs/research/README.md) | 验证记录与协议研究依据 |
+[English](README.md) · [简体中文](README.zh-CN.md)
 
-模块按项目命名，不绑定个人托管账户。单文件不超过1000行，结构检查会自动执行此限制。
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## 开发与验证
+## Features
 
-需要 Go 1.26+、Node 22.12+ 和 Python 3。仓库根目录执行：
+- **Multi-account overview.** View balance, equity, floating net P&L, margin levels, collection status, and sampling times together.
+- **Explicit currency units.** Confirmed USD and USC accounts contribute to a USD subtotal at 100 USC = 1 USD. Original amounts remain available; other currencies are listed separately.
+- **Daily trading statistics.** See net realized profit, balance change, closed trades, win rate, and gains/losses by MT4 server date.
+- **History and cash flows.** Backfill available history, recognize deposits and withdrawals from explicit order comments, and correct classifications with an audit trail.
+- **Scheduled collection.** Choose a 30, 60, 120, or 300-second interval. Failed collections retain the last complete snapshot, with missing and stale data clearly marked.
+- **Private deployment.** A single system password, separately encrypted investor credentials, SQLite storage, local backups, and rotating JSONL logs.
+- **Chinese and English UI.** Switch languages on the sign-in page or dashboard. Your preference is saved in the browser; account names and original comments retain their source text.
+- **Standalone Go SDK.** Use `Probe` and `Fetch` from `packages/mt4` independently of the dashboard and storage layers.
+
+The current release focuses on account monitoring and cash-flow statistics. Return curves, drawdown analytics, and snapshot archival are planned. Compatibility depends on the broker's protocol profile and available history; see the [validation records](docs/research/README.md) for the tested scope and dates.
+
+## Screenshots
+
+These desktop screenshots show the real UI running against an isolated synthetic server. Names, login numbers, amounts, orders, and comments are examples; no live MT4 connection is used.
+
+### Account overview
+
+Compare the latest known equity subtotal, native-currency amounts, and account collection states. The sample includes USD, USC, and EUR accounts, plus paused, stale, and missing snapshots.
+
+![Portexa account overview in English, showing synthetic account balances and collection states](docs/screenshots/overview-en.png)
+
+### Account details
+
+Inspect daily results, margin, cash-flow classification, positions, and recent snapshots. In this synthetic USC example, daily net profit is **9.50 USC**, two closed trades give a **50.00%** win rate, and recognized deposits/withdrawals total **1,100.00 / 20.00 USC**.
+
+<details>
+<summary>View the full account details screenshot</summary>
+
+![Portexa account details in English, showing synthetic daily statistics, funding records, and positions](docs/screenshots/account-en.png)
+
+</details>
+
+See [screenshot notes and regeneration commands](docs/screenshots.md) for the Chinese images and the meaning of the example values.
+
+## Quick start
+
+Build on **macOS or Linux** with **Go 1.26+**, **Node.js 22.12+**, and npm. Python 3 is also needed for repository checks. Run these commands from the repository root:
 
 ```sh
+git clone https://github.com/AuYuHui/Portexa.git
+cd Portexa
 make web-install
-make check
 make build
 .local/bin/portexa init
 .local/bin/portexa serve -dev-http
 ```
 
-浏览器访问 `http://127.0.0.1:8080`。系统密码至少16个字符，无用户名。生产部署使用 HTTPS 来源及反向代理，详见[启动说明](docs/product-start.md)。产物包含 `.local/bin/portexa`、`.local/bin/mt4probe` 和 `.local/bin/mt4verify`；产品运行时不需要 Node。
+During initialization, enter the system password twice when prompted. It must contain at least **16 Unicode characters**. There is no username or default password.
 
-运行日志默认写入 `.local/portexa/logs/portexa.jsonl`，单文件上限100 MiB，轮转后 gzip 压缩，保留窗口七天。可用 `serve -log-max-size 50` 调整大小上限；保留和脱敏规则见[日志说明](docs/product-start.md#jsonl-运行日志)。
+Open [http://127.0.0.1:8080](http://127.0.0.1:8080) and sign in. `-dev-http` enables HTTP on loopback only; use an HTTPS reverse proxy for deployment.
 
-普通检查仅运行合成与回环测试，不登录真实服务。已支持按 MT4 服务器日期展示当日利润、平仓笔数、胜率和盈利/亏损，以及账户保证金水平；可返回历史按窗口回填，出入金根据明确备注自动识别，支持人工校正。原币保留，未覆盖和待识别数据明确标记；收益率、回撤和分钟归档仍属后续阶段，当前不会清理未归档的分钟快照。
+The build produces `.local/bin/portexa`, `.local/bin/mt4probe`, `.local/bin/mt4verify`, and the static UI in `.local/web/`. Deploy the service binary **together with** the static UI directory; Node.js is only needed at build time. Data, keys, backups, and logs default to the ignored `.local/portexa/` directory.
 
-看板支持简体中文与英语。首次访问按浏览器首选语言选择，不匹配时使用中文；登录页与顶部均可切换，选择保存在当前浏览器。日期随界面语言格式化，账户名称、原始备注、金额精度和服务器墙钟含义保持不变。
+### Connect an account
 
-界面运行时使用 [Vue I18n](https://vue-i18n.intlify.dev/)，翻译资源位于 `web/src/locales/{locale}.json`。[x18n](https://github.com/x18n-dev/x18n) 用于翻译检查与管理：`npm --prefix web run i18n:check` 检查缺失、未使用的键及插值参数；`npm --prefix web run i18n:ui` 打开管理界面。`make check` 已包含翻译检查。新增语言需同时注册运行时语言、切换选项和 `web/x18n.config.json` 中的语言列表；接口现有文本提示通过本地资源映射，不改写业务记录。
+1. Open **Connections & settings → Register server**, then search for the broker or exact MT4 server name.
+2. Independently verify the selected endpoint and confirm the remaining connection risk before registration is approved.
+3. Choose **Connect account**, provide the MT4 login and **investor password**, confirm the currency unit, and enable collection. The investor password must be **1–16 UTF-8 bytes**; it is separate from the system password.
 
-协议模块也能独立检查：
+The native protocol sends password-derived material over TCP before cryptographic server identity can be established. A matching server name or directory entry does not provide that authentication. Review endpoints before sending credentials and follow the [connection and deployment guide](docs/product-start.md).
+
+### Deploy behind HTTPS
+
+Initialize a private data directory, then run the service behind your reverse proxy:
+
+```sh
+.local/bin/portexa init -data /path/to/private-data
+.local/bin/portexa serve \
+  -data /path/to/private-data \
+  -web /path/to/built-web \
+  -listen 127.0.0.1:8080 \
+  -origin https://portexa.example.com
+```
+
+Keep the browser UI and API on the same origin, and preserve the original `Host` and `Origin` headers through the proxy. See [startup, backups, restore, and password reset](docs/product-start.md) for administration details.
+
+## Development
+
+```sh
+make web-install
+make check
+```
+
+`make check` covers structure and file-size rules, Go tests across all modules, Python capture-tool tests, `go vet`, frontend type checks, translation checks, and the production web build. Ordinary checks use synthetic data and loopback services; they do not sign in to live trading servers.
+
+For frontend hot reload, run the initialized Go service and Vite in separate terminals:
+
+```sh
+# Terminal 1
+.local/bin/portexa serve -dev-http -origin http://127.0.0.1:5173
+
+# Terminal 2
+npm --prefix web run dev
+```
+
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). See [CONTRIBUTING.md](CONTRIBUTING.md) for code boundaries, test placement, and translation maintenance.
+
+## Standalone MT4 module
+
+[`packages/mt4`](packages/mt4/README.md) contains the independent `portexa/mt4` module. Its public API is `Probe`, `Fetch`, and typed protocol data. It does not read application configuration, persist data, or emit CLI output.
 
 ```sh
 GOWORK=off go -C packages/mt4 test ./...
+GOWORK=off go -C packages/mt4 vet ./...
 ```
 
-当前已完成 EC Markets、DPrime、DLSMarkets 的原生只读兼容性实测及官方字段对照，范围与方法见[本轮验收记录](docs/research/mt4-readonly-acceptance.md)；早先 Linux 运行保留在[历史验证报告](docs/research/mt4-native-validation.md)。凭据、接入地址、设备材料、抓包和真实数值均不进入源码、文档或测试。
+Module paths are currently local project names. Use this checkout and its local module replacement; a public `go get` module path has not been configured. See the [SDK reference](packages/mt4/README.md) and [probe CLI](cmd/mt4probe/README.md) for usage and protocol limits.
+
+## Documentation
+
+The detailed engineering and operating guides are currently primarily in Chinese. Start with the [documentation index](docs/README.md).
+
+| Guide | Contents |
+| --- | --- |
+| [Startup and administration](docs/product-start.md) | Build, deployment, server registration, private data, logs, backups, and restore |
+| [Account statistics](docs/account-statistics.md) | Daily results, margin, history coverage, and cash-flow classification |
+| [Server discovery](docs/server-discovery.md) | Directory search, independent verification, and endpoint revisions |
+| [Screenshot examples](docs/screenshots.md) | English/Chinese desktop images, sample values, and reproducible capture |
+| [Architecture](docs/architecture.md) | Project structure, module boundaries, and independent SDK distribution |
+| [Validation](docs/phase1-validation.md) | Synthetic acceptance, browser checks, and recorded performance evidence |
+| [Product plan](docs/product-plan.md) | Implemented scope and future analytics roadmap |
+| [Protocol research](docs/research/README.md) | Historical research and broker compatibility evidence |
+
+## Contributing
+
+Issues and pull requests are welcome. Describe the behavior you want to change and include a synthetic reproduction when reporting a bug. Keep real credentials, endpoints, account data, and packet captures out of public reports. Read the [contribution guide](CONTRIBUTING.md) before making changes.
+
+## License
+
+Portexa is released under the [MIT License](LICENSE). The standalone SDK includes its own [license copy](packages/mt4/LICENSE). Third-party dependencies retain their respective licenses; the SDK's bundled notice is in [THIRD_PARTY_NOTICES.md](packages/mt4/THIRD_PARTY_NOTICES.md).
+
+## Star History
+
+[View Portexa on Star History](https://www.star-history.com/?type=date&repos=AuYuHui%2FPortexa).

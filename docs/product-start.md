@@ -1,4 +1,6 @@
-# 第一阶段启动与管理
+# Portexa 启动与管理
+
+[English README](../README.md) · [中文 README](../README.zh-CN.md) · [文档索引](README.md) · [桌面截图示例](screenshots.md)
 
 当前交付单用户登录、可信账户接入、可配置周期快照（默认60秒）、总览、持仓、当日交易统计、保证金水平和自动出入金。历史回填、按备注自动识别及人工校正见[账户统计](account-statistics.md)；收益率、回撤与分钟归档尚未交付。验收仅使用合成数据，未登录真实账户。
 
@@ -7,12 +9,16 @@
 开发需要 Go 1.26+、Node 22.12+、Python 3；运行服务只需 Go 二进制、前端静态目录和私有运行目录。支持 macOS / Linux。
 
 ```sh
+git clone https://github.com/AuYuHui/Portexa.git
+cd Portexa
 make web-install
 make check
 make build
 .local/bin/portexa init
 .local/bin/portexa serve -dev-http
 ```
+
+以上命令在仓库根目录执行。`make build` 生成 `.local/bin/portexa`、`.local/bin/mt4probe`、`.local/bin/mt4verify`，前端构建到 `.local/web/`。静态资源未嵌入二进制，部署时需同时携带服务程序与静态目录；运行时不需要 Node.js。根目录 [MIT License](../LICENSE) 适用于项目自身代码，独立 SDK 保留自己的[许可证副本](../packages/mt4/LICENSE)和[第三方许可声明](../packages/mt4/THIRD_PARTY_NOTICES.md)。
 
 初始化在终端交互输入两次系统密码，至少16个 Unicode 字符，无用户名、角色或默认密码。已有系统不能重复初始化。非交互管理可用 `init -password-stdin` / `password-reset -password-stdin` 从安全标准输入管道读取，不能把密码写在命令行参数或提交到脚本。
 
