@@ -8,12 +8,14 @@ import (
 	"portexa/internal/storage"
 )
 
-const FundingRuleVersion = "balance-comment-v1"
+const FundingRuleVersion = "balance-comment-v2"
 
 var fundCommentRules = []struct {
 	category, label string
 	pattern         *regexp.Regexp
 }{
+	{"deposit", "券商入金编号", regexp.MustCompile(`(?i)^D\(DIN[0-9]+\)$`)},
+	{"withdrawal", "券商出金编号", regexp.MustCompile(`(?i)^W\(DOUT[0-9]+\)$`)},
 	{"deposit", "入金标识", regexp.MustCompile(`(?i)\bdeposit(?:s|ed)?\b|入金|存款`)},
 	{"withdrawal", "出金标识", regexp.MustCompile(`(?i)\bwithdraw(?:al|als|n)?\b|出金|提款|取款|提现`)},
 	{"rebate", "返佣标识", regexp.MustCompile(`(?i)\brebates?\b|\bcashback\b|返佣`)},
@@ -75,6 +77,16 @@ func automaticFundCategory(comment string, net, commission, swap, taxes decimal.
 	return category, "备注含" + label
 }
 
+// Automatic results are derived data. A rule upgrade can reinterpret retained
+// source annotations without modifying source revisions or refetching MT4.
+func currentAutomaticFundResult(order storage.HistoryOrder) (string, string, string) {
+	if order.AutomaticRuleVersion == FundingRuleVersion {
+		return order.AutomaticCategory, order.AutomaticReason, order.AutomaticRuleVersion
+	}
+	category, reason := automaticFundCategory(order.Comment, order.NetProfit, order.Commission, order.Swap, order.Taxes)
+	return category, reason, FundingRuleVersion
+}
+
 // Manual corrections apply only to the exact source revision. Otherwise a
 // newly observed source annotation is evaluated under the named rule version.
 func effectiveFundClassification(order storage.HistoryOrder, manual *storage.CashFlowClassification) (*storage.CashFlowClassification, bool) {
@@ -86,10 +98,10 @@ func effectiveFundClassification(order storage.HistoryOrder, manual *storage.Cas
 		value.Source = "manual"
 		return &value, false
 	}
-	category, reason := order.AutomaticCategory, order.AutomaticReason
+	category, reason, version := currentAutomaticFundResult(order)
 	if category != "" {
 		value := storage.CashFlowClassification{AccountID: order.AccountID, Ticket: order.Ticket, BasedTradeRevision: order.Revision,
-			Category: category, Reason: reason, Source: "automatic", RuleVersion: order.AutomaticRuleVersion}
+			Category: category, Reason: reason, Source: "automatic", RuleVersion: version}
 		if manual != nil {
 			value.Revision = manual.Revision
 		}

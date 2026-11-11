@@ -82,7 +82,8 @@ func readFundingView(tx *gorm.DB, account storage.Account, server storage.Server
 	view.CoverageComplete = len(coverage) > 0 && view.CoveredThroughWall >= day.End
 	view.Stale = known && recentThrough < day.End
 	query := withClassification(fundingHistory(tx, account, *snapshot)).Where("o.command=6").
-		Select("o.net_profit,o.revision,o.automatic_category,c.category,c.based_trade_revision")
+		Select(`o.net_profit,o.revision,o.comment,o.commission,o.swap,o.taxes,
+			o.automatic_category,o.automatic_reason,o.automatic_rule_version,c.category,c.based_trade_revision`)
 	rows, readErr := query.Rows()
 	if readErr != nil {
 		return view, readErr
@@ -90,20 +91,20 @@ func readFundingView(tx *gorm.DB, account storage.Account, server storage.Server
 	deposit, withdrawal := decimal.Zero, decimal.Zero
 	for rows.Next() {
 		var row struct {
-			NetProfit          decimal.Decimal
-			Revision           int64
+			storage.HistoryOrder
 			Category           *string
 			BasedTradeRevision *int64
-			AutomaticCategory  string
 		}
 		if readErr = tx.ScanRows(rows, &row); readErr != nil {
 			break
 		}
 		known = true
-		category := row.AutomaticCategory
+		category := ""
 		manual := row.Category != nil && row.BasedTradeRevision != nil && *row.BasedTradeRevision == row.Revision
 		if manual {
 			category = *row.Category
+		} else {
+			category, _, _ = currentAutomaticFundResult(row.HistoryOrder)
 		}
 		if category == "" || category == "unclassified" {
 			view.UnclassifiedCount++
@@ -208,38 +209,63 @@ func (s *Service) Funds(ctx context.Context, id, cursor string, limit int, uncla
 		if snapshot.UnitRevision != account.UnitRevision {
 			return nil
 		}
-		query := fundingHistory(tx, account, snapshot).Where("o.command IN (6,7)")
-		if cursor != "" {
-			query = query.Where("o.event_time_wall<? OR (o.event_time_wall=? AND o.ticket<?)", wall, wall, ticket)
-		}
+		hasCursor := cursor != ""
+		batchSize := limit + 1
 		if unclassified {
-			query = withClassification(query).Where(`o.command=6 AND (CASE WHEN c.based_trade_revision=o.revision
-				THEN c.category ELSE o.automatic_category END) IN ('','unclassified')`)
+			batchSize = max(batchSize, 50)
 		}
-		var orders []storage.HistoryOrder
-		if err := query.Select("o.*").Order("o.event_time_wall DESC,o.ticket DESC").Limit(limit + 1).Scan(&orders).Error; err != nil {
-			return err
-		}
-		if len(orders) > limit {
-			orders = orders[:limit]
+		for {
+			query := fundingHistory(tx, account, snapshot).Where("o.command IN (6,7)")
+			if hasCursor {
+				query = query.Where("o.event_time_wall<? OR (o.event_time_wall=? AND o.ticket<?)", wall, wall, ticket)
+			}
+			if unclassified {
+				// Old cached results are candidates until the current rule evaluates
+				// them. Valid manual corrections always retain precedence.
+				query = withClassification(query).Where(`o.command=6 AND (CASE WHEN c.based_trade_revision=o.revision
+					THEN c.category WHEN o.automatic_rule_version=? THEN o.automatic_category ELSE '' END)
+					IN ('','unclassified')`, FundingRuleVersion)
+			}
+			var orders []storage.HistoryOrder
+			if err := query.Select("o.*").Order("o.event_time_wall DESC,o.ticket DESC").Limit(batchSize).Scan(&orders).Error; err != nil {
+				return err
+			}
+			for _, order := range orders {
+				entry, err := readFundEntry(tx, order)
+				if err != nil {
+					return err
+				}
+				if unclassified && entry.Classification != nil && !entry.NeedsReview && entry.Classification.Category != "unclassified" {
+					continue
+				}
+				if len(page.Items) == limit {
+					last := page.Items[limit-1]
+					page.NextCursor = fmt.Sprintf("%d:%d", last.EventTimeWall, last.Ticket)
+					return nil
+				}
+				page.Items = append(page.Items, entry)
+			}
+			if !unclassified || len(orders) < batchSize {
+				return nil
+			}
 			last := orders[len(orders)-1]
-			page.NextCursor = fmt.Sprintf("%d:%d", last.EventTimeWall, last.Ticket)
+			wall, ticket, hasCursor = uint64(last.EventTimeWall), int64(last.Ticket), true
 		}
-		for _, order := range orders {
-			entry := FundEntry{HistoryOrder: order}
-			var classification storage.CashFlowClassification
-			found := tx.Where("account_id=? AND ticket=?", id, order.Ticket).Order("revision DESC").Limit(1).Find(&classification)
-			if found.Error != nil {
-				return found.Error
-			}
-			var manual *storage.CashFlowClassification
-			if found.RowsAffected > 0 {
-				manual = &classification
-			}
-			entry.Classification, entry.NeedsReview = effectiveFundClassification(order, manual)
-			page.Items = append(page.Items, entry)
-		}
-		return nil
 	})
 	return page, err
+}
+
+func readFundEntry(tx *gorm.DB, order storage.HistoryOrder) (FundEntry, error) {
+	entry := FundEntry{HistoryOrder: order}
+	var classification storage.CashFlowClassification
+	found := tx.Where("account_id=? AND ticket=?", order.AccountID, order.Ticket).Order("revision DESC").Limit(1).Find(&classification)
+	if found.Error != nil {
+		return entry, found.Error
+	}
+	var manual *storage.CashFlowClassification
+	if found.RowsAffected > 0 {
+		manual = &classification
+	}
+	entry.Classification, entry.NeedsReview = effectiveFundClassification(order, manual)
+	return entry, nil
 }

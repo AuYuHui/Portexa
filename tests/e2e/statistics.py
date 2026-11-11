@@ -56,6 +56,8 @@ def main():
         expect(panel).to_contain_text("自动识别 5 笔")
         expect(panel).to_contain_text("待识别 1 笔")
         expect(panel.locator(".funds-table tbody tr").filter(has_text="#69901")).to_contain_text("自动识别")
+        expect(panel.locator(".funds-table tbody tr").filter(has_text="#69901")).to_contain_text("D(DIN100000000000000001)")
+        expect(panel.locator(".funds-table tbody tr").filter(has_text="#70004")).to_contain_text("W(DOUT100000000000000003)")
         credit = panel.locator(".funds-table tbody tr").filter(has_text="#70005")
         expect(credit).to_contain_text("信用金（另计）")
         expect(credit.get_by_role("button")).to_have_count(0)

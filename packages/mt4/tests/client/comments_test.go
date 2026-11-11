@@ -9,7 +9,7 @@ import (
 )
 
 func TestHistoryCommentIsPreservedThroughPublicFetch(t *testing.T) {
-	for _, comment := range []string{"Deposit #synthetic", "入金", "12345678901234567890123456789012"} {
+	for _, comment := range []string{"Deposit #synthetic", "入金", "12345678901234567890123456789012", "D(DIN100000000000000001)", "W(DOUT100000000000000002)"} {
 		t.Run(comment, func(t *testing.T) {
 			record := support.TradeBytes(11, 1700000008, 10)
 			copy(record[0x94:0xb4], comment)
