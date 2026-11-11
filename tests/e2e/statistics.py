@@ -23,7 +23,7 @@ def main():
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(viewport={"width": 1440, "height": 1000})
+        context = browser.new_context(viewport={"width": 1440, "height": 1000}, locale="zh-CN")
         page = context.new_page()
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { localizeMessage } from "../i18n";
+import { useI18n } from "vue-i18n";
 import { computed, ref, shallowRef, watch } from "vue";
 import { useQuery } from "@tanstack/vue-query";
 import { RefreshCw } from "@lucide/vue";
@@ -17,6 +19,8 @@ import {
 } from "../format";
 import Modal from "./Modal.vue";
 import FundClassificationForm from "./FundClassificationForm.vue";
+
+const { t } = useI18n();
 
 const props = defineProps<{ account: Account }>();
 const funding = computed(() => props.account.funding!);
@@ -39,7 +43,7 @@ watch([id, unclassified], () => {
 const selected = shallowRef<FundEntry | null>(null);
 const open = ref(false);
 const busy = ref(false);
-const message = ref("");
+const message = ref<string | (() => string)>("");
 const actionError = ref("");
 function edit(entry: FundEntry) {
   selected.value = entry;
@@ -55,7 +59,7 @@ function back() {
 }
 function saved() {
   open.value = false;
-  message.value = "资金分类已保存，累计金额已更新。";
+  message.value = () => t('fundingSummary.fundClassificationSavedTotalsHaveBeenUpdated');
 }
 async function sync() {
   busy.value = true;
@@ -63,7 +67,7 @@ async function sync() {
   message.value = "";
   try {
     await api(`/accounts/${id.value}/history/sync`, "POST");
-    message.value = "历史回填与重查已加入队列，资金快照优先采集。";
+    message.value = () => t('fundingSummary.historyBackfillAndRecheckQueuedFundSnapshotsTake');
     await refreshAccounts();
   } catch (e) {
     actionError.value = (e as Error).message;
@@ -74,12 +78,12 @@ async function sync() {
 </script>
 
 <template>
-  <section class="panel funding-panel" aria-label="累计出入金与资金流水">
+  <section class="panel funding-panel" :aria-label="t('fundingSummary.totalDepositsWithdrawalsAndFundEntries')">
     <div class="panel-heading">
       <div>
-        <h2>累计出入金</h2>
+        <h2>{{ t('fundingSummary.totalDepositsWithdrawals') }}</h2>
         <p class="muted small">
-          自动识别资金流水，按原币累计外部出入金
+          {{ t('fundingSummary.externalFundEntriesDetectedAutomaticallyAndTotaledIn') }}
           <span
             class="badge"
             :class="
@@ -88,7 +92,7 @@ async function sync() {
                 : 'badge-warning'
             "
             >{{ fundingLabel(funding.state)
-            }}{{ funding.stale ? " · 过期" : "" }}</span
+            }}{{ funding.stale ? t('accountTable.stale') : "" }}</span
           >
         </p>
       </div>
@@ -101,85 +105,83 @@ async function sync() {
         "
         @click="sync"
       >
-        <RefreshCw :size="14" :class="{ spin: busy }" />回填 / 重查历史
+        <RefreshCw :size="14" :class="{ spin: busy }" />{{ t('fundingSummary.backfillRecheckHistory') }}
       </button>
     </div>
     <div class="funding-metrics">
       <div>
         <div class="card-label">
-          累计入金
+          {{ t('fundingSummary.totalDeposits') }}
           <span>{{
             funding.native_currency ||
             account.snapshot?.native_currency ||
-            "原币"
+            t('account.nativeCurrency')
           }}</span>
         </div>
         <div class="metric-value num" data-fund-total="deposits">
           {{ money(funding.deposits) }}
         </div>
-        <p class="metric-note">自动识别外部入金，支持人工校正</p>
+        <p class="metric-note">{{ t('fundingSummary.externalDepositsDetectedAutomaticallyWithManualCorrections') }}</p>
       </div>
       <div>
         <div class="card-label">
-          累计出金
+          {{ t('fundingSummary.totalWithdrawals') }}
           <span>{{
             funding.native_currency ||
             account.snapshot?.native_currency ||
-            "原币"
+            t('account.nativeCurrency')
           }}</span>
         </div>
         <div class="metric-value num" data-fund-total="withdrawals">
           {{ money(funding.withdrawals) }}
         </div>
-        <p class="metric-note">自动识别外部出金，展示绝对值</p>
+        <p class="metric-note">{{ t('fundingSummary.externalWithdrawalsDetectedAutomaticallyAbsoluteValuesShown') }}</p>
       </div>
     </div>
     <p class="daily-note muted small">
-      自动识别 {{ funding.automatic_count ?? 0 }} 笔 · 人工校正
-      {{ funding.manual_count ?? funding.confirmed_count }} 笔 · 待识别
-      {{ funding.unclassified_count }} 笔。
+      {{ t('fundingSummary.classificationCounts', { automatic: funding.automatic_count ?? 0, manual: funding.manual_count ?? funding.confirmed_count, unclassified: funding.unclassified_count }) }}
       <template v-if="!funding.coverage_complete"
-        >历史尚未完整回填，当前金额为已识别部分。</template
+        >{{ t('fundingSummary.historyBackfillIsIncompleteTotalsIncludeIdentifiedEntries') }}</template
       >
       <template v-if="funding.blocked_windows"
-        >{{ funding.blocked_windows }} 个区间存在采集缺口。</template
+        >{{ t('fundingSummary.blockedWindows', { count: funding.blocked_windows }) }}</template
       >
-      根据流水备注识别入金、出金、返佣等；无法确定的单独保留。返佣、费用、内部转账及信用金不计入外部出入金。
+      {{ t('fundingSummary.depositsWithdrawalsAndRebatesAreIdentifiedFromComments') }}
     </p>
     <p
       v-if="funding.last_run?.error_code"
       class="daily-note warning-text small"
     >
       {{
-        failureLabel(funding.last_run.error_code) || "历史暂未采集完成"
-      }}，保留已取得的历史和确认金额。
+        failureLabel(funding.last_run.error_code) || t('fundingSummary.historyCollectionIsNotCompleteYet')
+      }}{{ t('fundingSummary.retainingExistingHistoryAndConfirmedAmounts') }}
     </p>
     <div class="funding-toolbar">
-      <h3>资金流水</h3>
+      <h3>{{ t('fundingSummary.fundEntries') }}</h3>
       <label class="checkbox-line"
-        ><input v-model="unclassified" type="checkbox" />仅看待识别</label
+        ><input v-model="unclassified" type="checkbox" />{{ t('fundingSummary.unclassifiedOnly') }}</label
       >
     </div>
     <p v-if="error" role="alert" class="daily-note negative">
-      {{ error.message }}
-      <button class="text-button" @click="refetch()">重试</button>
+      {{ localizeMessage(error.message) }}
+      <button class="text-button" @click="refetch()">{{ t('overview.retry') }}</button>
     </p>
     <p v-if="actionError" role="alert" class="daily-note negative">
-      {{ actionError }}
+      {{ localizeMessage(actionError) }}
     </p>
     <p v-if="message" role="status" class="daily-note positive">
-      {{ message }}
+      {{ localizeMessage(message) }}
     </p>
     <div class="table-scroll">
       <table class="data-table funds-table">
         <thead>
           <tr>
-            <th>流水单号</th>
-            <th>服务器时间</th>
-            <th class="text-right">金额（原币）</th>
-            <th>分类</th>
-            <th>备注 / 识别依据</th>
-            <th>操作</th>
+            <th>{{ t('fundingSummary.entryTicket') }}</th>
+            <th>{{ t('settings.serverTime') }}</th>
+            <th class="text-right">{{ t('fundingSummary.amountNativeCurrency') }}</th>
+            <th>{{ t('fundingSummary.category') }}</th>
+            <th>{{ t('fundingSummary.commentDetectionBasis') }}</th>
+            <th>{{ t('fundingSummary.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -205,9 +207,9 @@ async function sync() {
                 "
                 >{{
                   entry.command === 7
-                    ? "信用金（另计）"
+                    ? t('fundingSummary.creditSeparate')
                     : entry.needs_review
-                      ? "待重新确认"
+                      ? t('fundingSummary.needsReconfirmation')
                       : fundCategories[
                           entry.classification?.category || "unclassified"
                         ]
@@ -218,26 +220,26 @@ async function sync() {
                 class="cell-note muted"
                 >{{
                   entry.classification.source === "automatic"
-                    ? "自动识别"
-                    : "人工校正"
+                    ? t('settings.automaticDetection')
+                    : t('fundingSummary.manualCorrection')
                 }}</small
               >
             </td>
             <td class="fund-reason small muted">
-              {{ entry.comment || "无备注" }}
+              {{ entry.comment || t('fundingSummary.noComment') }}
               <small v-if="entry.classification" class="cell-note">{{
-                entry.classification.reason
+                entry.classification.source === "automatic" ? localizeMessage(entry.classification.reason) : entry.classification.reason
               }}</small>
             </td>
             <td>
               <button
                 v-if="entry.command === 6"
                 class="text-button"
-                :aria-label="`分类流水 ${entry.ticket}`"
+                :aria-label="t('fundingSummary.classifyEntry', { value1: entry.ticket })"
                 @click="edit(entry)"
               >
-                {{ entry.classification ? "校正" : "补充识别" }}</button
-              ><span v-else class="muted small">单独记录</span>
+                {{ entry.classification ? t('fundingSummary.correct') : t('fundingSummary.classify') }}</button
+              ><span v-else class="muted small">{{ t('fundingSummary.trackedSeparately') }}</span>
             </td>
           </tr>
         </tbody>
@@ -246,36 +248,36 @@ async function sync() {
     <p v-if="!error && !data?.items.length" class="empty-inline">
       {{
         isPending
-          ? "正在加载资金流水…"
+          ? t('fundingSummary.loadingFundEntries')
           : unclassified
-            ? "当前没有待识别流水。"
+            ? t('fundingSummary.noUnclassifiedEntries')
             : funding.deposits == null
-              ? "等待服务器历史，尚无可展示的资金流水。"
-              : "已回填区间内没有资金流水。"
+              ? t('fundingSummary.waitingForServerHistoryNoFundEntriesAre')
+              : t('fundingSummary.noFundEntriesInTheBackfilledPeriod')
       }}
     </p>
     <div class="panel-footer">
-      <span>最近历史采样 {{ date(funding.last_sync_at_ms) }}</span>
+      <span>{{ t('fundingSummary.latestHistorySample') }} {{ date(funding.last_sync_at_ms) }}</span>
       <div class="funding-pagination">
         <button
           class="btn btn-small"
           :disabled="!previous.length || isFetching"
           @click="back"
         >
-          上一页</button
+          {{ t('fundingSummary.previous') }}</button
         ><button
           class="btn btn-small"
           :disabled="!data?.next_cursor || isFetching"
           @click="next"
         >
-          下一页
+          {{ t('fundingSummary.next') }}
         </button>
       </div>
     </div>
     <Modal
       v-model:open="open"
-      title="校正资金分类"
-      description="仅需校正识别有误或无法识别的流水，修改会保留记录。"
+      :title="t('fundingSummary.correctFundClassification')"
+      :description="t('fundingSummary.correctOnlyEntriesIdentifiedIncorrectlyOrLeftUnclassified')"
       ><FundClassificationForm
         v-if="selected"
         :key="`${selected.ticket}-${selected.revision}`"

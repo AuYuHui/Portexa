@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
 import type { Position } from "../types";
 import { money, signedMoney, price, positive, wallTime } from "../format";
+
+const { t } = useI18n();
 defineProps<{ positions: Position[] }>();
 const commands = [
   "buy",
@@ -16,13 +19,13 @@ const commands = [
     <table class="data-table positions-table">
       <thead>
         <tr>
-          <th>订单号 / 品种</th>
-          <th>类型</th>
-          <th class="text-right">手数</th>
-          <th class="text-right">开仓价</th>
-          <th class="text-right">当前价</th>
-          <th class="text-right">浮动净盈亏</th>
-          <th>开仓时间 · 服务器墙钟</th>
+          <th>{{ t('positionTable.ticketSymbol') }}</th>
+          <th>{{ t('positionTable.type') }}</th>
+          <th class="text-right">{{ t('positionTable.lots') }}</th>
+          <th class="text-right">{{ t('positionTable.openPrice') }}</th>
+          <th class="text-right">{{ t('positionTable.currentPrice') }}</th>
+          <th class="text-right">{{ t('account.floatingNetPL') }}</th>
+          <th>{{ t('positionTable.openTimeServerWallClock') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -48,8 +51,8 @@ const commands = [
             ><small
               v-if="p.command <= 1"
               class="cell-note muted"
-              :title="`佣金 ${p.commission} / 隔夜费 ${p.swap} / 税费 ${p.taxes}`"
-              >已含费用</small
+              :title="t('positionTable.commissionSwapTaxes', { value1: p.commission, value2: p.swap, value3: p.taxes })"
+              >{{ t('positionTable.feesIncluded') }}</small
             >
           </td>
           <td class="small muted num">{{ wallTime(p.open_time_wall) }}</td>
@@ -57,7 +60,7 @@ const commands = [
       </tbody>
     </table>
     <p v-if="!positions.length" class="empty-inline">
-      当前完整快照中没有此类订单。
+      {{ t('positionTable.noOrdersOfThisTypeInTheCurrent') }}
     </p>
   </div>
 </template>

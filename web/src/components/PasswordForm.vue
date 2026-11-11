@@ -1,8 +1,12 @@
 <script setup lang="ts">
+import { localizeMessage } from "../i18n";
+import { useI18n } from "vue-i18n";
 import { ref } from "vue";
 import { KeyRound, ShieldAlert } from "@lucide/vue";
 import { api } from "../api";
 import { useSession } from "../session";
+
+const { t } = useI18n();
 
 const emit = defineEmits<{ cancel: []; saved: [] }>();
 const session = useSession();
@@ -10,17 +14,17 @@ const session = useSession();
 const oldPassword = ref("");
 const newPassword = ref("");
 const confirmPassword = ref("");
-const passwordError = ref("");
+const passwordError = ref<string | (() => string)>("");
 const passwordBusy = ref(false);
 
 async function changePassword() {
   passwordError.value = "";
   if (Array.from(newPassword.value).length < 16) {
-    passwordError.value = "新密码至少需要 16 个字符。";
+    passwordError.value = () => t('passwordForm.theNewPasswordMustContainAtLeastCharacters');
     return;
   }
   if (newPassword.value !== confirmPassword.value) {
-    passwordError.value = "两次输入的新密码不一致。";
+    passwordError.value = () => t('passwordForm.theNewPasswordsDoNotMatch');
     return;
   }
   passwordBusy.value = true;
@@ -43,48 +47,48 @@ async function changePassword() {
   <form class="form-stack password-dialog-form" @submit.prevent="changePassword">
     <div class="security-alert-callout">
       <ShieldAlert :size="16" />
-      <span>修改成功后将撤销所有活跃会话，当前页面将返回登录界面。</span>
+      <span>{{ t('passwordForm.changingThePasswordRevokesAllActiveSessionsAnd') }}</span>
     </div>
 
     <label class="field">
-      当前密码
+      {{ t('passwordForm.currentPassword') }}
       <input
         v-model="oldPassword"
         type="password"
         autocomplete="current-password"
         required
         maxlength="1024"
-        placeholder="输入当前使用的登录密码"
+        :placeholder="t('passwordForm.enterYourCurrentLoginPassword')"
       />
     </label>
 
     <div class="form-grid">
       <label class="field">
-        新密码
+        {{ t('passwordForm.newPassword') }}
         <input
           v-model="newPassword"
           type="password"
           autocomplete="new-password"
           required
           maxlength="1024"
-          placeholder="至少 16 个字符"
+          :placeholder="t('passwordForm.atLeastCharacters')"
         />
       </label>
       <label class="field">
-        再次输入新密码
+        {{ t('passwordForm.confirmNewPassword') }}
         <input
           v-model="confirmPassword"
           type="password"
           autocomplete="new-password"
           required
           maxlength="1024"
-          placeholder="再次输入新密码"
+          :placeholder="t('passwordForm.confirmNewPassword')"
         />
       </label>
     </div>
 
     <p v-if="passwordError" class="error-message" role="alert">
-      {{ passwordError }}
+      {{ localizeMessage(passwordError) }}
     </p>
 
     <div class="dialog-actions">
@@ -94,11 +98,11 @@ async function changePassword() {
         :disabled="passwordBusy"
         @click="emit('cancel')"
       >
-        取消
+        {{ t('accountForm.cancel') }}
       </button>
       <button type="submit" class="btn btn-primary" :disabled="passwordBusy">
         <KeyRound :size="15" />
-        {{ passwordBusy ? "正在修改…" : "确认修改并重新登录" }}
+        {{ passwordBusy ? t('passwordForm.updating') : t('passwordForm.confirmChangeAndSignInAgain') }}
       </button>
     </div>
   </form>

@@ -40,13 +40,16 @@ var statisticsSchema string
 //go:embed migrations/006_history_comments.sql
 var historyCommentsSchema string
 
+//go:embed migrations/007_collection_settings.sql
+var collectionSchema string
+
 var ErrNotFound = gorm.ErrRecordNotFound
 var ErrConflict = errors.New("state conflict")
 var ErrDenied = errors.New("operation denied")
 var ErrClosed = errors.New("store closed")
 
 const ApplicationID = 0x50545841
-const SchemaVersion = 6
+const SchemaVersion = 7
 
 type Priority int
 
@@ -247,6 +250,11 @@ func migrate(db *sql.DB) error {
 	}
 	if version < 6 {
 		if _, err = tx.Exec(historyCommentsSchema); err != nil {
+			return err
+		}
+	}
+	if version < 7 {
+		if _, err = tx.Exec(collectionSchema); err != nil {
 			return err
 		}
 	}

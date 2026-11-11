@@ -1,12 +1,13 @@
 """Synthetic browser acceptance; run with tests/e2e/server and a built web app."""
 
 from pathlib import Path
+import os
 import re
 
 from playwright.sync_api import expect, sync_playwright
 
 
-ORIGIN = "http://127.0.0.1:18080"
+ORIGIN = os.environ.get("PORTEXA_E2E_ORIGIN", "http://127.0.0.1:18080")
 PASSWORD = "synthetic-login-password-2026"
 ARTIFACTS = Path(".local/browser")
 
@@ -19,7 +20,7 @@ def main():
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(viewport={"width": 1440, "height": 1000})
+        context = browser.new_context(viewport={"width": 1440, "height": 1000}, locale="zh-CN")
         page = context.new_page()
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
@@ -120,7 +121,7 @@ def main():
         page.get_by_role("button", name="账户配置").click()
         dialog = page.get_by_role("dialog")
         dialog.get_by_label("固定接入点").select_option(label="修订 2 · 203.0.113.10:443")
-        dialog.get_by_role("checkbox", name=re.compile("启用每 60 秒")).check()
+        dialog.get_by_role("checkbox", name="启用自动快照采集").check()
         dialog.get_by_role("button", name="保存账户配置").click()
         expect(dialog).not_to_be_visible()
         expect(page.get_by_role("button", name="暂停采集")).to_be_visible()

@@ -32,6 +32,8 @@ func main() {
 	}
 }
 func run() error {
+	listen := flag.String("listen", "127.0.0.1:18080", "synthetic browser fixture listen address")
+	webDir := flag.String("web", ".local/web", "synthetic browser fixture static files")
 	automaticTime := flag.Bool("automatic-time", false, "use a synthetic server matching a published calendar")
 	tradeClock := flag.Bool("trade-clock", false, "calibrate an unknown synthetic server using newly closed trades")
 	flag.Parse()
@@ -140,15 +142,15 @@ func run() error {
 		}
 		return json.Marshal(map[string]any{"result": result})
 	}})
-	handler, err := httpapi.New(authService, service, engine, httpapi.Config{Origin: "http://127.0.0.1:18080", DevelopmentHTTP: true, Static: os.DirFS(".local/web"), Directory: directory})
+	handler, err := httpapi.New(authService, service, engine, httpapi.Config{Origin: "http://" + *listen, DevelopmentHTTP: true, Static: os.DirFS(*webDir), Directory: directory})
 	if err != nil {
 		return err
 	}
-	httpServer := &http.Server{Addr: "127.0.0.1:18080", Handler: handler, ReadHeaderTimeout: 5 * time.Second}
+	httpServer := &http.Server{Addr: *listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 	done := make(chan error, 1)
 	go func() { done <- engine.Run(ctx) }()
 	go func() { <-ctx.Done(); _ = httpServer.Close() }()
-	fmt.Println("Synthetic browser fixture on 127.0.0.1:18080")
+	fmt.Println("Synthetic browser fixture on", *listen)
 	err = httpServer.ListenAndServe()
 	cancel()
 	engineErr := <-done

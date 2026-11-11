@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import { localizeMessage } from "../i18n";
+import { useI18n } from "vue-i18n";
 import { ref } from "vue";
 import type { FundEntry } from "../types";
 import { api } from "../api";
 import { refreshAccounts } from "../state";
 import { money, fundCategories } from "../format";
+
+const { t } = useI18n();
 
 const props = defineProps<{ accountId: string; entry: FundEntry }>();
 const emit = defineEmits<{ saved: [] }>();
@@ -43,23 +47,23 @@ async function save() {
   <form class="form-stack" @submit.prevent="save">
     <p class="notice notice-subtle num">
       #{{ entry.ticket }} · {{ money(entry.net_profit) }}
-      {{ entry.native_currency }} · 流水版本 {{ entry.revision }}
+      {{ entry.native_currency }} {{ t('fundClassificationForm.entryRevision') }} {{ entry.revision }}
     </p>
     <p v-if="entry.needs_review" class="notice notice-warning">
-      流水已修订，原分类已退出累计。请核对后重新确认。
+      {{ t('fundClassificationForm.theEntryWasRevisedAndItsPreviousClassification') }}
     </p>
     <p v-if="entry.classification" class="muted small">
       {{
         entry.classification.source === "automatic"
-          ? "自动识别依据"
-          : "上次校正依据"
-      }}：{{ entry.classification.reason }}
+          ? t('fundClassificationForm.automaticDetectionBasis')
+          : t('fundClassificationForm.previousCorrectionBasis')
+      }}: {{ entry.classification.source === "automatic" ? localizeMessage(entry.classification.reason) : entry.classification.reason }}
     </p>
     <p v-if="entry.comment" class="muted small">
-      原始备注：{{ entry.comment }}
+      {{ t('fundClassificationForm.originalComment') }}{{ entry.comment }}
     </p>
     <div class="field">
-      <label for="fund-category">资金分类</label>
+      <label for="fund-category">{{ t('fundClassificationForm.fundCategory') }}</label>
       <select id="fund-category" v-model="category" required>
         <option
           v-for="(label, value) in fundCategories"
@@ -71,24 +75,23 @@ async function save() {
       </select>
     </div>
     <div class="field">
-      <label for="fund-reason">校正原因</label>
+      <label for="fund-reason">{{ t('fundClassificationForm.correctionReason') }}</label>
       <textarea
         id="fund-reason"
         v-model="reason"
         required
         maxlength="500"
         rows="3"
-        placeholder="说明补充或校正识别结果的原因"
+        :placeholder="t('fundClassificationForm.explainWhyYouAreClassifyingOrCorrectingThis')"
       />
     </div>
     <p class="muted small">
-      外部出入金自动统计；返佣、费用、内部转账及其他调整单独保留。
-      分类作用于整笔流水，混合用途需拆分的流水请保留待分类。
+      {{ t('fundClassificationForm.externalDepositsAndWithdrawalsAreCalculatedAutomaticallyRebates') }}
     </p>
-    <p v-if="error" role="alert" class="notice notice-error">{{ error }}</p>
+    <p v-if="error" role="alert" class="notice notice-error">{{ localizeMessage(error) }}</p>
     <div class="form-actions">
       <button class="btn btn-primary" :disabled="busy || !reason.trim()">
-        {{ busy ? "保存中…" : "保存校正" }}
+        {{ busy ? t('fundClassificationForm.saving') : t('fundClassificationForm.saveCorrection') }}
       </button>
     </div>
   </form>

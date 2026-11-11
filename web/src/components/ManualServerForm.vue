@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import { localizeMessage } from "../i18n";
+import { useI18n } from "vue-i18n";
 import { ref } from "vue";
 import { LoaderCircle } from "@lucide/vue";
 import { api } from "../api";
 import { refreshAccounts } from "../state";
 import type { Server } from "../types";
+
+const { t } = useI18n();
 const props = defineProps<{ server?: Server }>();
 const emit = defineEmits<{ cancel: []; saved: [] }>();
 const broker = ref("");
@@ -42,31 +46,31 @@ async function submit() {
   <form class="form-stack" @submit.prevent="submit">
     <template v-if="!server"
       ><label class="field"
-        >经纪商<input
+        >{{ t('manualServerForm.broker') }}<input
           v-model="broker"
           required
           maxlength="128"
-          placeholder="经纪商名称" /></label
+          :placeholder="t('manualServerForm.brokerName')" /></label
       ><label class="field"
-        >准确的 MT4 服务器名称<input
+        >{{ t('manualServerForm.exactMtServerName') }}<input
           v-model="name"
           required
           maxlength="128"
-          placeholder="例如：Synthetic-Live01"
-        /><small>服务器名称用于协议配置，本身不能证明服务端身份。</small></label
+          :placeholder="t('manualServerForm.exampleSyntheticLive')"
+        /><small>{{ t('manualServerForm.theServerNameIsUsedForProtocolConfiguration') }}</small></label
       ></template
     >
     <p v-else class="notice notice-warning">
-      创建新修订会停用旧地址，并暂停该服务器所有账户。新修订完成核验后，需在账户配置中明确重新绑定。
+      {{ t('manualServerForm.aNewRevisionRetiresThePreviousAddressAnd') }}
     </p>
     <div class="form-grid">
       <label class="field"
-        >固定 IP 地址<input
+        >{{ t('manualServerForm.fixedIpAddress') }}<input
           v-model="address"
           required
-          placeholder="独立核验的公开 IP" /></label
+          :placeholder="t('manualServerForm.independentlyVerifiedPublicIp')" /></label
       ><label class="field"
-        >端口<input
+        >{{ t('manualServerForm.port') }}<input
           v-model.number="port"
           required
           type="number"
@@ -75,9 +79,9 @@ async function submit() {
       /></label>
     </div>
     <p class="muted small">
-      保存只登记配置，不发送账户凭据。下一步须登记独立核验依据并确认该修订的剩余风险。
+      {{ t('manualServerForm.savingRegistersConfigurationWithoutSendingCredentialsNextRecord') }}
     </p>
-    <p v-if="error" role="alert" class="error-message">{{ error }}</p>
+    <p v-if="error" role="alert" class="error-message">{{ localizeMessage(error) }}</p>
     <div class="dialog-actions">
       <button
         type="button"
@@ -85,16 +89,16 @@ async function submit() {
         :disabled="busy"
         @click="emit('cancel')"
       >
-        取消
+        {{ t('accountForm.cancel') }}
       </button>
       <button type="submit" class="btn btn-primary" :disabled="busy">
         <LoaderCircle v-if="busy" class="spin" :size="16" />
         {{
           busy
-            ? "正在登记…"
+            ? t('manualServerForm.registering')
             : server
-              ? "建立新修订并暂停账户"
-              : "登记服务器，继续核验"
+              ? t('manualServerForm.createRevisionAndPauseAccounts')
+              : t('manualServerForm.registerServerAndContinueVerification')
         }}
       </button>
     </div>

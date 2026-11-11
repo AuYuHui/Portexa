@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { localizeMessage } from "../i18n";
+import { useI18n } from "vue-i18n";
 import { ref } from "vue";
 import { RouterLink } from "vue-router";
 import { RefreshCw } from "@lucide/vue";
@@ -14,9 +16,11 @@ import {
   failureLabel,
 } from "../format";
 
+const { t } = useI18n();
+
 const props = defineProps<{ account: Account }>();
 const busy = ref(false);
-const message = ref("");
+const message = ref<string | (() => string)>("");
 const error = ref("");
 
 async function refresh() {
@@ -25,7 +29,7 @@ async function refresh() {
   message.value = "";
   try {
     await api(`/accounts/${props.account.id}/daily/sync`, "POST");
-    message.value = "当日历史采集已加入队列，资金与持仓优先刷新。";
+    message.value = () => t('dailySummary.dailyHistoryCollectionQueuedFundsAndPositionsAre');
     await refreshAccounts();
   } catch (e) {
     error.value = (e as Error).message;
@@ -36,12 +40,12 @@ async function refresh() {
 </script>
 
 <template>
-  <section class="panel daily-panel" aria-label="当日利润与结余">
+  <section class="panel daily-panel" :aria-label="t('dailySummary.todaySProfitAndBalanceChange')">
     <div class="panel-heading">
       <div>
-        <h2>当日交易统计</h2>
+        <h2>{{ t('dailySummary.todaySTradingStatistics') }}</h2>
         <p class="muted small">
-          {{ account.daily.date || "按 MT4 服务器日期统计" }}
+          {{ account.daily.date || t('dailySummary.byMtServerDate') }}
           <template v-if="account.daily.time_zone">
             · {{ account.daily.time_zone }}
           </template>
@@ -65,27 +69,27 @@ async function refresh() {
         "
         @click="refresh"
       >
-        <RefreshCw :size="14" :class="{ spin: busy }" />刷新当日
+        <RefreshCw :size="14" :class="{ spin: busy }" />{{ t('dailySummary.refreshToday') }}
       </button>
     </div>
     <div
       v-if="account.daily.state === 'time_zone_unconfirmed'"
       class="empty-inline"
     >
-      系统正在通过新平仓交易自动校准时间，就绪后显示当日利润与结余，无需选择时区。
+      {{ t('dailySummary.serverTimeIsBeingCalibratedFromNewlyClosed') }}
       <RouterLink to="/settings" class="text-button"
-        >查看服务器时间设置</RouterLink
+        >{{ t('dailySummary.viewServerTimeSettings') }}</RouterLink
       >
     </div>
     <template v-else>
       <div class="daily-metrics">
         <div>
           <div class="card-label">
-            当日利润
+            {{ t('accountTable.todaySProfit') }}
             <span>{{
               account.daily.report?.native_currency ||
               account.snapshot?.native_currency ||
-              "原币"
+              t('account.nativeCurrency')
             }}</span>
           </div>
           <div
@@ -100,15 +104,15 @@ async function refresh() {
           >
             {{ money(account.daily.report?.net_profit) }}
           </div>
-          <p class="metric-note">已平仓净利润，含佣金、隔夜费及税费</p>
+          <p class="metric-note">{{ t('dailySummary.closedNetProfitIncludingCommissionSwapAndTaxes') }}</p>
         </div>
         <div>
           <div class="card-label">
-            当日结余
+            {{ t('accountTable.todaySBalanceChange') }}
             <span>{{
               account.daily.report?.native_currency ||
               account.snapshot?.native_currency ||
-              "原币"
+              t('account.nativeCurrency')
             }}</span>
           </div>
           <div
@@ -123,59 +127,57 @@ async function refresh() {
           >
             {{ money(account.daily.report?.balance_change) }}
           </div>
-          <p class="metric-note">当日利润 + 余额调整，不含信用金</p>
+          <p class="metric-note">{{ t('dailySummary.todaySProfitBalanceAdjustmentsExcludingCredit') }}</p>
         </div>
         <div>
-          <div class="card-label">当日平仓</div>
+          <div class="card-label">{{ t('dailySummary.todaySClosedTrades') }}</div>
           <div class="metric-value num">
-            {{ account.daily.report?.closed_trades ?? "—" }}<small>笔</small>
+            {{ account.daily.report?.closed_trades ?? "—" }}<small>{{ t('dailySummary.trades') }}</small>
           </div>
-          <p class="metric-note">仅统计已平仓买卖单，按平仓日期归属</p>
+          <p class="metric-note">{{ t('dailySummary.closedBuySellTradesOnlyGroupedByClosing') }}</p>
         </div>
         <div>
-          <div class="card-label">当日胜率</div>
+          <div class="card-label">{{ t('dailySummary.todaySWinRate') }}</div>
           <div class="metric-value num">
             {{ percent(account.daily.report?.win_rate) }}
           </div>
           <p class="metric-note">
-            净盈利笔数 ÷ 平仓笔数，持平计入分母
+            {{ t('dailySummary.netWinningTradesClosedTradesIncludingBreakevenTrades') }}
             <template v-if="account.daily.report?.breakeven_trades != null">
-              · 持平 {{ account.daily.report.breakeven_trades }} 笔</template
+              {{ t('dailySummary.breakevenCount', { count: account.daily.report.breakeven_trades }) }}</template
             >
           </p>
         </div>
         <div>
           <div class="card-label">
-            当日盈利
+            {{ t('dailySummary.todaySGains') }}
             <span>{{
               account.daily.report?.native_currency ||
               account.snapshot?.native_currency ||
-              "原币"
+              t('account.nativeCurrency')
             }}</span>
           </div>
           <div class="metric-value num positive">
             {{ money(account.daily.report?.gross_profit) }}
           </div>
           <p class="metric-note">
-            净盈利 {{ account.daily.report?.winning_trades ?? "—" }} 笔 ·
-            含已报告费用
+            {{ t('dailySummary.winningTrades', { count: account.daily.report?.winning_trades ?? '—' }) }}
           </p>
         </div>
         <div>
           <div class="card-label">
-            当日亏损
+            {{ t('dailySummary.todaySLosses') }}
             <span>{{
               account.daily.report?.native_currency ||
               account.snapshot?.native_currency ||
-              "原币"
+              t('account.nativeCurrency')
             }}</span>
           </div>
           <div class="metric-value num negative">
             {{ money(account.daily.report?.gross_loss) }}
           </div>
           <p class="metric-note">
-            净亏损 {{ account.daily.report?.losing_trades ?? "—" }} 笔 ·
-            金额为亏损绝对值
+            {{ t('dailySummary.losingTrades', { count: account.daily.report?.losing_trades ?? '—' }) }}
           </p>
         </div>
       </div>
@@ -185,42 +187,40 @@ async function refresh() {
         "
         class="daily-note muted small"
       >
-        旧日报尚无胜负明细，下一次当日采集完成后补齐。
+        {{ t('dailySummary.olderDailyReportsLackWinLossDetailsThe') }}
       </p>
       <p
         v-else-if="account.daily.report?.closed_trades === 0"
         class="daily-note muted small"
       >
-        当日尚无平仓，胜率暂不可用。
+        {{ t('dailySummary.noTradesClosedTodayWinRateIsUnavailable') }}
       </p>
       <p v-if="!account.daily.report" class="daily-note muted small">
-        等待当日完整历史；尚未取得数据时不显示为零。
+        {{ t('dailySummary.waitingForCompleteDailyHistoryMissingDataIs') }}
       </p>
       <p v-if="account.daily.error_code" class="daily-note warning-text small">
-        {{ failureLabel(account.daily.error_code) || "当日采集暂未完成" }}
+        {{ failureLabel(account.daily.error_code) || t('dailySummary.todaySCollectionIsNotCompleteYet') }}
         <template v-if="account.daily.raw_status != null">
-          （服务端原码 {{ account.daily.raw_status }}）
+          {{ t('dailySummary.rawServerStatus', { status: account.daily.raw_status }) }}
         </template>
         {{
-          account.daily.report ? "，保留上次当日结果。" : "，尚无当日完整结果。"
+          account.daily.report ? t('dailySummary.retainingThePreviousDailyResult') : t('dailySummary.noCompleteDailyResultYet')
         }}
       </p>
       <div v-if="account.daily.report" class="panel-footer">
         <span class="num">
-          已平仓 {{ account.daily.report.closed_trades }} 笔 · 余额调整
-          {{ money(account.daily.report.balance_adjustment) }} · 信用变动
-          {{ money(account.daily.report.credit_change) }}
+          {{ t('dailySummary.reportTotals', { count: account.daily.report.closed_trades, adjustment: money(account.daily.report.balance_adjustment), credit: money(account.daily.report.credit_change) }) }}
         </span>
         <span>
-          采样完成 {{ date(account.daily.report.observed_to_ms) }} · 原币未换算
+          {{ t('account.sampleCompleted') }} {{ date(account.daily.report.observed_to_ms) }} {{ t('dailySummary.nativeCurrencyUnconverted') }}
         </span>
       </div>
     </template>
     <p v-if="message" class="daily-note muted small" role="status">
-      {{ message }}
+      {{ localizeMessage(message) }}
     </p>
     <p v-if="error" class="daily-note warning-text small" role="alert">
-      {{ error }}
+      {{ localizeMessage(error) }}
     </p>
   </section>
 </template>

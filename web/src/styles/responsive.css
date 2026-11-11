@@ -165,6 +165,12 @@
     font-size: 9px;
     margin: 5px 0 0;
   }
+  .summary-card .metric-value {
+    flex-wrap: wrap;
+  }
+  .summary-card .metric-value small {
+    flex-basis: 100%;
+  }
   .summary-featured .hero-value {
     margin-top: 14px;
     margin-bottom: 14px;
@@ -231,10 +237,26 @@
     gap: 18px;
     margin-top: 18px;
   }
+  .currency-row {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 8px 12px;
+    padding: 16px;
+  }
+  .currency-row > div:last-child {
+    grid-column: 2;
+    margin-left: 0;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
   .security-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 14px;
     padding: 0 16px 20px;
+  }
+  .security-card-footer {
+    flex-wrap: wrap;
+    gap: 10px;
   }
   .setup-stepper {
     flex-direction: column;
@@ -367,6 +389,11 @@
   .login-form > p.muted {
     margin-bottom: 25px;
     font-size: 11px;
+  }
+}
+@media (max-width: 360px) {
+  .summary-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (prefers-reduced-motion: reduce) {

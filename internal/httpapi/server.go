@@ -117,6 +117,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/auth/touch", s.protected(s.touch))
 	s.mux.HandleFunc("PUT /api/auth/password", s.protected(s.password))
 	s.mux.HandleFunc("GET /api/overview", s.protected(s.overview))
+	s.mux.HandleFunc("GET /api/settings/collection", s.protected(s.collectionSettings))
+	s.mux.HandleFunc("PUT /api/settings/collection", s.protected(s.updateCollectionSettings))
 	s.mux.HandleFunc("GET /api/servers", s.protected(s.servers))
 	s.mux.HandleFunc("GET /api/server-directory", s.protected(s.searchDirectory))
 	s.mux.HandleFunc("POST /api/servers/discovered", s.protected(s.createDiscovered))

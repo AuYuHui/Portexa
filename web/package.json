@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "check": "vue-tsc --noEmit",
+    "check": "vue-tsc --noEmit && npm run i18n:check",
+    "i18n:check": "x18n check",
+    "i18n:ui": "x18n ui",
     "build": "npm run check && vite build"
   },
   "dependencies": {
@@ -15,11 +17,13 @@
     "pinia": "3.0.4",
     "reka-ui": "2.11.0",
     "vue": "3.5.45",
+    "vue-i18n": "11.4.18",
     "vue-router": "4.6.4"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.5",
     "@vitejs/plugin-vue": "6.0.10",
+    "@x18n/cli": "0.1.14",
     "tailwindcss": "4.3.5",
     "typescript": "5.9.3",
     "vite": "8.3.8",

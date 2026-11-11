@@ -1,0 +1,16 @@
+{
+  "$schema": "https://x18n.dev/schema/config.json",
+  "sourceLocale": "zh-CN",
+  "locales": ["zh-CN", "en"],
+  "presets": ["vue-i18n"],
+  "resources": [{ "pattern": "src/locales/{locale}.json" }],
+  "usage": {
+    "include": ["src/**/*.vue", "src/**/*.ts"],
+    "keysInUse": ["serverMessages.*"]
+  },
+  "checks": {
+    "missing-translation": "error",
+    "unused-key": "error",
+    "param-mismatch": "error"
+  }
+}

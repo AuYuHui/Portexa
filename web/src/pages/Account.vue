@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { localizeMessage } from "../i18n";
+import { useI18n } from "vue-i18n";
 import { computed, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { useQuery } from "@tanstack/vue-query";
@@ -28,6 +30,8 @@ import AccountForm from "../components/AccountForm.vue";
 import PositionTable from "../components/PositionTable.vue";
 import DailySummary from "../components/DailySummary.vue";
 import FundingSummary from "../components/FundingSummary.vue";
+
+const { t } = useI18n();
 const route = useRoute();
 const id = computed(() => String(route.params.id));
 const sort = ref("ticket");
@@ -45,7 +49,7 @@ const tab = ref("positions");
 const open = ref(false);
 const busy = ref(false);
 const actionError = ref("");
-const message = ref("");
+const message = ref<string | (() => string)>("");
 const current = computed(() => data.value?.account.snapshot);
 const positions = computed(
   () =>
@@ -59,7 +63,7 @@ async function requestSync() {
   message.value = "";
   try {
     await api(`/accounts/${id.value}/sync`, "POST");
-    message.value = "快照采集已加入队列。";
+    message.value = () => t('account.snapshotCollectionQueued');
     await refreshAccounts();
   } catch (e) {
     actionError.value = (e as Error).message;
@@ -88,12 +92,12 @@ async function toggleSync() {
 <template>
   <div class="page-content">
     <RouterLink to="/" class="back-link"
-      ><ArrowLeft :size="16" />全部账户</RouterLink
+      ><ArrowLeft :size="16" />{{ t('account.allAccounts') }}</RouterLink
     >
     <p v-if="error" class="notice notice-error" role="alert">
-      {{ error.message }}
+      {{ localizeMessage(error.message) }}
     </p>
-    <p v-if="isPending" class="empty-inline">正在加载账户…</p>
+    <p v-if="isPending" class="empty-inline">{{ t('account.loadingAccount') }}</p>
     <template v-if="data">
       <div class="page-title detail-title">
         <div>
@@ -107,26 +111,26 @@ async function toggleSync() {
         </div>
         <div class="page-actions">
           <button class="btn" :disabled="busy" @click="open = true">
-            <Settings2 :size="16" />账户配置</button
+            <Settings2 :size="16" />{{ t('account.accountSettings') }}</button
           ><button class="btn" :disabled="busy" @click="toggleSync">
             <Pause v-if="data.account.sync_enabled" :size="16" /><Play
               v-else
               :size="16"
-            />{{ data.account.sync_enabled ? "暂停采集" : "恢复采集" }}</button
+            />{{ data.account.sync_enabled ? t('account.pauseCollection') : t('account.resumeCollection') }}</button
           ><button
             class="btn btn-primary"
             :disabled="busy || !data.account.sync_enabled"
             @click="requestSync"
           >
-            <RefreshCw :size="16" :class="{ spin: busy }" />立即采集
+            <RefreshCw :size="16" :class="{ spin: busy }" />{{ t('account.collectNow') }}
           </button>
         </div>
       </div>
       <p v-if="actionError" role="alert" class="notice notice-error">
-        {{ actionError }}
+        {{ localizeMessage(actionError) }}
       </p>
       <p v-if="message" role="status" class="notice notice-subtle">
-        {{ message }}
+        {{ localizeMessage(message) }}
       </p>
       <div class="detail-status">
         <StatusBadge
@@ -134,17 +138,17 @@ async function toggleSync() {
           :stale="data.account.stale"
         /><span class="muted small">{{
           current
-            ? `最近采样 ${date(current.observed_from_ms)} — ${date(current.observed_to_ms)}`
-            : "尚未取得完整快照，资金与持仓暂不可用。"
+            ? t('account.latestSample', { value1: date(current.observed_from_ms), value2: date(current.observed_to_ms) })
+            : t('account.noCompleteSnapshotYetFundsAndPositionsAre')
         }}</span
         ><span class="unit-label"
           >{{
             current?.native_currency ||
             data.account.confirmed_currency ||
-            "单位待确认"
+            t('account.unitUnconfirmed')
           }}
           ·
-          {{ data.account.unit_confirmed ? "单位已确认" : "未确认换算" }}</span
+          {{ data.account.unit_confirmed ? t('account.unitConfirmed') : t('account.conversionUnconfirmed') }}</span
         >
       </div>
       <div
@@ -159,17 +163,17 @@ async function toggleSync() {
           {{ failureLabel(data.account.last_run.error_code)
           }}{{
             data.account.last_run.raw_status !== null
-              ? `（服务端原码 ${data.account.last_run.raw_status}，不据此推断密码错误）`
+              ? t('account.serverStatusThisDoesNotEstablishAPassword', { value1: data.account.last_run.raw_status })
               : ""
-          }}。{{ current ? "继续显示上次完整快照。" : "等待首次完整快照。" }}
+          }} {{ current ? t('account.showingTheLastCompleteSnapshot') : t('account.waitingForTheFirstCompleteSnapshot') }}
         </p>
       </div>
       <section class="summary-grid detail-metrics">
         <article class="summary-card">
           <div class="card-label">
-            账户净值
+            {{ t('account.accountEquity') }}
             <span class="badge badge-neutral">{{
-              current?.native_currency || "原币"
+              current?.native_currency || t('account.nativeCurrency')
             }}</span>
           </div>
           <div class="metric-value num">
@@ -178,10 +182,10 @@ async function toggleSync() {
               current.native_currency
             }}</small>
           </div>
-          <p class="metric-note">含信用金，保留 SDK 口径</p>
+          <p class="metric-note">{{ t('account.includesCreditFollowingTheSdkDefinition') }}</p>
         </article>
         <article class="summary-card">
-          <div class="card-label">余额 / 信用金</div>
+          <div class="card-label">{{ t('account.balanceCredit') }}</div>
           <div class="metric-value num">
             {{ money(current?.balance) }}
             <small v-if="current?.native_currency">{{
@@ -189,12 +193,12 @@ async function toggleSync() {
             }}</small>
           </div>
           <p class="metric-note num">
-            信用金 {{ money(current?.credit) }}
+            {{ t('account.credit') }} {{ money(current?.credit) }}
             {{ current?.native_currency || "" }}
           </p>
         </article>
         <article class="summary-card">
-          <div class="card-label">浮动净盈亏</div>
+          <div class="card-label">{{ t('account.floatingNetPL') }}</div>
           <div
             class="metric-value num"
             :class="{
@@ -207,11 +211,11 @@ async function toggleSync() {
               current.native_currency
             }}</small>
           </div>
-          <p class="metric-note">当前买卖持仓，含已报告费用</p>
+          <p class="metric-note">{{ t('account.openBuySellPositionsIncludingReportedFees') }}</p>
         </article>
         <article class="summary-card">
-          <div class="card-label" title="账户净值 ÷ 已用保证金 × 100%">
-            保证金水平
+          <div class="card-label" :title="t('account.accountEquityUsedMargin')">
+            {{ t('account.marginLevel') }}
           </div>
           <div class="metric-value num">
             {{ marginLevel(current) }}
@@ -219,8 +223,8 @@ async function toggleSync() {
           <p class="metric-note">
             {{
               current?.margin_available
-                ? `已用 ${money(current.margin)} ${current.native_currency} · 杠杆 1:${current.leverage}`
-                : "保证金数据不可用"
+                ? t('account.usedLeverage', { value1: money(current.margin), value2: current.native_currency, value3: current.leverage })
+                : t('account.marginDataUnavailable')
             }}
           </p>
         </article>
@@ -229,12 +233,12 @@ async function toggleSync() {
       <FundingSummary v-if="data.account.funding" :account="data.account" />
       <section class="panel">
         <div class="panel-heading">
-          <div class="tabs" aria-label="订单类型">
+          <div class="tabs" :aria-label="t('account.orderType')">
             <button
               :class="{ active: tab === 'positions' }"
               @click="tab = 'positions'"
             >
-              当前持仓
+              {{ t('account.openPositions') }}
               <span>{{
                 data.positions.filter((p) => p.command <= 1).length
               }}</span></button
@@ -242,56 +246,56 @@ async function toggleSync() {
               :class="{ active: tab === 'pending' }"
               @click="tab = 'pending'"
             >
-              挂单
+              {{ t('account.pendingOrders') }}
               <span>{{
                 data.positions.filter((p) => p.command >= 2).length
               }}</span>
             </button>
           </div>
           <label class="sort-label"
-            >排序<select v-model="sort" aria-label="订单排序">
-              <option value="ticket">订单号</option>
-              <option value="open_time_wall">服务器开仓时间</option>
+            >{{ t('account.sort') }}<select v-model="sort" :aria-label="t('account.orderSorting')">
+              <option value="ticket">{{ t('account.ticket') }}</option>
+              <option value="open_time_wall">{{ t('account.serverOpenTime') }}</option>
             </select></label
           >
         </div>
         <PositionTable v-if="current" :positions="positions" />
         <p v-else class="empty-inline">
-          尚无完整快照，不能将缺失持仓视为零持仓。
+          {{ t('account.noCompleteSnapshotYetMissingPositionsDoNot') }}
         </p>
         <div class="panel-footer">
           <span
-            ><Info :size="14" />开仓时间为服务器墙钟{{
+            ><Info :size="14" />{{ t('account.openTimesUseTheServerWallClock') }} {{
               data.server_time_status === "verified"
-                ? `（${data.account.daily.time_zone}）`
-                : "，时区尚未核验"
-            }}。</span
-          ><span>金额按原币展示</span>
+                ? `(${data.account.daily.time_zone})`
+                : t('account.timeZoneUnverified')
+            }}</span
+          ><span>{{ t('account.amountsShownInNativeCurrency') }}</span>
         </div>
       </section>
       <section class="panel snapshot-panel">
         <div class="panel-heading">
           <div>
-            <h2>最近成功快照</h2>
+            <h2>{{ t('account.recentSuccessfulSnapshots') }}</h2>
             <p class="muted small">
-              最近 10 次完整采集。失败的采集不会写成零值快照。
+              {{ t('account.theLastCompleteCollectionsFailedCollectionsNeverBecome') }}
             </p>
           </div>
-          <span class="badge badge-neutral">快照明细</span>
+          <span class="badge badge-neutral">{{ t('account.snapshotDetails') }}</span>
         </div>
         <p v-if="snapshotsError" class="error-message">
-          {{ snapshotsError.message }}
+          {{ localizeMessage(snapshotsError.message) }}
         </p>
         <div class="table-scroll">
           <table class="data-table">
             <thead>
               <tr>
-                <th>采样开始</th>
-                <th>采样完成</th>
-                <th class="text-right">余额</th>
-                <th class="text-right">净值</th>
-                <th class="text-right">浮动净盈亏</th>
-                <th>单位</th>
+                <th>{{ t('account.sampleStarted') }}</th>
+                <th>{{ t('account.sampleCompleted') }}</th>
+                <th class="text-right">{{ t('account.balance') }}</th>
+                <th class="text-right">{{ t('account.equity') }}</th>
+                <th class="text-right">{{ t('account.floatingNetPL') }}</th>
+                <th>{{ t('account.unit') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -313,14 +317,14 @@ async function toggleSync() {
             </tbody>
           </table>
           <p v-if="snapshots && !snapshots.length" class="empty-inline">
-            首次完整采集后开始积累快照。
+            {{ t('account.snapshotsAccumulateAfterTheFirstCompleteCollection') }}
           </p>
         </div>
       </section>
       <Modal
         v-model:open="open"
-        title="账户配置"
-        description="修改配置会取消旧任务，发布前还会再次校验配置版本。"
+        :title="t('account.accountSettings')"
+        :description="t('account.changesCancelPreviousJobsTheConfigurationVersionIs')"
       >
         <AccountForm
           :account="data.account"

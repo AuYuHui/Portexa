@@ -89,16 +89,17 @@ func (total MoneyTotals) MarshalJSON() ([]byte, error) {
 }
 
 type Overview struct {
-	Accounts         []AccountView       `json:"accounts"`
-	USDTotal         MoneyTotals         `json:"usd_total"`
-	CurrencyTotals   []MoneyTotals       `json:"currency_totals"`
-	AccountCount     int                 `json:"account_count"`
-	MissingCount     int                 `json:"missing_count"`
-	StaleCount       int                 `json:"stale_count"`
-	ExcludedUSDCount int                 `json:"excluded_usd_count"`
-	KeyReady         bool                `json:"key_ready"`
-	AsOfMS           int64               `json:"as_of_ms"`
-	Maintenance      storage.Maintenance `json:"maintenance"`
+	Accounts           []AccountView              `json:"accounts"`
+	USDTotal           MoneyTotals                `json:"usd_total"`
+	CurrencyTotals     []MoneyTotals              `json:"currency_totals"`
+	AccountCount       int                        `json:"account_count"`
+	MissingCount       int                        `json:"missing_count"`
+	StaleCount         int                        `json:"stale_count"`
+	ExcludedUSDCount   int                        `json:"excluded_usd_count"`
+	KeyReady           bool                       `json:"key_ready"`
+	AsOfMS             int64                      `json:"as_of_ms"`
+	Maintenance        storage.Maintenance        `json:"maintenance"`
+	CollectionSettings storage.CollectionSettings `json:"collection_settings"`
 }
 
 func (s *Service) Servers(ctx context.Context) ([]ServerView, error) {
@@ -161,7 +162,7 @@ func (s *Service) Servers(ctx context.Context) ([]ServerView, error) {
 	return views, err
 }
 
-func readView(tx *gorm.DB, account storage.Account, now int64) (AccountView, error) {
+func readView(tx *gorm.DB, account storage.Account, now int64, staleAfter time.Duration) (AccountView, error) {
 	view := AccountView{ID: account.ID, ServerID: account.ServerID, EndpointID: account.PinnedEndpointID,
 		Login: account.Login, Label: account.Label, ConfirmedCurrency: account.Currency, UnitConfirmed: account.UnitVerifiedAtMS != nil,
 		ConfiguredUnitConfirmed: account.UnitVerifiedAtMS != nil,
@@ -183,7 +184,7 @@ func readView(tx *gorm.DB, account storage.Account, now int64) (AccountView, err
 			return view, err
 		}
 		view.Snapshot = &snapshot
-		view.Stale = now-snapshot.ObservedToMS > (3 * time.Minute).Milliseconds()
+		view.Stale = now-snapshot.ObservedToMS > staleAfter.Milliseconds()
 		if account.Currency == nil || *account.Currency != snapshot.NativeCurrency || account.UnitRevision != snapshot.UnitRevision {
 			view.UnitConfirmed = false
 		}
@@ -210,15 +211,26 @@ func readView(tx *gorm.DB, account storage.Account, now int64) (AccountView, err
 }
 
 func (s *Service) List(ctx context.Context) ([]AccountView, error) {
+	views, _, err := s.list(ctx)
+	return views, err
+}
+
+func (s *Service) list(ctx context.Context) ([]AccountView, storage.CollectionSettings, error) {
 	views := make([]AccountView, 0)
+	var settings storage.CollectionSettings
 	err := s.Store.Read.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var list []storage.Account
 		if err := tx.Where("removed_at_ms IS NULL").Order("created_at_ms, id").Find(&list).Error; err != nil {
 			return err
 		}
+		var err error
+		settings, err = readCollectionSettings(tx)
+		if err != nil {
+			return err
+		}
 		now := s.Now().UnixMilli()
 		for _, account := range list {
-			view, err := readView(tx, account, now)
+			view, err := readView(tx, account, now, snapshotStaleAfter(settings))
 			if err != nil {
 				return err
 			}
@@ -226,7 +238,7 @@ func (s *Service) List(ctx context.Context) ([]AccountView, error) {
 		}
 		return nil
 	})
-	return views, err
+	return views, settings, err
 }
 
 func (s *Service) Detail(ctx context.Context, id, order string) (AccountDetail, error) {
@@ -242,8 +254,11 @@ func (s *Service) Detail(ctx context.Context, id, order string) (AccountDetail, 
 		if err := tx.First(&account, "id = ? AND removed_at_ms IS NULL", id).Error; err != nil {
 			return err
 		}
-		var err error
-		detail.Account, err = readView(tx, account, s.Now().UnixMilli())
+		settings, err := readCollectionSettings(tx)
+		if err != nil {
+			return err
+		}
+		detail.Account, err = readView(tx, account, s.Now().UnixMilli(), snapshotStaleAfter(settings))
 		if detail.Account.Daily.TimeZone != "" {
 			detail.ServerTimeStatus = "verified"
 		}
@@ -300,11 +315,12 @@ func addTotal(total *MoneyTotals, snapshot storage.Snapshot, scale decimal.Decim
 }
 
 func (s *Service) Overview(ctx context.Context) (Overview, error) {
-	list, err := s.List(ctx)
+	list, settings, err := s.list(ctx)
 	if err != nil {
 		return Overview{}, err
 	}
 	view := Overview{Accounts: list, USDTotal: MoneyTotals{Currency: "USD"}, CurrencyTotals: make([]MoneyTotals, 0), AccountCount: len(list), KeyReady: s.Vault.Ready(), AsOfMS: s.Now().UnixMilli()}
+	view.CollectionSettings = settings
 	view.Maintenance = s.Store.Maintenance()
 	raw := map[string]*MoneyTotals{}
 	for _, account := range list {

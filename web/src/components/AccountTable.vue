@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
 import { computed, h } from "vue";
 import { RouterLink } from "vue-router";
 import {
@@ -20,6 +21,8 @@ import {
   fundingLabel,
 } from "../format";
 import StatusBadge from "./StatusBadge.vue";
+
+const { t } = useI18n();
 const props = defineProps<{ accounts: Account[]; search: string }>();
 const filtered = computed(() =>
   props.accounts.filter((a) =>
@@ -51,7 +54,7 @@ function dailyCell(account: Account, field: "net_profit" | "balance_change") {
 const columns: ColumnDef<Account>[] = [
   {
     id: "account",
-    header: "账户",
+    header: () => t('accountTable.account'),
     cell: ({ row: { original: a } }) =>
       h(RouterLink, { to: `/accounts/${a.id}`, class: "account-cell" }, () => [
         h("span", { class: "account-avatar" }, a.label.slice(0, 1)),
@@ -63,35 +66,35 @@ const columns: ColumnDef<Account>[] = [
   },
   {
     id: "currency",
-    header: "原币 / 单位",
+    header: () => t('accountTable.nativeCurrencyUnit'),
     cell: ({ row: { original: a } }) =>
       h("span", {}, [
         h(
           "strong",
           { class: "currency-label" },
-          a.snapshot?.native_currency || a.confirmed_currency || "待确认",
+          a.snapshot?.native_currency || a.confirmed_currency || t('accountTable.unconfirmed'),
         ),
         !a.unit_confirmed
-          ? h("small", { class: "cell-note warning-text" }, "未确认换算")
+          ? h("small", { class: "cell-note warning-text" }, t('account.conversionUnconfirmed'))
           : null,
       ]),
   },
   {
     id: "balance",
-    header: "余额",
+    header: () => t('account.balance'),
     meta: { numeric: true },
     cell: ({ row: { original: a } }) => money(a.snapshot?.balance),
   },
   {
     id: "equity",
-    header: "账户净值",
+    header: () => t('account.accountEquity'),
     meta: { numeric: true },
     cell: ({ row: { original: a } }) =>
       h("strong", {}, money(a.snapshot?.equity)),
   },
   {
     id: "profit",
-    header: "浮动净盈亏",
+    header: () => t('account.floatingNetPL'),
     meta: { numeric: true },
     cell: ({ row: { original: a } }) =>
       h(
@@ -108,38 +111,38 @@ const columns: ColumnDef<Account>[] = [
   },
   {
     id: "daily_profit",
-    header: "当日利润",
+    header: () => t('accountTable.todaySProfit'),
     cell: ({ row: { original: a } }) => dailyCell(a, "net_profit"),
   },
   {
     id: "daily_balance",
-    header: "当日结余",
+    header: () => t('accountTable.todaySBalanceChange'),
     cell: ({ row: { original: a } }) => dailyCell(a, "balance_change"),
   },
   {
     id: "daily_trades",
-    header: "当日平仓 / 胜率",
+    header: () => t('accountTable.todaySClosedTradesWinRate'),
     cell: ({ row: { original: a } }) => {
       const report = a.daily?.report;
       return h(
         "span",
-        { title: "按服务器日期统计；净盈利笔数 ÷ 全部平仓笔数，含持平单" },
+        { title: t('accountTable.byServerDateNetWinningTradesAllClosed') },
         [
           h(
             "strong",
             {},
             report
-              ? `${report.closed_trades} 笔 · ${percent(report.win_rate)}`
+              ? t('accountTable.trades', { value1: report.closed_trades, value2: percent(report.win_rate) })
               : "—",
           ),
           h(
             "small",
             { class: "cell-note muted" },
             report?.winning_trades != null
-              ? `盈 ${report.winning_trades} / 亏 ${report.losing_trades} / 平 ${report.breakeven_trades}`
+              ? t('accountTable.wonLostBreakeven', { value1: report.winning_trades, value2: report.losing_trades, value3: report.breakeven_trades })
               : a.daily
                 ? dailyLabel(a.daily.state, a.daily.stale)
-                : "等待历史采集",
+                : t('accountTable.waitingForHistory'),
           ),
         ],
       );
@@ -147,11 +150,11 @@ const columns: ColumnDef<Account>[] = [
   },
   {
     id: "daily_gains",
-    header: "当日盈利 / 亏损",
+    header: () => t('accountTable.todaySGainsLosses'),
     cell: ({ row: { original: a } }) =>
       h(
         "span",
-        { title: "原币净盈亏分别汇总，亏损展示绝对值，均含已报告费用" },
+        { title: t('accountTable.netGainsAndLossesInNativeCurrencyIncluding') },
         [
           h(
             "strong",
@@ -168,21 +171,21 @@ const columns: ColumnDef<Account>[] = [
   },
   {
     id: "margin_level",
-    header: "保证金水平",
+    header: () => t('account.marginLevel'),
     cell: ({ row: { original: a } }) =>
       h(
         "span",
-        { title: "账户净值 ÷ 已用保证金 × 100%" },
+        { title: t('account.accountEquityUsedMargin') },
         marginLevel(a.snapshot),
       ),
   },
   {
     id: "funding",
-    header: "累计入金 / 出金",
+    header: () => t('accountTable.totalDepositsWithdrawals'),
     cell: ({ row: { original: a } }) =>
       h(
         "span",
-        { title: "根据备注自动识别外部出入金，支持人工校正；其他资金不计入" },
+        { title: t('accountTable.externalDepositsAndWithdrawalsDetectedFromCommentsWith') },
         [
           h(
             "strong",
@@ -193,21 +196,21 @@ const columns: ColumnDef<Account>[] = [
             "small",
             { class: "cell-note muted" },
             a.funding
-              ? `${a.funding.coverage_complete && a.funding.state === "ready" ? "自动统计" : fundingLabel(a.funding.state)}${a.funding.unclassified_count ? ` · ${a.funding.unclassified_count} 笔待识别` : ""}${a.funding.stale ? " · 过期" : ""}`
-              : "等待历史采集",
+              ? `${a.funding.coverage_complete && a.funding.state === "ready" ? t('accountTable.automaticallyCalculated') : fundingLabel(a.funding.state)}${a.funding.unclassified_count ? t('accountTable.unclassified', { value1: a.funding.unclassified_count }) : ""}${a.funding.stale ? t('accountTable.stale') : ""}`
+              : t('accountTable.waitingForHistory'),
           ),
         ],
       ),
   },
   {
     id: "state",
-    header: "同步状态",
+    header: () => t('accountTable.syncStatus'),
     cell: ({ row: { original: a } }) =>
       h(StatusBadge, { state: a.sync_state, stale: a.stale }),
   },
   {
     id: "time",
-    header: "最近采样",
+    header: () => t('accountTable.latestSample'),
     cell: ({ row: { original: a } }) =>
       h("span", { class: "small muted num" }, date(a.snapshot?.observed_to_ms)),
   },
@@ -220,7 +223,7 @@ const columns: ColumnDef<Account>[] = [
         {
           to: `/accounts/${a.id}`,
           class: "icon-button",
-          "aria-label": `查看${a.label}`,
+          "aria-label": t('accountTable.view', { value1: a.label }),
         },
         () => h(ArrowUpRight, { size: 17 }),
       ),
@@ -284,20 +287,20 @@ const table = useVueTable({
     <div v-if="!filtered.length" class="empty-table-state">
       <template v-if="!accounts.length">
         <span class="icon-box subtle"><Wallet :size="24" /></span>
-        <p class="empty-table-title">暂无已接入账户</p>
+        <p class="empty-table-title">{{ t('accountTable.noConnectedAccountsYet') }}</p>
         <p class="muted small">
-          完成服务器登记与核验后，在此接入只读投资者凭据并开始数据聚合。
+          {{ t('accountTable.registerAndVerifyAServerThenConnectRead') }}
         </p>
         <RouterLink
           to="/settings?add=account"
           class="btn btn-primary btn-small"
         >
-          <Plus :size="15" />接入首个账户
+          <Plus :size="15" />{{ t('accountTable.connectYourFirstAccount') }}
         </RouterLink>
       </template>
       <template v-else>
         <p class="empty-inline">
-          未找到匹配的账户，请尝试搜索其他名称、账号或经纪商。
+          {{ t('accountTable.noMatchingAccountsTryAnotherNameLoginOr') }}
         </p>
       </template>
     </div>

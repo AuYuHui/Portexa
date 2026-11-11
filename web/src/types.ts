@@ -130,7 +130,13 @@ export interface Totals {
   observed_from_ms: number | null;
   observed_to_ms: number | null;
 }
+export interface CollectionSettings {
+  snapshot_interval_seconds: number;
+  updated_at_ms: number;
+}
+
 export interface Overview {
+  collection_settings?: CollectionSettings;
   accounts: Account[];
   usd_total: Totals;
   currency_totals: Totals[];

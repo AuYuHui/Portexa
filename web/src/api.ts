@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 let csrfToken = "";
 let expired: () => void = () => undefined;
 
@@ -37,7 +38,7 @@ export async function api<T>(
     if (response.status === 401) expired();
     throw new APIError(
       response.status,
-      result.error || "服务暂时不可用，请稍后重试",
+      result.error || t('api.serviceTemporarilyUnavailablePleaseRetryLater'),
     );
   }
   return result as T;

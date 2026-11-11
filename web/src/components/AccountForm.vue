@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import { localizeMessage } from "../i18n";
+import { useI18n } from "vue-i18n";
 import { computed, ref } from "vue";
 import { useQuery } from "@tanstack/vue-query";
 import { ShieldCheck, LoaderCircle } from "@lucide/vue";
 import type { Account, Server } from "../types";
 import { api } from "../api";
 import { refreshAccounts } from "../state";
+
+const { t } = useI18n();
 const props = defineProps<{ account?: Account }>();
 const emit = defineEmits<{ cancel: []; saved: [] }>();
 const { data: servers, error: loadError } = useQuery({
@@ -38,7 +42,7 @@ const customCurrency = ref(isPreset ? "" : initialCurrency);
 const confirmed = ref(props.account?.configured_unit_confirmed || false);
 const enabled = ref(props.account?.sync_enabled ?? true);
 const busy = ref(false);
-const error = ref("");
+const error = ref<string | (() => string)>("");
 const server = computed(() =>
   servers.value?.find((s) => s.id === serverID.value),
 );
@@ -57,7 +61,7 @@ async function submit() {
     (!props.account || password.value) &&
     (new TextEncoder().encode(password.value).length > 16 || !password.value)
   ) {
-    error.value = "投资者密码需要 1 至 16 个 UTF-8 字节。";
+    error.value = () => t('accountForm.theInvestorPasswordMustContainToUtfBytes');
     return;
   }
   busy.value = true;
@@ -70,7 +74,7 @@ async function submit() {
       .trim()
       .toUpperCase();
     if (!finalCurrency) {
-      error.value = "请选择或输入有效的账户币种单位。";
+      error.value = () => t('accountForm.selectOrEnterAValidAccountCurrencyUnit');
       busy.value = false;
       return;
     }
@@ -108,45 +112,45 @@ async function submit() {
 <template>
   <form class="form-stack" @submit.prevent="submit">
     <p v-if="loadError" role="alert" class="error-message">
-      {{ loadError.message }}
+      {{ localizeMessage(loadError.message) }}
     </p>
     <p v-if="servers && !servers.length" class="notice notice-warning">
-      请先关闭此窗口，在“接入与设置”中建立服务器并完成独立核验。
+      {{ t('accountForm.closeThisWindowFirstThenRegisterAndIndependently') }}
     </p>
     <label class="field"
-      >账户名称<input
+      >{{ t('accountForm.accountName') }}<input
         v-model="label"
         required
         maxlength="96"
-        placeholder="例如：主账户 · 稳健策略"
+        :placeholder="t('accountForm.exampleMainAccountConservativeStrategy')"
     /></label>
     <div class="form-grid">
       <label class="field"
-        >服务器<select
+        >{{ t('accountForm.server') }}<select
           v-model="serverID"
-          aria-label="服务器"
+          :aria-label="t('accountForm.server')"
           required
           :disabled="!!account"
           @change="selectServer"
         >
-          <option disabled value="">选择已登记服务器</option>
+          <option disabled value="">{{ t('accountForm.selectARegisteredServer') }}</option>
           <option v-for="s in servers" :key="s.id" :value="s.id">
             {{ s.broker_name }} / {{ s.server_name }}
           </option>
         </select></label
       ><label class="field"
-        >MT4 账号<input
+        >{{ t('accountForm.mtLogin') }}<input
           v-model="login"
           inputmode="numeric"
           pattern="[0-9]+"
           required
           :disabled="!!account"
-          placeholder="交易登录号"
+          :placeholder="t('accountForm.tradingLoginNumber')"
       /></label>
     </div>
     <label class="field"
-      >固定接入点<select v-model="endpointID" required aria-label="固定接入点">
-        <option disabled value="">请选择核验并接受风险的修订</option>
+      >{{ t('accountForm.fixedEndpoint') }}<select v-model="endpointID" required :aria-label="t('accountForm.fixedEndpoint')">
+        <option disabled value="">{{ t('accountForm.selectAVerifiedRevisionWithAcceptedRisk') }}</option>
         <option
           v-if="
             account && !endpoints.some((e) => e.id === account?.endpoint_id)
@@ -154,54 +158,54 @@ async function submit() {
           disabled
           :value="account.endpoint_id"
         >
-          旧接入点已停用，请重新绑定
+          {{ t('accountForm.thePreviousEndpointIsRetiredRebindTheAccount') }}
         </option>
         <option v-for="e in endpoints" :key="e.id" :value="e.id">
-          修订 {{ e.revision }} · {{ e.ip_address }}:{{ e.port }}
+          {{ t('accountForm.revision') }} {{ e.revision }} · {{ e.ip_address }}:{{ e.port }}
         </option></select
       ><small
-        >仅允许完成核验和风险确认的修订。重新绑定将重加密凭据。</small
+        >{{ t('accountForm.onlyVerifiedRevisionsWithAcceptedRiskAreAllowed') }}</small
       ></label
     >
     <label class="field"
-      >投资者密码 {{ account ? "（留空保留原密码）" : ""
+      >{{ t('accountForm.investorPassword') }} {{ account ? t('accountForm.leaveBlankToKeepTheCurrentPassword') : ""
       }}<input
         v-model="password"
         type="password"
         :required="!account"
         autocomplete="new-password"
         maxlength="16"
-        placeholder="只使用只读投资者密码"
+        :placeholder="t('accountForm.useOnlyAReadOnlyInvestorPassword')"
       /><small
-        >与 Portexa 系统登录密码不同，按 SDK 限制最多 16 个 UTF-8 字节。</small
+        >{{ t('accountForm.differentFromYourPortexaLoginPasswordLimitedTo') }}</small
       ></label
     >
     <div class="field">
-      <label for="account-currency">账户单位</label>
+      <label for="account-currency">{{ t('accountForm.accountUnit') }}</label>
       <div :class="{ 'currency-select-group': selectedCurrency === 'CUSTOM' }">
         <select
           id="account-currency"
           v-model="selectedCurrency"
           required
-          aria-label="账户单位"
+          :aria-label="t('accountForm.accountUnit')"
         >
-          <optgroup label="主流折算单位">
-            <option value="USD">USD · 美元（标准折算 1:1）</option>
-            <option value="USC">USC · 美元美分（美分折算 100:1）</option>
+          <optgroup :label="t('accountForm.unitsIncludedInTheUsdSubtotal')">
+            <option value="USD">{{ t('accountForm.usdUsDollarConversion') }}</option>
+            <option value="USC">{{ t('accountForm.uscUsDollarCentConversion') }}</option>
           </optgroup>
-          <optgroup label="常见主要原币">
-            <option value="EUR">EUR · 欧元</option>
-            <option value="GBP">GBP · 英镑</option>
-            <option value="JPY">JPY · 日元</option>
-            <option value="AUD">AUD · 澳元</option>
-            <option value="CAD">CAD · 加元</option>
-            <option value="CHF">CHF · 瑞士法郎</option>
-            <option value="HKD">HKD · 港币</option>
-            <option value="CNH">CNH · 离岸人民币</option>
-            <option value="SGD">SGD · 新加坡元</option>
-            <option value="NZD">NZD · 新西兰元</option>
+          <optgroup :label="t('accountForm.commonNativeCurrencies')">
+            <option value="EUR">{{ t('accountForm.eurEuro') }}</option>
+            <option value="GBP">{{ t('accountForm.gbpBritishPound') }}</option>
+            <option value="JPY">{{ t('accountForm.jpyJapaneseYen') }}</option>
+            <option value="AUD">{{ t('accountForm.audAustralianDollar') }}</option>
+            <option value="CAD">{{ t('accountForm.cadCanadianDollar') }}</option>
+            <option value="CHF">{{ t('accountForm.chfSwissFranc') }}</option>
+            <option value="HKD">{{ t('accountForm.hkdHongKongDollar') }}</option>
+            <option value="CNH">{{ t('accountForm.cnhOffshoreRenminbi') }}</option>
+            <option value="SGD">{{ t('accountForm.sgdSingaporeDollar') }}</option>
+            <option value="NZD">{{ t('accountForm.nzdNewZealandDollar') }}</option>
           </optgroup>
-          <option value="CUSTOM">其他币种（手动输入代码）…</option>
+          <option value="CUSTOM">{{ t('accountForm.otherCurrencyEnterCode') }}</option>
         </select>
         <input
           v-if="selectedCurrency === 'CUSTOM'"
@@ -209,43 +213,42 @@ async function submit() {
           type="text"
           required
           maxlength="12"
-          placeholder="输入币种代码（如 SEK）"
+          :placeholder="t('accountForm.enterACurrencyCodeEGSek')"
           class="custom-currency-input"
-          aria-label="自定义币种代码"
+          :aria-label="t('accountForm.customCurrencyCode')"
         />
       </div>
       <small v-if="selectedCurrency === 'USD'">
-        标准美元账户，按 1:1 计入美元资金总计。
+        {{ t('accountForm.standardUsdAccountIncludedInTheUsdSubtotal') }}
       </small>
       <small v-else-if="selectedCurrency === 'USC'">
-        美分账户（Cent），按 100:1 换算折算计入美元总计。
+        {{ t('accountForm.centAccountConvertedAtIntoTheUsdSubtotal') }}
       </small>
       <small v-else-if="selectedCurrency === 'CUSTOM'">
-        请输入自定义货币代码（如 SEK、THB 等），金额将独立单列展示。
+        {{ t('accountForm.enterACurrencyCodeSuchAsSekOr') }}
       </small>
       <small v-else>
-        原币账户，金额将独立单列展示，不折算混入美元总计。
+        {{ t('accountForm.nativeCurrencyAccountAmountsAreShownSeparatelyAnd') }}
       </small>
     </div>
     <label class="checkbox-row"
       ><input v-model="confirmed" type="checkbox" /><span
-        >我已核对该账户的币种与金额单位。<small
-          >USD 按 1:1、USC 按 100:1
-          折算美元；其他币种单列。与采集结果不符时停止换算。</small
+        >{{ t('accountForm.iHaveVerifiedThisAccountSCurrencyAnd') }}<small
+          >{{ t('accountForm.usdConvertsAtAndUscAtOtherCurrencies') }}</small
         ></span
       ></label
     >
     <label class="checkbox-row"
       ><input v-model="enabled" type="checkbox" /><span
-        >启用每 60 秒的快照采集<small
-          >首次完整成功后展示资金与持仓；接入前的历史净值不补造。</small
+        >{{ t('accountForm.enableAutomaticSnapshotCollection') }}<small
+          >{{ t('accountForm.setTheSharedIntervalInConnectionsSettingsFunds') }}</small
         ></span
       ></label
     >
     <div class="notice notice-subtle">
-      <ShieldCheck :size="17" />投资者凭据加密保存，接口不会返回密码或密文。
+      <ShieldCheck :size="17" />{{ t('accountForm.investorCredentialsAreStoredEncryptedTheApiNever') }}
     </div>
-    <p v-if="error" class="error-message" role="alert">{{ error }}</p>
+    <p v-if="error" class="error-message" role="alert">{{ localizeMessage(error) }}</p>
     <div class="dialog-actions">
       <button
         type="button"
@@ -253,7 +256,7 @@ async function submit() {
         :disabled="busy"
         @click="emit('cancel')"
       >
-        取消
+        {{ t('accountForm.cancel') }}
       </button>
       <button
         type="submit"
@@ -263,7 +266,7 @@ async function submit() {
         "
       >
         <LoaderCircle v-if="busy" class="spin" :size="16" />
-        {{ busy ? "正在保存…" : account ? "保存账户配置" : "保存并接入账户" }}
+        {{ busy ? t('accountForm.saving') : account ? t('accountForm.saveAccountSettings') : t('accountForm.saveAndConnectAccount') }}
       </button>
     </div>
   </form>

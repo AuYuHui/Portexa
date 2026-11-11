@@ -3,7 +3,6 @@ package syncer
 import (
 	"context"
 	"errors"
-	"hash/fnv"
 	"log/slog"
 	"sync"
 	"time"
@@ -16,7 +15,7 @@ import (
 type Fetcher func(context.Context, mt4.Config, mt4.Options) (mt4.Result, error)
 
 type Options struct {
-	Interval        time.Duration
+	Interval        time.Duration // Optional process override; zero uses persisted collection settings.
 	Timeout         time.Duration
 	Workers         int
 	Logger          *slog.Logger
@@ -44,9 +43,6 @@ type Engine struct {
 func New(service *accounts.Service, fetch Fetcher, options Options) *Engine {
 	if fetch == nil {
 		fetch = mt4.Fetch
-	}
-	if options.Interval <= 0 {
-		options.Interval = time.Minute
 	}
 	if options.Timeout <= 0 {
 		options.Timeout = 20 * time.Second
@@ -193,7 +189,11 @@ func (e *Engine) runOne(ctx context.Context, id string) {
 		var positions []storage.Position
 		snapshot, positions, err = Convert(job, result, from.UnixMilli(), finished.UnixMilli())
 		if err == nil {
-			err = e.accounts.Publish(ctx, job, snapshot, positions, e.next(id, finished).UnixMilli())
+			if e.interval > 0 {
+				err = e.accounts.Publish(ctx, job, snapshot, positions, accounts.NextSnapshotAt(id, finished, e.interval).UnixMilli())
+			} else {
+				err = e.accounts.PublishScheduled(ctx, job, snapshot, positions)
+			}
 		}
 	}
 	if err != nil {
@@ -222,15 +222,6 @@ func (e *Engine) stopForStorageFailure() {
 		e.logger.Error("sync_storage_failed")
 	default:
 	}
-}
-
-func (e *Engine) next(id string, now time.Time) time.Time {
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(id))
-	interval := e.interval.Milliseconds()
-	phase := int64(h.Sum32()) % interval
-	next := ((now.UnixMilli()-phase)/interval+1)*interval + phase
-	return time.UnixMilli(next)
 }
 
 func classify(err error) accounts.Failure {
