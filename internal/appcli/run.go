@@ -8,6 +8,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -21,12 +23,13 @@ import (
 	"portexa/internal/accounts"
 	"portexa/internal/auth"
 	"portexa/internal/httpapi"
+	"portexa/internal/logging"
 	"portexa/internal/storage"
 	"portexa/internal/syncer"
 	"portexa/internal/vault"
 )
 
-func Run(ctx context.Context, args []string) error {
+func Run(ctx context.Context, args []string) (result error) {
 	if len(args) == 0 {
 		return errors.New("用法: portexa init|serve|password-reset|backup|restore [选项]，使用 -h 查看")
 	}
@@ -43,11 +46,15 @@ func Run(ctx context.Context, args []string) error {
 	dev := flags.Bool("dev-http", false, "仅允许环回 HTTP 开发访问")
 	webDir := flags.String("web", ".local/web", "构建后的前端目录")
 	backupPath := flags.String("file", "", "备份输出文件，或恢复输入文件")
+	logMaxSize := flags.Int("log-max-size", logging.DefaultMaxSizeMB, "单个 JSONL 日志文件上限（MiB），压缩轮转，最多保留7天")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
 		return errors.New("不接受位置参数")
+	}
+	if *logMaxSize <= 0 {
+		return errors.New("日志文件大小上限必须是正整数 MiB")
 	}
 	abs, err := filepath.Abs(*dataDir)
 	if err != nil {
@@ -61,6 +68,20 @@ func Run(ctx context.Context, args []string) error {
 		return err
 	}
 	defer unlock()
+	logs, err := logging.Open(filepath.Join(abs, "logs"), *logMaxSize)
+	if err != nil {
+		return errors.New("无法初始化 JSONL 日志，请检查日志目录、文件和大小配置")
+	}
+	logger := logs.Logger.With("component", "app")
+	logger.Info("command_started", "command", command)
+	defer func() {
+		if result != nil {
+			logger.Error("command_failed", "command", command)
+		} else {
+			logger.Info("command_completed", "command", command)
+		}
+		result = errors.Join(result, logs.Close())
+	}()
 	dbPath := filepath.Join(abs, "db", "portexa.sqlite")
 	if command == "restore" {
 		if *backupPath == "" {
@@ -147,14 +168,15 @@ func Run(ctx context.Context, args []string) error {
 		key, err := vault.Load(*keyPath)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "凭据密钥不可用：保留已有数据，账户采集将停止；请恢复匹配密钥。")
+			logger.Warn("credential_key_unavailable")
 		}
 		service := accounts.New(store, key, nil)
-		engine := syncer.New(service, nil, syncer.Options{})
-		handler, err := httpapi.New(authService, service, engine, httpapi.Config{Origin: *origin, DevelopmentHTTP: *dev, Static: os.DirFS(*webDir)})
+		engine := syncer.New(service, nil, syncer.Options{Logger: logs.Logger})
+		handler, err := httpapi.New(authService, service, engine, httpapi.Config{Origin: *origin, DevelopmentHTTP: *dev, Static: os.DirFS(*webDir), Logger: logs.Logger})
 		if err != nil {
 			return err
 		}
-		return serve(ctx, *listen, handler, store, engine, filepath.Join(abs, "backups"))
+		return serve(ctx, *listen, handler, store, engine, filepath.Join(abs, "backups"), logger)
 	}
 	return nil
 }
@@ -205,10 +227,11 @@ func lock(dataDir string) (func(), error) {
 	return func() { _ = unix.Flock(int(file.Fd()), unix.LOCK_UN); _ = file.Close() }, nil
 }
 
-func serve(parent context.Context, address string, handler http.Handler, store *storage.Store, engine *syncer.Engine, backupDir string) error {
+func serve(parent context.Context, address string, handler http.Handler, store *storage.Store, engine *syncer.Engine, backupDir string, logger *slog.Logger) error {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-	server := &http.Server{Addr: address, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024}
+	server := &http.Server{Addr: address, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024,
+		ErrorLog: log.New(serverErrorWriter{logger}, "", 0)}
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return err
@@ -221,10 +244,14 @@ func serve(parent context.Context, address string, handler http.Handler, store *
 	go func() { defer wg.Done(); errorsCh <- engine.Run(ctx) }()
 	go func() {
 		defer wg.Done()
-		store.Maintain(ctx, backupDir, func(error) { fmt.Fprintln(os.Stderr, "数据库维护未完成，请检查空间和备份目录。") })
+		store.Maintain(ctx, backupDir, func(error) {
+			fmt.Fprintln(os.Stderr, "数据库维护未完成，请检查空间和备份目录。")
+			logger.Error("database_maintenance_failed")
+		})
 	}()
 	go func() { errorsCh <- server.Serve(listener) }()
 	fmt.Println("Portexa 已启动：", address, "SQLite", store.Version())
+	logger.Info("server_started", "sqlite_version", store.Version())
 	select {
 	case <-ctx.Done():
 	case err = <-errorsCh:
@@ -235,5 +262,19 @@ func serve(parent context.Context, address string, handler http.Handler, store *
 	cancel()
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
-	return errors.Join(err, server.Shutdown(shutdownCtx))
+	result := errors.Join(err, server.Shutdown(shutdownCtx))
+	if result != nil {
+		logger.Error("server_stopped", "reason", "failure")
+	} else {
+		logger.Info("server_stopped", "reason", "shutdown")
+	}
+	return result
+}
+
+type serverErrorWriter struct{ logger *slog.Logger }
+
+func (w serverErrorWriter) Write(p []byte) (int, error) {
+	// net/http diagnostics can contain client addresses and arbitrary panic data.
+	w.logger.Error("http_server_error")
+	return len(p), nil
 }

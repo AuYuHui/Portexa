@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"hash/fnv"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -18,6 +19,7 @@ type Options struct {
 	Interval time.Duration
 	Timeout  time.Duration
 	Workers  int
+	Logger   *slog.Logger
 }
 
 type Engine struct {
@@ -30,6 +32,7 @@ type Engine struct {
 	active            map[string]context.CancelFunc
 	wg                sync.WaitGroup
 	fatal             chan error
+	logger            *slog.Logger
 }
 
 func New(service *accounts.Service, fetch Fetcher, options Options) *Engine {
@@ -45,8 +48,12 @@ func New(service *accounts.Service, fetch Fetcher, options Options) *Engine {
 	if options.Workers <= 0 {
 		options.Workers = 10
 	}
+	if options.Logger == nil {
+		options.Logger = slog.New(slog.DiscardHandler)
+	}
 	return &Engine{accounts: service, fetch: fetch, interval: options.Interval, timeout: options.Timeout,
-		sem: make(chan struct{}, options.Workers), wake: make(chan struct{}, 1), active: map[string]context.CancelFunc{}, fatal: make(chan error, 1)}
+		sem: make(chan struct{}, options.Workers), wake: make(chan struct{}, 1), active: map[string]context.CancelFunc{}, fatal: make(chan error, 1),
+		logger: options.Logger.With("component", "syncer")}
 }
 
 // Run is called once; cancellation drains every active Fetch before it returns.
@@ -130,6 +137,7 @@ func (e *Engine) runOne(ctx context.Context, id string) {
 	job, err := e.accounts.Claim(ctx, id)
 	if err != nil {
 		if accounts.IsBrokenGate(err) {
+			e.logger.Warn("sync_gate_unavailable", "account_id", id)
 			endCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			if err := e.accounts.DisableBrokenGate(endCtx, id, job.Account.ConfigVersion); err != nil && !errors.Is(err, storage.ErrNotFound) {
@@ -141,6 +149,8 @@ func (e *Engine) runOne(ctx context.Context, id string) {
 		return
 	}
 	from := time.Now()
+	logger := e.logger.With("account_id", id, "run_id", job.Run.ID)
+	logger.Info("sync_started")
 	result, err := e.fetch(ctx, job.Config, mt4.Options{})
 	job.Config.Password = ""
 	finished := time.Now()
@@ -157,11 +167,19 @@ func (e *Engine) runOne(ctx context.Context, id string) {
 	}
 	if err != nil {
 		failure := classify(err)
+		level := slog.LevelWarn
+		if failure.Canceled {
+			level = slog.LevelInfo
+		}
+		logger.Log(ctx, level, "sync_failed", "code", failure.Code, "operation", failure.Operation,
+			"permanent", failure.Permanent, "canceled", failure.Canceled, "duration_ms", time.Since(from).Milliseconds())
 		endCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		if err := e.accounts.Fail(endCtx, job, failure, finished.Add(accounts.RetryDelay(job.Account.FailureCount)).UnixMilli()); err != nil {
 			e.stopForStorageFailure()
 		}
+	} else {
+		logger.Info("sync_completed", "duration_ms", time.Since(from).Milliseconds())
 	}
 }
 
@@ -170,6 +188,7 @@ func (e *Engine) stopForStorageFailure() {
 	// The supervisor restarts the service; Recover marks unfinished runs interrupted.
 	select {
 	case e.fatal <- errors.New("快照调度无法持久化状态，已停止；请检查数据库并重启服务"):
+		e.logger.Error("sync_storage_failed")
 	default:
 	}
 }

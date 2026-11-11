@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"log/slog"
 	"mime"
 	"net/http"
 	"net/url"
@@ -28,6 +29,7 @@ type Config struct {
 	Origin          string
 	DevelopmentHTTP bool
 	Static          fs.FS
+	Logger          *slog.Logger
 }
 
 type Server struct {
@@ -66,6 +68,19 @@ func New(a *auth.Service, service *accounts.Service, scheduler Scheduler, config
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if s.config.Logger != nil {
+		observed := &responseLog{ResponseWriter: w}
+		w = observed
+		started := time.Now()
+		defer func() {
+			if failure := recover(); failure != nil {
+				observed.status = http.StatusInternalServerError
+				s.logRequest(r, observed, started)
+				panic(failure)
+			}
+			s.logRequest(r, observed, started)
+		}()
+	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("X-Frame-Options", "DENY")

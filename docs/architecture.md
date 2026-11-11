@@ -12,6 +12,7 @@ Portexa/
 ├── internal/accounts/            # 可信接入、加密凭据管理和资金聚合
 ├── internal/syncer/              # 有界快照调度、SDK 适配与结果校验
 ├── internal/storage/             # STRICT 迁移、GORM、单写队列与在线备份
+├── internal/logging/             # slog JSONL、大小/每日轮转、压缩与七天保留
 ├── internal/vault/               # 独立 AES-GCM 密钥与持久化加密计数
 ├── internal/cli/                 # 本地输入、参数和脱敏输出
 ├── web/                          # Vue 看板，静态构建到 .local/web

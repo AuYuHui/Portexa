@@ -10,6 +10,7 @@
 | internal/accounts、internal/syncer | 可信账户管理、快照采集、Decimal 聚合 |
 | internal/auth、internal/httpapi、internal/vault | 会话、受保护 API 与独立凭据密钥 |
 | internal/storage | STRICT 迁移、GORM 映射、单写队列与在线备份 |
+| internal/logging | JSONL 文件日志、大小及每日轮转、gzip 压缩与七天保留 |
 | web | Vue 3 / TypeScript 中文账户看板 |
 | [packages/mt4](packages/mt4/README.md) | 独立协议模块 portexa/mt4 |
 | [cmd/mt4probe](cmd/mt4probe/README.md) | 联网验证命令，输出脱敏结果 |
@@ -37,6 +38,8 @@ make build
 ```
 
 浏览器访问 `http://127.0.0.1:8080`。系统密码至少16个字符，无用户名。生产部署使用 HTTPS 来源及反向代理，详见[启动说明](docs/product-start.md)。产物包含 `.local/bin/portexa`、`.local/bin/mt4probe` 和 `.local/bin/mt4verify`；产品运行时不需要 Node。
+
+运行日志默认写入 `.local/portexa/logs/portexa.jsonl`，单文件上限100 MiB，轮转后 gzip 压缩，保留窗口七天。可用 `serve -log-max-size 50` 调整大小上限；保留和脱敏规则见[日志说明](docs/product-start.md#jsonl-运行日志)。
 
 普通检查仅运行合成与回环测试，不登录真实服务。历史同步、收益率、回撤和分钟归档尚属后续阶段，当前不会清理未归档的分钟快照。
 

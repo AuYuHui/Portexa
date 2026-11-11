@@ -23,7 +23,7 @@ def command(*args, password=None, success=True):
 
 
 def start(data):
-    process = subprocess.Popen([BINARY, "serve", "-data", str(data), "-dev-http", "-listen", "127.0.0.1:18081"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    process = subprocess.Popen([BINARY, "serve", "-data", str(data), "-dev-http", "-listen", "127.0.0.1:18081", "-log-max-size", "1"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     for _ in range(100):
         if process.poll() is not None:
             raise AssertionError(process.communicate())
@@ -61,6 +61,7 @@ def main():
         backup = Path(root) / "backup.sqlite"
         command("init", "-data", str(original), "-password-stdin", password=PASSWORD + "\n")
         command("init", "-data", str(original), "-password-stdin", password=PASSWORD + "\n", success=False)
+        command("serve", "-data", str(original), "-log-max-size", "0", success=False)
         cookie_jar = http.cookiejar.CookieJar()
         opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
         process = start(original)
@@ -93,7 +94,18 @@ def main():
         finally:
             stop(process)
         assert len(list((restored / "backups").glob("portexa-day-*.sqlite"))) >= 1
-        print("PASS: CLI init/refusal/lock, private key loading, serve, daily backup, verified backup/restore, session revocation, password reset; zero MT4 accounts")
+        for data in (original, restored):
+            log = data / "logs" / "portexa.jsonl"
+            assert log.stat().st_mode & 0o777 == 0o600
+            assert log.parent.stat().st_mode & 0o777 == 0o700
+            content = log.read_text()
+            assert PASSWORD not in content and "new-synthetic-cli-password" not in content
+            events = [json.loads(line) for line in content.splitlines()]
+            names = {event["msg"] for event in events}
+            assert {"command_started", "command_completed", "server_started", "server_stopped", "http_request"} <= names
+            assert all("time" in event and "level" in event for event in events)
+        assert "command_failed" in (original / "logs" / "portexa.jsonl").read_text()
+        print("PASS: CLI init/refusal/lock, private key loading, serve, daily backup, verified backup/restore, session revocation, password reset, private JSONL lifecycle/request logs; zero MT4 accounts")
 
 
 if __name__ == "__main__":
