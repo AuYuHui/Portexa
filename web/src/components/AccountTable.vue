@@ -7,7 +7,7 @@ import {
   useVueTable,
   type ColumnDef,
 } from "@tanstack/vue-table";
-import { ArrowUpRight } from "@lucide/vue";
+import { ArrowUpRight, Wallet, Plus } from "@lucide/vue";
 import type { Account } from "../types";
 import { money, date, positive } from "../format";
 import StatusBadge from "./StatusBadge.vue";
@@ -152,12 +152,20 @@ const table = useVueTable({
         </tr>
       </tbody>
     </table>
-    <p v-if="!filtered.length" class="empty-inline">
-      {{
-        accounts.length
-          ? "没有匹配的账户，试试其他名称或账号。"
-          : "还没有接入账户。完成服务器核验后，即可开始采集。"
-      }}
-    </p>
+    <div v-if="!filtered.length" class="empty-table-state">
+      <template v-if="!accounts.length">
+        <span class="icon-box subtle"><Wallet :size="24" /></span>
+        <p class="empty-table-title">暂无已接入账户</p>
+        <p class="muted small">
+          完成服务器登记与核验后，在此接入只读投资者凭据并开始数据聚合。
+        </p>
+        <RouterLink to="/settings?add=account" class="btn btn-primary btn-small">
+          <Plus :size="15" />接入首个账户
+        </RouterLink>
+      </template>
+      <template v-else>
+        <p class="empty-inline">未找到匹配的账户，请尝试搜索其他名称、账号或经纪商。</p>
+      </template>
+    </div>
   </div>
 </template>

@@ -34,6 +34,9 @@ Go 标准 HTTP 服务提供同源 API 与构建后的 Vue 静态资源。SQLite 
 | `PUT /api/auth/password` | 核验原密码并设置新密码，撤销所有会话 |
 | `GET /api/overview` | 最近已知资金合计、账户列表、采样范围和缺失状态 |
 | `GET /api/servers` | 服务器及接入点状态，不包含凭据 |
+| `GET /api/server-directory?q=...` | 登录后搜索 MT4 经纪商或服务器，返回短期有效候选 |
+| `POST /api/servers/discovered` | 使用服务端候选登记服务器、保存来源及本修订明确风险确认 |
+| `POST /api/servers/{id}/discovered-endpoints` | 从同公司、同服务器的候选建立新修订，暂停旧绑定 |
 | `POST /api/servers` | 建立服务器及待核验接入点，不拨号 |
 | `POST /api/servers/{id}/endpoints` | 建立新接入点修订，停用旧地址并暂停受影响账户 |
 | `POST /api/endpoints/{id}/review` | 登记独立核验依据、摘要及该修订的风险确认 |
@@ -49,6 +52,8 @@ Go 标准 HTTP 服务提供同源 API 与构建后的 Vue 静态资源。SQLite 
 ## 可信账户与快照
 
 新接入点为 pending。核验依据、摘要、reviewed 状态、风险接受记录、账户固定关系及采集开关全部满足后才可调用 SDK。更新地址必须建立新修订，不继承旧风险接受。正常轮询和重连复用有效修订的记录。
+
+默认登记流程使用[服务器发现](server-discovery.md)：地址及证据由服务端目录查询取得，浏览器只提交候选 ID、接入点序号和明确风险确认。选择后原子保存来源及该修订的核验/确认记录。手动高级路径继续先登记 pending，再填写独立证据。目录查询不登录账户，也不将候选自动视为可发送凭据的授权。
 
 凭据用 AES-256-GCM 加密，AAD 绑定账户、服务器、接入点及凭据版本。HTTP 从不回读凭据或密文。账户配置增加版本号，接入点、凭据、单位或采集开关变化后取消旧任务；提交前再校验版本。
 

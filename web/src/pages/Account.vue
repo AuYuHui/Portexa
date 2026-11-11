@@ -284,8 +284,13 @@ async function toggleSync() {
         v-model:open="open"
         title="账户配置"
         description="修改配置会取消旧任务，发布前还会再次校验配置版本。"
-        ><AccountForm :account="data.account" @saved="open = false"
-      /></Modal>
+      >
+        <AccountForm
+          :account="data.account"
+          @saved="open = false"
+          @cancel="open = false"
+        />
+      </Modal>
     </template>
   </div>
 </template>

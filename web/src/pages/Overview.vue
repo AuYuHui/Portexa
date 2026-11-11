@@ -13,6 +13,7 @@ import {
   Layers3,
   Info,
   AlertTriangle,
+  ShieldCheck,
 } from "@lucide/vue";
 import { api } from "../api";
 import type { Overview } from "../types";
@@ -220,16 +221,29 @@ const healthy = computed(
             </div>
           </div>
         </div>
-        <div class="scope-card">
-          <span class="eyebrow">CLEAR DATA, CLEAR CONTEXT</span>
-          <h2>看清数字，也看清边界。</h2>
-          <p>
-            未确认的单位、缺失与过期数据都会保留标记。这里的资金是最近已知估值，不代表同一时刻的组合估值或可提现金额。
-          </p>
-          <RouterLink to="/settings"
-            >管理接入与单位确认 <ArrowUpRight :size="16"
-          /></RouterLink>
-          <div class="scope-decoration" aria-hidden="true">P<span>.</span></div>
+        <div class="panel scope-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>资产口径与采样边界</h2>
+              <p class="muted small">看清数字背后的统计口径与时间基准。</p>
+            </div>
+            <span class="icon-box subtle"><ShieldCheck :size="20" /></span>
+          </div>
+          <div class="scope-body">
+            <div class="scope-item">
+              <strong>未确认单位不混入小计</strong>
+              <p>仅已确认的 USD / USC 纳入美元小计，其他原币独立展示，避免因汇率扰乱真实资金。</p>
+            </div>
+            <div class="scope-item">
+              <strong>按独立快照保留真实时钟</strong>
+              <p>各账户采集并非同一瞬时，反映最近已知估值。缺失与过期数据均保留明确标记。</p>
+            </div>
+            <div class="scope-footer">
+              <RouterLink class="text-button" to="/settings">
+                前往管理接入与单位确认 <ArrowUpRight :size="15" />
+              </RouterLink>
+            </div>
+          </div>
         </div>
       </section>
     </template>

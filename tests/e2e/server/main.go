@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	"portexa/internal/accounts"
 	"portexa/internal/auth"
+	"portexa/internal/discovery"
 	"portexa/internal/httpapi"
 	"portexa/internal/storage"
 	"portexa/internal/syncer"
@@ -110,7 +112,14 @@ func run() error {
 		}
 	}
 	engine := syncer.New(service, fetch, syncer.Options{Interval: time.Hour})
-	handler, err := httpapi.New(authService, service, engine, httpapi.Config{Origin: "http://127.0.0.1:18080", DevelopmentHTTP: true, Static: os.DirFS(".local/web")})
+	directory := discovery.New(discovery.Options{AllowTarget: service.AllowTarget, Fetch: func(ctx context.Context, query string) ([]byte, error) {
+		result := []map[string]any{}
+		if strings.Contains(strings.ToLower(query), "directory") {
+			result = append(result, map[string]any{"company": "Synthetic Directory Broker", "results": []map[string]any{{"name": "Synthetic-DirectoryLive", "access": []string{"203.0.113.9:443", "203.0.113.10:443"}, "is_demo": false}}})
+		}
+		return json.Marshal(map[string]any{"result": result})
+	}})
+	handler, err := httpapi.New(authService, service, engine, httpapi.Config{Origin: "http://127.0.0.1:18080", DevelopmentHTTP: true, Static: os.DirFS(".local/web"), Directory: directory})
 	if err != nil {
 		return err
 	}

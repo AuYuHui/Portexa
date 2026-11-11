@@ -20,6 +20,7 @@ GORM 模型显式映射本文的表名、主键、INTEGER 毫秒时间和 NULL �
 | `auth_settings`、`sessions` | 一 | 单例登录密码、会话和全局撤销版本 |
 | `servers`、`server_endpoints` | 一 | 稳定服务器身份、版本化接入点及核验记录 |
 | `server_time_rule_sets` | 一记录，二用于历史 | 有证据和版本的服务器时区规则 |
+| `server_directory_evidence` | 一，迁移002 | 服务器目录来源、取得时间、响应摘要及私有原文，随数据库备份 |
 | `accounts` | 一 | 交易账号、单位、加密凭据、采集开关和当前快照指针 |
 | `sync_runs` | 一 | 一次实际执行、调度键、失败分类和恢复审计 |
 | `account_snapshots` | 一 | 完整资金快照及采集时间窗口 |

@@ -6,7 +6,7 @@ import type { Account, Server } from "../types";
 import { api } from "../api";
 import { refreshAccounts } from "../state";
 const props = defineProps<{ account?: Account }>();
-const emit = defineEmits<{ saved: [] }>();
+const emit = defineEmits<{ cancel: []; saved: [] }>();
 const { data: servers, error: loadError } = useQuery({
   queryKey: ["servers"],
   queryFn: () => api<Server[]>("/servers"),
@@ -16,7 +16,25 @@ const endpointID = ref(props.account?.endpoint_id || "");
 const label = ref(props.account?.label || "");
 const login = ref(props.account?.login?.toString() || "");
 const password = ref("");
-const currency = ref(props.account?.confirmed_currency || "USD");
+const PRESET_CURRENCIES = [
+  "USD",
+  "USC",
+  "EUR",
+  "GBP",
+  "JPY",
+  "AUD",
+  "CAD",
+  "CHF",
+  "HKD",
+  "CNH",
+  "SGD",
+  "NZD",
+];
+const initialCurrency = (props.account?.confirmed_currency || "USD").toUpperCase();
+const isPreset = PRESET_CURRENCIES.includes(initialCurrency);
+
+const selectedCurrency = ref(isPreset ? initialCurrency : "CUSTOM");
+const customCurrency = ref(isPreset ? "" : initialCurrency);
 const confirmed = ref(props.account?.configured_unit_confirmed || false);
 const enabled = ref(props.account?.sync_enabled ?? true);
 const busy = ref(false);
@@ -44,10 +62,22 @@ async function submit() {
   }
   busy.value = true;
   try {
+    const finalCurrency = (
+      selectedCurrency.value === "CUSTOM"
+        ? customCurrency.value
+        : selectedCurrency.value
+    )
+      .trim()
+      .toUpperCase();
+    if (!finalCurrency) {
+      error.value = "请选择或输入有效的账户币种单位。";
+      busy.value = false;
+      return;
+    }
     const values = {
       label: label.value,
       endpoint_id: endpointID.value,
-      confirmed_currency: currency.value.toUpperCase(),
+      confirmed_currency: finalCurrency,
       confirm_unit: confirmed.value,
       sync_enabled: enabled.value,
     };
@@ -146,13 +176,57 @@ async function submit() {
         >与 Portexa 系统登录密码不同，按 SDK 限制最多 16 个 UTF-8 字节。</small
       ></label
     >
-    <label class="field"
-      >账户单位<input
-        v-model="currency"
-        required
-        maxlength="12"
-        placeholder="USD / USC / EUR…"
-    /></label>
+    <div class="field">
+      <label for="account-currency">账户单位</label>
+      <div :class="{ 'currency-select-group': selectedCurrency === 'CUSTOM' }">
+        <select
+          id="account-currency"
+          v-model="selectedCurrency"
+          required
+          aria-label="账户单位"
+        >
+          <optgroup label="主流折算单位">
+            <option value="USD">USD · 美元（标准折算 1:1）</option>
+            <option value="USC">USC · 美元美分（美分折算 100:1）</option>
+          </optgroup>
+          <optgroup label="常见主要原币">
+            <option value="EUR">EUR · 欧元</option>
+            <option value="GBP">GBP · 英镑</option>
+            <option value="JPY">JPY · 日元</option>
+            <option value="AUD">AUD · 澳元</option>
+            <option value="CAD">CAD · 加元</option>
+            <option value="CHF">CHF · 瑞士法郎</option>
+            <option value="HKD">HKD · 港币</option>
+            <option value="CNH">CNH · 离岸人民币</option>
+            <option value="SGD">SGD · 新加坡元</option>
+            <option value="NZD">NZD · 新西兰元</option>
+          </optgroup>
+          <option value="CUSTOM">其他币种（手动输入代码）…</option>
+        </select>
+        <input
+          v-if="selectedCurrency === 'CUSTOM'"
+          v-model="customCurrency"
+          type="text"
+          required
+          maxlength="12"
+          placeholder="输入币种代码（如 SEK）"
+          class="custom-currency-input"
+          aria-label="自定义币种代码"
+        />
+      </div>
+      <small v-if="selectedCurrency === 'USD'">
+        标准美元账户，按 1:1 计入美元资金总计。
+      </small>
+      <small v-else-if="selectedCurrency === 'USC'">
+        美分账户（Cent），按 100:1 换算折算计入美元总计。
+      </small>
+      <small v-else-if="selectedCurrency === 'CUSTOM'">
+        请输入自定义货币代码（如 SEK、THB 等），金额将独立单列展示。
+      </small>
+      <small v-else>
+        原币账户，金额将独立单列展示，不折算混入美元总计。
+      </small>
+    </div>
     <label class="checkbox-row"
       ><input v-model="confirmed" type="checkbox" /><span
         >我已核对该账户的币种与金额单位。<small
@@ -172,15 +246,25 @@ async function submit() {
       <ShieldCheck :size="17" />投资者凭据加密保存，接口不会返回密码或密文。
     </div>
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
-    <button
-      class="btn btn-primary full-width"
-      :disabled="
-        busy || !endpointID || !endpoints.some((e) => e.id === endpointID)
-      "
-    >
-      <LoaderCircle v-if="busy" class="spin" :size="17" />{{
-        busy ? "正在保存" : account ? "保存账户配置" : "保存并接入账户"
-      }}
-    </button>
+    <div class="dialog-actions">
+      <button
+        type="button"
+        class="btn"
+        :disabled="busy"
+        @click="emit('cancel')"
+      >
+        取消
+      </button>
+      <button
+        type="submit"
+        class="btn btn-primary"
+        :disabled="
+          busy || !endpointID || !endpoints.some((e) => e.id === endpointID)
+        "
+      >
+        <LoaderCircle v-if="busy" class="spin" :size="16" />
+        {{ busy ? "正在保存…" : account ? "保存账户配置" : "保存并接入账户" }}
+      </button>
+    </div>
   </form>
 </template>

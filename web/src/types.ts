@@ -110,3 +110,15 @@ export interface Detail {
   positions: Position[];
   server_time_status: string;
 }
+
+export interface DirectoryCandidate {
+  id: string;
+  broker_name: string;
+  server_name: string;
+  demo: boolean;
+  endpoints: { ip_address: string; port: number }[];
+  source_name: string;
+  source_url: string;
+  fetched_at_ms: number;
+  expires_at_ms: number;
+}

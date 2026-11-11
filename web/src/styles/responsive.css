@@ -38,8 +38,8 @@
   .panel-heading {
     padding: 20px;
   }
-  .scope-card {
-    padding: 24px;
+  .scope-body {
+    padding: 0 20px 20px;
   }
   .detail-title {
     align-items: flex-start;
@@ -226,40 +226,33 @@
     padding: 13px 16px;
     font-size: 9px;
   }
-  .bottom-grid,
-  .settings-bottom {
+  .bottom-grid {
     grid-template-columns: 1fr;
     gap: 18px;
     margin-top: 18px;
   }
-  .scope-card {
-    padding: 24px;
+  .security-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 0 16px 20px;
+  }
+  .setup-stepper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+  .step-connector {
+    display: none;
+  }
+  .scope-body {
+    padding: 0 20px 20px;
   }
   .footer {
     flex-direction: column;
     padding: 15px 20px 20px;
     gap: 8px;
     font-size: 8px;
-  }
-  .setup-steps {
-    gap: 12px;
-    padding: 17px 14px;
-  }
-  .setup-steps > div {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .setup-steps span {
-    font-size: 20px;
-  }
-  .setup-steps strong {
-    font-size: 10px;
-    line-height: 1.9;
-  }
-  .setup-steps small {
-    font-size: 9px;
-    line-height: 1.7;
   }
   .server-card {
     margin: 0 15px 16px;
@@ -302,18 +295,13 @@
   .endpoint-row > :last-child {
     margin-left: auto;
   }
-  .password-panel > form {
-    padding: 0 16px 20px;
-  }
-  .form-grid {
+  .form-grid,
+  .currency-select-group {
     grid-template-columns: 1fr;
   }
   .modal-content {
     padding: 23px 20px;
     max-height: calc(100dvh - 30px);
-  }
-  .security-note {
-    padding: 16px 8px;
   }
   .detail-status {
     gap: 9px;

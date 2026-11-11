@@ -4,5 +4,6 @@
 @import "./styles/dashboard.css";
 @import "./styles/details-settings.css";
 @import "./styles/forms.css";
+@import "./styles/server-discovery.css";
 @import "./styles/login.css";
 @import "./styles/responsive.css";

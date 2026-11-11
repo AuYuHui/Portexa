@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { AlertTriangle } from "@lucide/vue";
+import { AlertTriangle, LoaderCircle } from "@lucide/vue";
 import type { Endpoint } from "../types";
 import { api } from "../api";
 import { refreshAccounts } from "../state";
 const props = defineProps<{ endpoint: Endpoint }>();
-const emit = defineEmits<{ saved: [] }>();
+const emit = defineEmits<{ cancel: []; saved: [] }>();
 const reference = ref(props.endpoint.evidence_ref || "");
 const digest = ref("");
 const risk = ref(false);
@@ -96,8 +96,23 @@ async function submit() {
       ></label
     >
     <p v-if="error" role="alert" class="error-message">{{ error }}</p>
-    <button class="btn btn-primary full-width" :disabled="busy || !risk">
-      {{ busy ? "正在保存" : "保存核验与风险确认" }}
-    </button>
+    <div class="dialog-actions">
+      <button
+        type="button"
+        class="btn"
+        :disabled="busy"
+        @click="emit('cancel')"
+      >
+        取消
+      </button>
+      <button
+        type="submit"
+        class="btn btn-primary"
+        :disabled="busy || !risk"
+      >
+        <LoaderCircle v-if="busy" class="spin" :size="16" />
+        {{ busy ? "正在保存…" : "保存核验与风险确认" }}
+      </button>
+    </div>
   </form>
 </template>

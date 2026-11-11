@@ -16,6 +16,7 @@ import (
 
 	"portexa/internal/accounts"
 	"portexa/internal/auth"
+	"portexa/internal/discovery"
 	"portexa/internal/storage"
 	"portexa/internal/vault"
 )
@@ -30,6 +31,7 @@ type Config struct {
 	DevelopmentHTTP bool
 	Static          fs.FS
 	Logger          *slog.Logger
+	Directory       *discovery.Catalog
 }
 
 type Server struct {
@@ -57,6 +59,9 @@ func New(a *auth.Service, service *accounts.Service, scheduler Scheduler, config
 		}
 	} else if u.Scheme != "https" {
 		return nil, errors.New("HTTPS origin required")
+	}
+	if config.Directory == nil {
+		config.Directory = discovery.New(discovery.Options{AllowTarget: service.AllowTarget})
 	}
 	s := &Server{auth: a, accounts: service, scheduler: scheduler, config: config, host: u.Host,
 		cookieName: "__Host-portexa", limiter: newLoginLimiter(), hashSlots: make(chan struct{}, 2), mux: http.NewServeMux()}
@@ -113,6 +118,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /api/auth/password", s.protected(s.password))
 	s.mux.HandleFunc("GET /api/overview", s.protected(s.overview))
 	s.mux.HandleFunc("GET /api/servers", s.protected(s.servers))
+	s.mux.HandleFunc("GET /api/server-directory", s.protected(s.searchDirectory))
+	s.mux.HandleFunc("POST /api/servers/discovered", s.protected(s.createDiscovered))
+	s.mux.HandleFunc("POST /api/servers/{id}/discovered-endpoints", s.protected(s.newDiscoveredEndpoint))
 	s.mux.HandleFunc("POST /api/servers", s.protected(s.createServer))
 	s.mux.HandleFunc("POST /api/servers/{id}/endpoints", s.protected(s.newEndpoint))
 	s.mux.HandleFunc("POST /api/endpoints/{id}/review", s.protected(s.review))
@@ -198,6 +206,14 @@ func fail(w http.ResponseWriter, err error) {
 		code, message = 404, "记录不存在"
 	case errors.Is(err, storage.ErrConflict):
 		code, message = 409, "配置已变化，请刷新后重试"
+	case errors.Is(err, discovery.ErrQuery):
+		code, message = 400, err.Error()
+	case errors.Is(err, discovery.ErrExpired):
+		code, message = 409, err.Error()
+	case errors.Is(err, discovery.ErrBusy):
+		code, message = 429, err.Error()
+	case errors.Is(err, discovery.ErrUnavailable):
+		code, message = 502, err.Error()
 	case errors.Is(err, accounts.ErrEndpoint), errors.Is(err, accounts.ErrTarget), errors.Is(err, accounts.ErrPaused):
 		code, message = 409, err.Error()
 	case errors.Is(err, vault.ErrUnavailable), errors.Is(err, vault.ErrDecrypt):

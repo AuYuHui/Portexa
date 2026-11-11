@@ -6,7 +6,7 @@
 .login-story {
   position: relative;
   overflow: hidden;
-  background: #173d32;
+  background: #064e3b;
   padding: 55px 12%;
   color: #eff8f1;
   display: flex;
@@ -16,33 +16,37 @@
 .login-story .brand {
   position: absolute;
   top: 50px;
+  color: #ffffff;
 }
 .login-story .brand-mark {
-  color: #95c9a9;
+  color: #a7f3d0;
 }
 .login-story .brand-dot {
-  color: #8fbd9e;
+  color: #a7f3d0;
 }
 .login-story > .eyebrow {
-  color: #81a594;
-  font-size: 9px;
+  color: #a7f3d0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
   margin-top: 30px;
   position: relative;
   z-index: 1;
 }
 .login-story h1 {
-  font-size: clamp(36px, 4.8vw, 68px);
-  font-weight: 500;
-  line-height: 1.4;
-  letter-spacing: -2px;
+  font-size: clamp(34px, 4.5vw, 60px);
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -1.5px;
   margin: 20px 0 24px;
   position: relative;
   z-index: 1;
+  color: #ffffff;
 }
 .login-story p {
-  color: #98b1a3;
-  line-height: 2;
-  font-size: 13px;
+  color: #d1fae5;
+  line-height: 1.9;
+  font-size: 14px;
   position: relative;
   z-index: 1;
 }
@@ -50,14 +54,15 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #8dad9b;
-  margin-top: 56px;
-  font-size: 10px;
+  color: #a7f3d0;
+  margin-top: 50px;
+  font-size: 12px;
   position: relative;
   z-index: 1;
 }
 .login-assurance span span {
   padding: 0 9px;
+  opacity: 0.6;
 }
 .story-lines {
   position: absolute;
@@ -69,7 +74,7 @@
 }
 .story-lines i {
   position: absolute;
-  border: 1px solid #7ba48a22;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 50%;
   inset: 0;
 }
@@ -92,28 +97,31 @@
   flex-direction: column;
   padding: 50px 35px;
   position: relative;
-  background: #fafcfb;
+  background: var(--color-canvas);
 }
 .login-form {
   width: 100%;
-  max-width: 350px;
+  max-width: 360px;
 }
 .login-form h2 {
-  font-size: 25px;
-  margin: 25px 0 12px;
-  font-weight: 650;
+  font-size: 24px;
+  margin: 22px 0 10px;
+  font-weight: 700;
   letter-spacing: -0.5px;
+  color: var(--color-ink);
 }
 .login-form > p.muted {
-  font-size: 12px;
-  line-height: 1.9;
-  margin-bottom: 38px;
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 32px;
+  color: var(--color-muted);
 }
 .login-submit {
   width: 100%;
   margin-top: 24px;
-  height: 46px;
-  font-size: 13px;
+  height: 44px;
+  font-size: 14px;
+  font-weight: 600;
 }
 .login-submit svg:last-child {
   margin-left: auto;
@@ -125,16 +133,16 @@
   margin-top: 15px;
 }
 .login-help {
-  font-size: 10px;
-  line-height: 2.1;
-  color: #a0ada5;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--color-muted);
   margin-top: 26px;
   text-align: center;
 }
 .login-footer {
   position: absolute;
-  bottom: 30px;
-  color: #b2bdb6;
-  font-size: 9px;
-  letter-spacing: 1px;
+  bottom: 24px;
+  color: var(--color-text-faint);
+  font-size: 11px;
+  letter-spacing: 0.8px;
 }

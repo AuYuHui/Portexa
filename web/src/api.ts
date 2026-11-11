@@ -17,6 +17,7 @@ export async function api<T>(
   path: string,
   method = "GET",
   data?: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (method !== "GET") {
@@ -28,6 +29,7 @@ export async function api<T>(
     headers,
     credentials: "same-origin",
     cache: "no-store",
+    signal,
     body: data === undefined ? undefined : JSON.stringify(data),
   });
   const result = await response.json().catch(() => ({}));

@@ -81,6 +81,10 @@ type AccountPatch struct {
 }
 
 func (s *Service) CreateServer(ctx context.Context, input ServerInput) (storage.Server, storage.Endpoint, error) {
+	return s.createServer(ctx, input, nil)
+}
+
+func (s *Service) createServer(ctx context.Context, input ServerInput, approval *endpointApproval) (storage.Server, storage.Endpoint, error) {
 	if !clean(input.BrokerName, 1, 128) || !clean(input.ServerName, 1, 128) {
 		return storage.Server{}, storage.Endpoint{}, &InputError{"请填写经纪商和准确的服务器名称"}
 	}
@@ -96,6 +100,9 @@ func (s *Service) CreateServer(ctx context.Context, input ServerInput) (storage.
 	server := storage.Server{ID: storage.NewID(), Protocol: "mt4", BrokerName: strings.TrimSpace(input.BrokerName), ServerName: strings.TrimSpace(input.ServerName), CreatedAtMS: now}
 	endpoint := storage.Endpoint{ID: storage.NewID(), ServerID: server.ID, Revision: 1, IPAddress: input.IPAddress, Port: input.Port, State: "pending", CreatedAtMS: now}
 	err := s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
+		if err := approval.apply(tx, &endpoint, now); err != nil {
+			return err
+		}
 		if err := tx.Create(&server).Error; err != nil {
 			return err
 		}
@@ -112,6 +119,10 @@ func (s *Service) CreateServer(ctx context.Context, input ServerInput) (storage.
 }
 
 func (s *Service) NewEndpoint(ctx context.Context, serverID string, input EndpointInput) (storage.Endpoint, []string, error) {
+	return s.newEndpoint(ctx, serverID, input, nil)
+}
+
+func (s *Service) newEndpoint(ctx context.Context, serverID string, input EndpointInput, approval *endpointApproval) (storage.Endpoint, []string, error) {
 	if !s.AllowTarget(input.IPAddress) || input.Port < 1 || input.Port > 65535 {
 		return storage.Endpoint{}, nil, ErrTarget
 	}
@@ -120,6 +131,12 @@ func (s *Service) NewEndpoint(ctx context.Context, serverID string, input Endpoi
 	err := s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
 		var server storage.Server
 		if err := tx.First(&server, "id = ? AND retired_at_ms IS NULL", serverID).Error; err != nil {
+			return err
+		}
+		if !approval.matchesServer(server) {
+			return &InputError{"新接入点必须属于当前 MT4 服务器"}
+		}
+		if err := approval.apply(tx, &endpoint, s.Now().UnixMilli()); err != nil {
 			return err
 		}
 		var revision int64

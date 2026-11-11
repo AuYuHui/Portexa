@@ -105,7 +105,7 @@ func ValidateDatabase(ctx context.Context, path string) error {
 	if err = db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return err
 	}
-	if application != ApplicationID || version != SchemaVersion {
+	if application != ApplicationID || version < 1 || version > SchemaVersion {
 		return errors.New("backup schema is not supported")
 	}
 	var integrity string
@@ -177,6 +177,9 @@ func RestoreNew(ctx context.Context, source, destination string) error {
 		}
 	})
 	conn.Close()
+	if err == nil {
+		err = migrate(store.writeSQL)
+	}
 	if err == nil {
 		err = store.Write(ctx, High, func(tx *gorm.DB) error {
 			now := time.Now().UnixMilli()

@@ -25,13 +25,16 @@ import (
 //go:embed migrations/001_phase1.sql
 var initialSchema string
 
+//go:embed migrations/002_server_directory.sql
+var directorySchema string
+
 var ErrNotFound = gorm.ErrRecordNotFound
 var ErrConflict = errors.New("state conflict")
 var ErrDenied = errors.New("operation denied")
 var ErrClosed = errors.New("store closed")
 
 const ApplicationID = 0x50545841
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 type Priority int
 
@@ -191,20 +194,29 @@ func migrate(db *sql.DB) error {
 	if version == SchemaVersion && application == ApplicationID {
 		return nil
 	}
-	if version != 0 || application != 0 {
+	if (version == 0 && application != 0) || (version > 0 && application != ApplicationID) || version < 0 || version > SchemaVersion {
 		return errors.New("unsupported database schema")
 	}
-	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").Scan(&count); err != nil || count != 0 {
-		return errors.New("refusing to initialize a nonempty database")
+	if version == 0 {
+		var count int
+		if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").Scan(&count); err != nil || count != 0 {
+			return errors.New("refusing to initialize a nonempty database")
+		}
 	}
 	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err = tx.Exec(initialSchema); err != nil {
-		return err
+	if version == 0 {
+		if _, err = tx.Exec(initialSchema); err != nil {
+			return err
+		}
+	}
+	if version < 2 {
+		if _, err = tx.Exec(directorySchema); err != nil {
+			return err
+		}
 	}
 	if _, err = tx.Exec(fmt.Sprintf("PRAGMA application_id=%d", ApplicationID)); err != nil {
 		return err

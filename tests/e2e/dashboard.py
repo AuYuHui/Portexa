@@ -45,6 +45,7 @@ def main():
         page.get_by_role("link", name="接入与设置", exact=True).click()
         page.get_by_role("button", name="登记服务器", exact=True).click()
         dialog = page.get_by_role("dialog")
+        dialog.get_by_role("button", name="手动填写（高级）", exact=True).click()
         dialog.get_by_label("经纪商", exact=True).fill("Synthetic UI Broker")
         dialog.get_by_label("准确的 MT4 服务器名称").fill("Synthetic-UI")
         dialog.get_by_label("固定 IP 地址").fill("203.0.113.9")
@@ -101,6 +102,7 @@ def main():
         server = page.locator(".server-card").filter(has=page.get_by_role("heading", name="Synthetic-UI", exact=True))
         server.get_by_role("button", name="新建接入修订").click()
         dialog = page.get_by_role("dialog")
+        dialog.get_by_role("button", name="手动填写（高级）", exact=True).click()
         dialog.get_by_label("固定 IP 地址").fill("203.0.113.10")
         dialog.get_by_role("button", name="建立新修订并暂停账户").click()
         expect(dialog).not_to_be_visible()
@@ -135,10 +137,12 @@ def main():
         page.screenshot(path=str(ARTIFACTS / "settings-mobile.png"), full_page=True)
 
         # Password changes revoke this session; the next login uses the new password.
+        if not page.get_by_label("当前密码", exact=True).count():
+            page.get_by_role("button", name="修改密码", exact=True).first.click()
         page.get_by_label("当前密码", exact=True).fill(PASSWORD)
         page.get_by_label("新密码", exact=True).fill("new-synthetic-browser-password")
         page.get_by_label("再次输入新密码", exact=True).fill("new-synthetic-browser-password")
-        page.get_by_role("button", name="修改密码并退出登录").click()
+        page.get_by_role("button", name=re.compile("修改密码并退出登录|确认修改并重新登录")).click()
         expect(page.get_by_role("heading", name="进入你的工作台")).to_be_visible()
         assert context.request.get(ORIGIN + "/api/accounts").status == 401
         no_page_overflow(page)
