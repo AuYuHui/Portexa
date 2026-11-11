@@ -1,0 +1,28 @@
+{
+  "name": "portexa-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "check": "vue-tsc --noEmit",
+    "build": "npm run check && vite build"
+  },
+  "dependencies": {
+    "@lucide/vue": "1.71.0",
+    "@tanstack/vue-query": "5.107.1",
+    "@tanstack/vue-table": "8.21.3",
+    "pinia": "3.0.4",
+    "reka-ui": "2.11.0",
+    "vue": "3.5.45",
+    "vue-router": "4.6.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.5",
+    "@vitejs/plugin-vue": "6.0.10",
+    "tailwindcss": "4.3.5",
+    "typescript": "5.9.3",
+    "vite": "8.3.8",
+    "vue-tsc": "3.3.14"
+  }
+}

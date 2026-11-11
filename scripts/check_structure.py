@@ -9,6 +9,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_LINES = 1000
+# npm 生成的依赖锁不属于源码、测试、脚本或文档；保留标准排版与完整锁定信息。
+GENERATED_LOCKFILES = {Path("web/package-lock.json")}
 
 
 def main() -> int:
@@ -25,6 +27,8 @@ def main() -> int:
     for relative in paths:
         path = ROOT / relative
         if not path.is_file():
+            continue
+        if relative in GENERATED_LOCKFILES:
             continue
         try:
             text = path.read_text(encoding="utf-8")
