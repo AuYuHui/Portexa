@@ -8,7 +8,7 @@ import (
 	"portexa/internal/storage"
 )
 
-const FundingRuleVersion = "balance-comment-v2"
+const FundingRuleVersion = "balance-comment-v3"
 
 var fundCommentRules = []struct {
 	category, label string
@@ -16,6 +16,9 @@ var fundCommentRules = []struct {
 }{
 	{"deposit", "券商入金编号", regexp.MustCompile(`(?i)^D\(DIN[0-9]+\)$`)},
 	{"withdrawal", "券商出金编号", regexp.MustCompile(`(?i)^W\(DOUT[0-9]+\)$`)},
+	{"deposit", "DPrime 入金标识", regexp.MustCompile(`(?i)^dbu(?:[ \t]+#IT[0-9]+)?$`)},
+	{"withdrawal", "DPrime 出金标识", regexp.MustCompile(`(?i)^wbu(?:[ \t]+#IT[0-9]+)?$`)},
+	{"profit_share_expense", "DPrime 跟单分润支出标识", regexp.MustCompile(`(?i)^-PF(?:\|[0-9]+\|&[0-9]+)?$`)},
 	{"deposit", "入金标识", regexp.MustCompile(`(?i)\bdeposit(?:s|ed)?\b|入金|存款`)},
 	{"withdrawal", "出金标识", regexp.MustCompile(`(?i)\bwithdraw(?:al|als|n)?\b|出金|提款|取款|提现`)},
 	{"rebate", "返佣标识", regexp.MustCompile(`(?i)\brebates?\b|\bcashback\b|返佣`)},
@@ -50,7 +53,7 @@ func automaticFundCategory(comment string, net, commission, swap, taxes decimal.
 		if sign <= 0 {
 			return "", ""
 		}
-	case "withdrawal", "fee":
+	case "withdrawal", "fee", "profit_share_expense":
 		if sign >= 0 {
 			return "", ""
 		}
