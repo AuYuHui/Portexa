@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { localizeMessage } from "../i18n";
+import { useI18n } from "vue-i18n";
 import { computed, ref, shallowRef, watch } from "vue";
 import {
   Search,
@@ -12,6 +14,8 @@ import { api } from "../api";
 import { refreshAccounts } from "../state";
 import { date } from "../format";
 import type { DirectoryCandidate, Server } from "../types";
+
+const { t } = useI18n();
 
 const props = defineProps<{ server?: Server }>();
 const emit = defineEmits<{ cancel: []; saved: [] }>();
@@ -108,24 +112,20 @@ async function submit() {
 <template>
   <form class="form-stack directory-form" @submit.prevent="submit">
     <p v-if="server" class="notice notice-warning">
-      选择
-      {{
-        server.server_name
-      }}
-      的新接入点后，旧修订将停用，相关账户会暂停；随后请在账户配置中重新绑定。
+      {{ t('directoryPicker.revisionWarning', { server: server.server_name }) }}
     </p>
     <div class="field">
-      <label for="server-directory-search-input">搜索经纪商或服务器</label>
+      <label for="server-directory-search-input">{{ t('directoryPicker.searchBrokerOrServer') }}</label>
       <div class="directory-search">
         <Search :size="16" class="search-icon" />
         <input
           id="server-directory-search-input"
           v-model="query"
           type="search"
-          aria-label="搜索经纪商或服务器"
+          :aria-label="t('directoryPicker.searchBrokerOrServer')"
           autocomplete="off"
           maxlength="80"
-          placeholder="例如 DPrime、IC Markets、服务器名称"
+          :placeholder="t('directoryPicker.exampleDprimeIcMarketsOrAServerName')"
           :disabled="saving"
         />
         <LoaderCircle
@@ -134,17 +134,17 @@ async function submit() {
           class="spin loading-icon"
         />
       </div>
-      <small>输入至少 2 个字符，自动查询 MT4 服务器及候选地址，无需账户密码。</small>
+      <small>{{ t('directoryPicker.enterAtLeastCharactersToSearchMtServers') }}</small>
     </div>
 
     <template v-if="!selected">
       <div v-if="loading" class="directory-status" role="status">
-        <LoaderCircle :size="18" class="spin" />正在查询服务器目录…
+        <LoaderCircle :size="18" class="spin" />{{ t('directoryPicker.searchingServerDirectory') }}
       </div>
       <div
         v-else-if="shown.length"
         class="directory-results"
-        aria-label="服务器搜索结果"
+        :aria-label="t('directoryPicker.serverSearchResults')"
       >
         <button
           v-for="candidate in shown"
@@ -152,7 +152,7 @@ async function submit() {
           type="button"
           class="directory-result"
           :disabled="!candidate.endpoints.length"
-          :aria-label="`选择服务器 ${candidate.server_name}`"
+          :aria-label="t('directoryPicker.selectServer', { value1: candidate.server_name })"
           @click="choose(candidate)"
         >
           <span class="icon-box subtle"><ServerIcon :size="18" /></span
@@ -161,23 +161,23 @@ async function submit() {
             ><small>{{ candidate.broker_name }}</small
             ><span class="directory-result-meta">{{
               candidate.endpoints.length
-                ? `${candidate.endpoints.length} 个候选接入点`
-                : "目录暂未返回可用地址"
+                ? t('directoryPicker.candidateEndpoints', { value1: candidate.endpoints.length })
+                : t('directoryPicker.noAvailableEndpointsReturnedByTheDirectory')
             }}</span></span
           ><span
             class="badge"
             :class="candidate.demo ? 'badge-info' : 'badge-neutral'"
-            >{{ candidate.demo ? "模拟" : "真实" }}</span
+            >{{ candidate.demo ? t('directoryPicker.demo') : t('directoryPicker.live') }}</span
           >
         </button>
       </div>
       <div v-else-if="searched && !error" class="directory-empty">
-        <Search :size="24" /><strong>没有找到匹配的 MT4 服务器</strong>
-        <p>试试经纪商简称、旧名称或服务器完整名称。新服务器可能尚未收录。</p>
+        <Search :size="24" /><strong>{{ t('directoryPicker.noMatchingMtServers') }}</strong>
+        <p>{{ t('directoryPicker.tryABrokerAbbreviationFormerNameOrFull') }}</p>
       </div>
       <div v-else-if="!error" class="directory-empty">
-        <ServerIcon :size="26" /><strong>选择经纪商和服务器即可开始</strong>
-        <p>系统自动取得候选地址，并保存来源记录。你无需查找或输入 IP。</p>
+        <ServerIcon :size="26" /><strong>{{ t('directoryPicker.chooseABrokerAndServerToBegin') }}</strong>
+        <p>{{ t('directoryPicker.candidateEndpointsAreRetrievedAndTheirSourceRecorded') }}</p>
       </div>
     </template>
 
@@ -192,44 +192,42 @@ async function submit() {
             risk = false;
           "
         >
-          <ChevronLeft :size="14" />重新选择
+          <ChevronLeft :size="14" />{{ t('directoryPicker.chooseAgain') }}
         </button>
         <h3>{{ selected.server_name }}</h3>
         <p>{{ selected.broker_name }}</p>
         <span class="badge badge-good"
-          ><Check :size="13" />已取得
-          {{ selected.endpoints.length }} 个候选接入点</span
+          ><Check :size="13" />{{ t('directoryPicker.retrievedEndpoints', { count: selected.endpoints.length }) }}</span
         >
       </div>
       <div class="directory-provenance">
         <ShieldCheck :size="18" />
         <div>
-          <strong>{{ selected.source_name }}</strong>
+          <strong>{{ localizeMessage(selected.source_name) }}</strong>
           <p>
-            地址与端口自动带入，来源记录自动保存。查询于
-            {{ date(selected.fetched_at_ms) }}。
+            {{ t('directoryPicker.sourceTimestamp', { time: date(selected.fetched_at_ms) }) }}
           </p>
         </div>
       </div>
       <details class="directory-details">
-        <summary>查看接入地址与来源</summary>
+        <summary>{{ t('directoryPicker.viewEndpointAndSource') }}</summary>
         <label class="field"
-          >固定接入点<select
+          >{{ t('accountForm.fixedEndpoint') }}<select
             v-model.number="endpoint"
-            aria-label="目录候选接入点"
+            :aria-label="t('directoryPicker.directoryCandidateEndpoint')"
           >
             <option
               v-for="(access, index) in selected.endpoints"
               :key="`${access.ip_address}:${access.port}`"
               :value="index"
             >
-              接入点 {{ index + 1 }} · {{ access.ip_address }}:{{ access.port }}
+              {{ t('directoryPicker.endpointOption', { number: index + 1, address: access.ip_address, port: access.port }) }}
             </option>
           </select></label
         >
         <p class="small muted">{{ selected.source_url }}</p>
         <p class="small muted">
-          本次固定到所选地址，不会自动向其他接入点发送凭据。
+          {{ t('directoryPicker.thisConnectionIsPinnedToTheSelectedAddress') }}
         </p>
       </details>
       <label class="checkbox-row"
@@ -239,8 +237,8 @@ async function submit() {
           required
           :disabled="saving"
         /><span
-          >我已核对经纪商和服务器，并确认此次接入。<small
-            >候选地址来自官方目录，仍不能提供密码学服务端身份认证；直连仍有伪造对端和网络路径劫持的剩余风险。本次确认仅适用于所选接入点修订。</small
+          >{{ t('directoryPicker.iHaveCheckedTheBrokerAndServerAnd') }}<small
+            >{{ t('directoryPicker.officialDirectoryAddressesDoNotProvideCryptographicServer') }}</small
           ></span
         ></label
       >
@@ -251,7 +249,7 @@ async function submit() {
           :disabled="saving"
           @click="emit('cancel')"
         >
-          取消
+          {{ t('accountForm.cancel') }}
         </button>
         <button
           type="submit"
@@ -261,17 +259,17 @@ async function submit() {
           <LoaderCircle v-if="saving" class="spin" :size="16" />
           {{
             saving
-              ? "正在保存…"
+              ? t('accountForm.saving')
               : server
-                ? "确认新接入修订并暂停账户"
-                : "登记并确认接入"
+                ? t('directoryPicker.confirmNewRevisionAndPauseAccounts')
+                : t('directoryPicker.registerAndConfirmConnection')
           }}
         </button>
       </div>
       <p class="small muted directory-footer">
-        登记过程不登录交易账户，也不发送投资者凭据。
+        {{ t('directoryPicker.registrationDoesNotLogInToATrading') }}
       </p>
     </template>
-    <p v-if="error" class="error-message" role="alert">{{ error }}</p>
+    <p v-if="error" class="error-message" role="alert">{{ localizeMessage(error) }}</p>
   </form>
 </template>

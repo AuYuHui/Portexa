@@ -46,6 +46,9 @@ func (s *Service) RequestSync(ctx context.Context, id string) error {
 
 func (s *Service) Recover(ctx context.Context) error {
 	return s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
+		if err := recoverHistory(tx, s.Now().UnixMilli(), "process_restart"); err != nil {
+			return err
+		}
 		if err := tx.Model(&storage.SyncRun{}).Where("state IN ('running', 'queued')").Updates(map[string]any{
 			"state": "interrupted", "finished_at_ms": s.Now().UnixMilli(), "completion_reason": "process_restart",
 		}).Error; err != nil {
@@ -130,6 +133,16 @@ func (s *Service) DisableBrokenGate(ctx context.Context, id string, version int6
 }
 
 func (s *Service) Publish(ctx context.Context, job Job, snapshot storage.Snapshot, positions []storage.Position, next int64) error {
+	return s.publish(ctx, job, snapshot, positions, &next)
+}
+
+// PublishScheduled reads the current cycle in the same transaction that
+// publishes the snapshot, so an in-flight Fetch cannot restore an old setting.
+func (s *Service) PublishScheduled(ctx context.Context, job Job, snapshot storage.Snapshot, positions []storage.Position) error {
+	return s.publish(ctx, job, snapshot, positions, nil)
+}
+
+func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapshot, positions []storage.Position, next *int64) error {
 	observations, err := s.clockDisappearances(ctx, job, snapshot, positions)
 	if err != nil {
 		return err
@@ -165,7 +178,17 @@ func (s *Service) Publish(ctx context.Context, job Job, snapshot storage.Snapsho
 				return err
 			}
 		}
-		updates := map[string]any{"current_snapshot_id": snapshot.ID, "next_sync_at_ms": next, "failure_count": 0}
+		var nextAt int64
+		if next != nil {
+			nextAt = *next
+		} else {
+			settings, err := readCollectionSettings(tx)
+			if err != nil {
+				return err
+			}
+			nextAt = NextSnapshotAt(current.ID, time.UnixMilli(snapshot.ObservedToMS), time.Duration(settings.SnapshotIntervalSeconds)*time.Second).UnixMilli()
+		}
+		updates := map[string]any{"current_snapshot_id": snapshot.ID, "next_sync_at_ms": nextAt, "failure_count": 0}
 		if current.IncludedAtMS == nil && snapshot.USDScale != nil {
 			updates["included_at_ms"] = snapshot.ObservedToMS
 			updates["initial_statistical_equity"] = snapshot.Equity.Sub(snapshot.Credit)

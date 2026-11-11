@@ -119,6 +119,25 @@
   font-size: 12px;
   color: var(--color-muted);
 }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+@media (max-width: 640px) {
+  .topbar-actions {
+    gap: 8px;
+  }
+  .topbar-actions .private-badge {
+    display: none;
+  }
+  .breadcrumb {
+    min-width: 0;
+  }
+  .breadcrumb span {
+    padding: 0 5px;
+  }
+}
 .breadcrumb span {
   padding: 0 10px;
   color: var(--color-text-faint);

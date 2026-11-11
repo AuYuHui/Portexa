@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
 import {
   DialogRoot,
   DialogPortal,
@@ -9,6 +10,8 @@ import {
   DialogClose,
 } from "reka-ui";
 import { X } from "@lucide/vue";
+
+const { t } = useI18n();
 defineProps<{ title: string; description: string }>();
 const open = defineModel<boolean>("open", { required: true });
 </script>
@@ -24,7 +27,7 @@ const open = defineModel<boolean>("open", { required: true });
               description
             }}</DialogDescription>
           </div>
-          <DialogClose class="icon-button" aria-label="关闭"
+          <DialogClose class="icon-button" :aria-label="t('modal.close')"
             ><X :size="20"
           /></DialogClose>
         </div>

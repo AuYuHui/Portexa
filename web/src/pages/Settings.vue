@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { localizeMessage } from "../i18n";
+import { useI18n } from "vue-i18n";
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { useQuery } from "@tanstack/vue-query";
@@ -22,6 +24,9 @@ import ServerForm from "../components/ServerForm.vue";
 import ReviewForm from "../components/ReviewForm.vue";
 import PasswordForm from "../components/PasswordForm.vue";
 import ServerTimeForm from "../components/ServerTimeForm.vue";
+import CollectionSettings from "../components/CollectionSettings.vue";
+
+const { t } = useI18n();
 
 const route = useRoute();
 
@@ -74,21 +79,21 @@ onMounted(() => {
     <div class="page-title">
       <div>
         <span class="eyebrow">CONNECTIONS & SECURITY</span>
-        <h1>接入与设置<span class="title-dot">.</span></h1>
-        <p class="muted">搜索交易服务器，确认接入配置后连接你的账户。</p>
+        <h1>{{ t('settings.connectionsSettings') }}<span class="title-dot">.</span></h1>
+        <p class="muted">{{ t('settings.findYourTradingServerConfirmTheConnectionAnd') }}</p>
       </div>
       <div class="page-actions">
         <button class="btn" @click="passwordOpen = true">
-          <KeyRound :size="16" />修改密码
+          <KeyRound :size="16" />{{ t('settings.changePassword') }}
         </button>
         <button class="btn btn-primary" @click="accountOpen = true">
-          <Plus :size="17" />接入账户
+          <Plus :size="17" />{{ t('overview.connectAccount') }}
         </button>
       </div>
     </div>
 
     <p v-if="error" role="alert" class="notice notice-error">
-      {{ error.message }}
+      {{ localizeMessage(error.message) }}
     </p>
 
     <!-- 流程指示：轻量流线型步骤指引，告别笨重大字报 -->
@@ -96,8 +101,8 @@ onMounted(() => {
       <div class="step-node" :class="{ 'step-done': (servers?.length || 0) > 0 }">
         <span class="step-num">01</span>
         <div class="step-body">
-          <strong>搜索服务器</strong>
-          <small>按经纪商或服务器名称查找</small>
+          <strong>{{ t('settings.findServer') }}</strong>
+          <small>{{ t('settings.searchByBrokerOrServerName') }}</small>
         </div>
       </div>
       <div class="step-connector" />
@@ -111,16 +116,16 @@ onMounted(() => {
       >
         <span class="step-num">02</span>
         <div class="step-body">
-          <strong>确认接入配置</strong>
-          <small>来源自动记录，确认本次接入</small>
+          <strong>{{ t('settings.confirmConnection') }}</strong>
+          <small>{{ t('settings.sourceRecordedAutomaticallyConfirmThisConnection') }}</small>
         </div>
       </div>
       <div class="step-connector" />
       <div class="step-node">
         <span class="step-num">03</span>
         <div class="step-body">
-          <strong>接入只读账户</strong>
-          <small>绑定单位，开启采集</small>
+          <strong>{{ t('settings.connectReadOnlyAccount') }}</strong>
+          <small>{{ t('settings.confirmTheUnitAndStartCollection') }}</small>
         </div>
       </div>
     </div>
@@ -130,25 +135,25 @@ onMounted(() => {
       <div class="panel-heading">
         <div>
           <h2>
-            可信服务器
+            {{ t('settings.trustedServers') }}
             <span class="count-pill">{{ servers?.length || 0 }}</span>
           </h2>
-          <p class="muted small">凭据只发往账户明确绑定且已核验的接入点。</p>
+          <p class="muted small">{{ t('settings.credentialsAreSentOnlyToTheVerifiedEndpoint') }}</p>
         </div>
         <button class="btn" @click="newServer">
-          <Plus :size="16" />登记服务器
+          <Plus :size="16" />{{ t('settings.registerServer') }}
         </button>
       </div>
 
-      <p v-if="isPending" class="empty-inline">正在加载服务器…</p>
+      <p v-if="isPending" class="empty-inline">{{ t('settings.loadingServers') }}</p>
       <div v-else-if="!servers?.length" class="empty-server-box">
         <ServerIcon :size="32" class="empty-icon" />
-        <p class="empty-title">尚未登记任何服务器接入点</p>
+        <p class="empty-title">{{ t('settings.noServerEndpointsRegisteredYet') }}</p>
         <p class="muted small">
-          搜索经纪商或服务器，系统自动取得候选接入地址，无需手填 IP 和端口。
+          {{ t('settings.searchForABrokerOrServerToRetrieve') }}
         </p>
         <button class="btn btn-primary btn-inline" @click="newServer">
-          <Plus :size="15" />现在登记首个服务器
+          <Plus :size="15" />{{ t('settings.registerYourFirstServer') }}
         </button>
       </div>
 
@@ -159,20 +164,21 @@ onMounted(() => {
             <h3>{{ server.server_name }}</h3>
             <p class="muted small">
               {{ server.broker_name }} · MT4 <span class="divider-dot">·</span>
-              {{ server.time_zone_verified ? server.time_zone : "时间校准中" }}（{{
-                server.time_mode === "automatic"
-                  ? "自动识别"
-                  : server.time_mode === "calibrated" ? "交易时间校准"
-                  : server.time_zone_verified ? "手动校正" : "自动"
-              }}）
+              {{ t('settings.serverTimeMode', {
+                zone: server.time_zone_verified ? server.time_zone : t('settings.calibratingTime'),
+                mode: server.time_mode === "automatic"
+                  ? t('settings.automaticDetection')
+                  : server.time_mode === "calibrated" ? t('settings.tradeTimeCalibration')
+                  : server.time_zone_verified ? t('settings.manualCorrection') : t('settings.automatic'),
+              }) }}
             </p>
           </div>
           <div class="server-card-actions">
             <button
               v-if="typeof server.time_ruleset_id === 'string'"
               class="text-button" @click="editTime(server)"
-            ><Clock :size="15" />服务器时间</button>
-            <button class="text-button" @click="newRevision(server)">新建接入修订 <ArrowUpRight :size="15" /></button>
+            ><Clock :size="15" />{{ t('settings.serverTime') }}</button>
+            <button class="text-button" @click="newRevision(server)">{{ t('settings.newEndpointRevision') }} <ArrowUpRight :size="15" /></button>
           </div>
         </div>
         <div
@@ -186,33 +192,35 @@ onMounted(() => {
               >{{ endpoint.ip_address }}:{{ endpoint.port }}</strong
             ><small>{{
               endpoint.state === "retired"
-                ? "已停用，不能继续发送凭据"
+                ? t('settings.retiredCredentialsCanNoLongerBeSent')
                 : endpoint.risk_accepted_at_ms
-                  ? `已确认风险 · ${date(endpoint.risk_accepted_at_ms)}`
-                  : "需登记独立核验依据并确认剩余风险"
+                  ? t('settings.riskAccepted', { value1: date(endpoint.risk_accepted_at_ms) })
+                  : t('settings.independentVerificationAndAcceptanceOfRemainingRiskAre')
             }}</small>
           </div>
           <span
             v-if="endpoint.state === 'reviewed' && endpoint.risk_accepted_at_ms"
             class="badge badge-good"
-            ><ShieldCheck :size="13" />已核验</span
+            ><ShieldCheck :size="13" />{{ t('settings.verified') }}</span
           ><button
             v-else-if="endpoint.state !== 'retired'"
             class="btn btn-small"
             @click="review(endpoint)"
           >
-            核验接入点</button
-          ><span v-else class="badge badge-neutral">已停用</span>
+            {{ t('settings.verifyEndpoint') }}</button
+          ><span v-else class="badge badge-neutral">{{ t('settings.retired') }}</span>
         </div>
       </article>
     </section>
+
+    <CollectionSettings />
 
     <!-- 系统与凭据安全：结构清晰，密码修改通过独立 dialog 触发 -->
     <section class="panel security-section">
       <div class="panel-heading">
         <div>
-          <h2>系统与凭据安全</h2>
-          <p class="muted small">实例主密码管理与私有数据安全保障机制。</p>
+          <h2>{{ t('settings.systemCredentialSecurity') }}</h2>
+          <p class="muted small">{{ t('settings.manageTheInstancePasswordAndProtectionOfPrivate') }}</p>
         </div>
       </div>
 
@@ -222,19 +230,19 @@ onMounted(() => {
           <div class="security-card-header">
             <span class="icon-box subtle"><KeyRound :size="20" /></span>
             <div>
-              <h3>系统登录密码</h3>
-              <p class="muted small">保护控制台的管理员密码与会话有效性。</p>
+              <h3>{{ t('settings.systemLoginPassword') }}</h3>
+              <p class="muted small">{{ t('settings.protectAdministratorAccessAndSessionValidity') }}</p>
             </div>
           </div>
           <p class="card-desc">
-            主密码至少需 16 个字符。修改密码后将立即撤销所有现有会话并要求重新登录。
+            {{ t('settings.theSystemPasswordMustContainAtLeastCharacters') }}
           </p>
           <div class="security-card-footer">
             <span class="badge badge-good">
-              <CheckCircle2 :size="13" />保护中
+              <CheckCircle2 :size="13" />{{ t('settings.protected') }}
             </span>
             <button class="btn btn-small" @click="passwordOpen = true">
-              <KeyRound :size="14" />修改密码
+              <KeyRound :size="14" />{{ t('settings.changePassword') }}
             </button>
           </div>
         </div>
@@ -244,37 +252,37 @@ onMounted(() => {
           <div class="feature-item">
             <div class="feature-icon"><Lock :size="16" /></div>
             <div>
-              <strong>投资者凭据独立加密</strong>
-              <p>账户凭据使用专用主密钥单独加密，数据库备份中不含密钥，保障离线安全。</p>
+              <strong>{{ t('settings.separatelyEncryptedInvestorCredentials') }}</strong>
+              <p>{{ t('settings.credentialsAreEncryptedWithADedicatedKeyDatabase') }}</p>
             </div>
           </div>
           <div class="feature-item">
             <div class="feature-icon"><Radio :size="16" /></div>
             <div>
-              <strong>接入变更熔断暂停</strong>
-              <p>接入地址变化后旧连接立即中断，账户进入暂停状态，需新修订核验后重新绑定。</p>
+              <strong>{{ t('settings.endpointChangesPauseCollection') }}</strong>
+              <p>{{ t('settings.changingAnEndpointStopsPreviousConnectionsAndPauses') }}</p>
             </div>
           </div>
           <div class="feature-item">
             <div class="feature-icon"><Clock :size="16" /></div>
             <div>
-              <strong>保留原始墙钟时间</strong>
-              <p>未知时区的服务器订单时间严格保留原值，不生成不可靠的日期统计。</p>
+              <strong>{{ t('settings.originalWallClockTimesPreserved') }}</strong>
+              <p>{{ t('settings.orderTimesFromServersWithUnknownTimeZones') }}</p>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <Modal v-model:open="timeOpen" title="服务器时间" description="系统优先自动识别，用于统计服务器当日利润与结余。">
+    <Modal v-model:open="timeOpen" :title="t('settings.serverTime')" :description="t('settings.automaticDetectionIsPreferredForDailyProfitAnd')">
       <ServerTimeForm v-if="currentTimeServer" :server="currentTimeServer" @saved="timeOpen = false" @cancel="timeOpen = false" />
     </Modal>
 
     <!-- 独立弹窗：修改密码 -->
     <Modal
       v-model:open="passwordOpen"
-      title="修改系统登录密码"
-      description="建议使用 16 位以上的高强度密码。修改后需重新登录。"
+      :title="t('settings.changeSystemLoginPassword')"
+      :description="t('settings.useAStrongPasswordOfAtLeastCharacters')"
     >
       <PasswordForm
         @cancel="passwordOpen = false"
@@ -285,8 +293,8 @@ onMounted(() => {
     <!-- 弹窗：登记服务器 -->
     <Modal
       v-model:open="serverOpen"
-      :title="editServer ? '建立接入点新修订' : '登记 MT4 服务器'"
-      description="登记配置不发送账户凭据。"
+      :title="editServer ? t('settings.createEndpointRevision') : t('settings.registerMtServer')"
+      :description="t('settings.registeringConfigurationDoesNotSendAccountCredentials')"
     >
       <ServerForm
         :server="editServer"
@@ -298,8 +306,8 @@ onMounted(() => {
     <!-- 弹窗：核验接入点 -->
     <Modal
       v-model:open="reviewOpen"
-      title="核验固定接入点"
-      description="独立核验和剩余风险确认是发送凭据前的必要门槛。"
+      :title="t('settings.verifyFixedEndpoint')"
+      :description="t('settings.independentVerificationAndAcceptanceOfRemainingRiskAre161')"
     >
       <ReviewForm
         v-if="reviewEndpoint"
@@ -312,8 +320,8 @@ onMounted(() => {
     <!-- 弹窗：接入账户 -->
     <Modal
       v-model:open="accountOpen"
-      title="接入只读账户"
-      description="同一个登录号可以存在于不同服务器，按服务器分别管理。"
+      :title="t('settings.connectReadOnlyAccount')"
+      :description="t('settings.theSameLoginNumberCanExistOnDifferent')"
     >
       <AccountForm
         @saved="accountOpen = false"

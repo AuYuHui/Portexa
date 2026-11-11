@@ -1,12 +1,13 @@
 """Exercise the server-directory flow with a synthetic provider, never trading accounts."""
 
 from pathlib import Path
+import os
 import re
 
 from playwright.sync_api import expect, sync_playwright
 
 
-ORIGIN = "http://127.0.0.1:18080"
+ORIGIN = os.environ.get("PORTEXA_E2E_ORIGIN", "http://127.0.0.1:18080")
 ARTIFACTS = Path(".local/browser")
 
 
@@ -14,7 +15,7 @@ def main():
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(viewport={"width": 1440, "height": 1000})
+        context = browser.new_context(viewport={"width": 1440, "height": 1000}, locale="zh-CN")
         page = context.new_page()
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))

@@ -1,6 +1,6 @@
 # Portexa
 
-多账户只读聚合系统。第一阶段提供单用户密码登录、可信服务器与账户接入、周期快照和浏览器看板。主工程使用 Go、GORM、SQLite 及 Vue；MT4 协议 SDK 保持冻结，可独立使用，无需 MT4 终端、Wine、EA 或第三方账户服务。
+多账户只读聚合系统。第一阶段提供单用户密码登录、可信服务器与账户接入、周期快照和浏览器看板。主工程使用 Go、GORM、SQLite 及 Vue；MT4 协议 SDK 可独立使用，业务分类留在主工程，无需 MT4 终端、Wine、EA 或第三方账户服务。
 
 ## 工程入口
 
@@ -11,7 +11,7 @@
 | internal/auth、internal/httpapi、internal/vault | 会话、受保护 API 与独立凭据密钥 |
 | internal/storage | STRICT 迁移、GORM 映射、单写队列与在线备份 |
 | internal/logging | JSONL 文件日志、大小及每日轮转、gzip 压缩与七天保留 |
-| web | Vue 3 / TypeScript 中文账户看板 |
+| web | Vue 3 / TypeScript 中英文账户看板 |
 | [packages/mt4](packages/mt4/README.md) | 独立协议模块 portexa/mt4 |
 | [cmd/mt4probe](cmd/mt4probe/README.md) | 联网验证命令，输出脱敏结果 |
 | packages/mt4/tests、tests | 协议、公开接口、CLI 和采集测试 |
@@ -20,6 +20,7 @@
 | [docs/architecture.md](docs/architecture.md) | 目录、依赖方向及独立发布方式 |
 | [docs/product-plan.md](docs/product-plan.md) | 多账户聚合产品方案、Analytics 口径及单用户登录规则 |
 | [docs/product-start.md](docs/product-start.md) | 第一阶段启动、部署与本地管理 |
+| [docs/account-statistics.md](docs/account-statistics.md) | 当日胜负、保证金水平、历史回填与自动识别出入金 |
 | [docs/phase1-validation.md](docs/phase1-validation.md) | 合成验收与历史发布性能结果 |
 | [docs/research](docs/research/README.md) | 验证记录与协议研究依据 |
 
@@ -27,7 +28,7 @@
 
 ## 开发与验证
 
-需要 Go 1.26+、Node 22.12+（或20.19+）和 Python 3。仓库根目录执行：
+需要 Go 1.26+、Node 22.12+ 和 Python 3。仓库根目录执行：
 
 ```sh
 make web-install
@@ -41,7 +42,11 @@ make build
 
 运行日志默认写入 `.local/portexa/logs/portexa.jsonl`，单文件上限100 MiB，轮转后 gzip 压缩，保留窗口七天。可用 `serve -log-max-size 50` 调整大小上限；保留和脱敏规则见[日志说明](docs/product-start.md#jsonl-运行日志)。
 
-普通检查仅运行合成与回环测试，不登录真实服务。已支持按已确认的 MT4 服务器日期采集当日利润与结余，原币保留；完整历史回填、收益率、回撤和分钟归档仍属后续阶段，当前不会清理未归档的分钟快照。
+普通检查仅运行合成与回环测试，不登录真实服务。已支持按 MT4 服务器日期展示当日利润、平仓笔数、胜率和盈利/亏损，以及账户保证金水平；可返回历史按窗口回填，出入金根据明确备注自动识别，支持人工校正。原币保留，未覆盖和待识别数据明确标记；收益率、回撤和分钟归档仍属后续阶段，当前不会清理未归档的分钟快照。
+
+看板支持简体中文与英语。首次访问按浏览器首选语言选择，不匹配时使用中文；登录页与顶部均可切换，选择保存在当前浏览器。日期随界面语言格式化，账户名称、原始备注、金额精度和服务器墙钟含义保持不变。
+
+界面运行时使用 [Vue I18n](https://vue-i18n.intlify.dev/)，翻译资源位于 `web/src/locales/{locale}.json`。[x18n](https://github.com/x18n-dev/x18n) 用于翻译检查与管理：`npm --prefix web run i18n:check` 检查缺失、未使用的键及插值参数；`npm --prefix web run i18n:ui` 打开管理界面。`make check` 已包含翻译检查。新增语言需同时注册运行时语言、切换选项和 `web/x18n.config.json` 中的语言列表；接口现有文本提示通过本地资源映射，不改写业务记录。
 
 协议模块也能独立检查：
 

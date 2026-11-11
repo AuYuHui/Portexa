@@ -169,7 +169,7 @@ func trades(values []protocol.TradeInfo) []Trade {
 	result := make([]Trade, 0, len(values))
 	for _, v := range values {
 		result = append(result, Trade{
-			Ticket: v.Ticket, Symbol: v.Symbol, Digits: v.Digits, Command: v.Command,
+			Ticket: v.Ticket, Symbol: v.Symbol, Comment: v.Comment, Digits: v.Digits, Command: v.Command,
 			VolumeHundredths: v.VolumeHundredths, Time20: v.Time20, Time40: v.Time40,
 			OpenTime: v.Time20, CloseTime: v.Time40, OpenPrice: v.OpenPrice, ClosePrice: v.ClosePrice,
 			SL: v.Sl, TP: v.Tp, Commission: v.Commission, Swap: v.Swap, Profit: v.Profit, Taxes: v.Taxes,

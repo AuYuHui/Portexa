@@ -74,6 +74,10 @@ func accountFetching(tx *gorm.DB, id string) (bool, error) {
 		return count > 0, err
 	}
 	err := tx.Model(&storage.ClockRun{}).Where("account_id = ? AND state = 'running'", id).Count(&count).Error
+	if err != nil || count > 0 {
+		return count > 0, err
+	}
+	err = tx.Model(&storage.HistoryRun{}).Where("account_id = ? AND state = 'running'", id).Count(&count).Error
 	return count > 0, err
 }
 
@@ -151,6 +155,8 @@ func (s *Service) PublishDaily(ctx context.Context, job DailyJob, report storage
 			"state": "succeeded", "finished_at_ms": report.FinishedAtMS, "native_currency": report.NativeCurrency,
 			"net_profit": report.NetProfit, "balance_adjustment": report.BalanceAdjustment, "balance_change": report.BalanceChange,
 			"credit_change": report.CreditChange, "closed_trades": report.ClosedTrades, "completion_reason": "complete",
+			"winning_trades": report.WinningTrades, "losing_trades": report.LosingTrades, "breakeven_trades": report.BreakevenTrades,
+			"gross_profit": report.GrossProfit, "gross_loss": report.GrossLoss,
 		})
 		if result.Error != nil {
 			return result.Error

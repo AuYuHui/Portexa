@@ -24,6 +24,9 @@ func ConvertDaily(job accounts.DailyJob, result mt4.Result, finished int64) (sto
 		return report, ErrIncomplete
 	}
 	profit, adjustment, credit := decimal.Zero, decimal.Zero, decimal.Zero
+	grossProfit, grossLoss := decimal.Zero, decimal.Zero
+	wins, losses, breakeven := 0, 0, 0
+	report.ClosedTrades = 0
 	seen := map[int32]bool{}
 	for _, trade := range result.History {
 		if trade.Ticket <= 0 || seen[trade.Ticket] || trade.Command < 0 || trade.Command > 7 {
@@ -51,6 +54,16 @@ func ConvertDaily(job accounts.DailyJob, result mt4.Result, finished int64) (sto
 		case 0, 1:
 			profit = profit.Add(net)
 			report.ClosedTrades++
+			switch net.Sign() {
+			case 1:
+				wins++
+				grossProfit = grossProfit.Add(net)
+			case -1:
+				losses++
+				grossLoss = grossLoss.Add(net.Abs())
+			default:
+				breakeven++
+			}
 		case 6:
 			adjustment = adjustment.Add(net)
 		case 7:
@@ -60,6 +73,8 @@ func ConvertDaily(job accounts.DailyJob, result mt4.Result, finished int64) (sto
 	change := profit.Add(adjustment)
 	report.State, report.FinishedAtMS, report.NativeCurrency = "succeeded", &finished, currency
 	report.NetProfit, report.BalanceAdjustment, report.BalanceChange, report.CreditChange = &profit, &adjustment, &change, &credit
+	report.WinningTrades, report.LosingTrades, report.BreakevenTrades = &wins, &losses, &breakeven
+	report.GrossProfit, report.GrossLoss = &grossProfit, &grossLoss
 	return report, nil
 }
 

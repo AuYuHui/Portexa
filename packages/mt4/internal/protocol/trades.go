@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"math"
@@ -11,6 +12,7 @@ import (
 type TradeInfo struct {
 	Ticket                          int32
 	Symbol                          string
+	Comment                         string
 	Digits, Command                 int32
 	VolumeHundredths                int32
 	Time20, Time40                  uint32
@@ -30,6 +32,7 @@ func ParseTradeRecords(data []byte) ([]TradeInfo, error) {
 		value := TradeInfo{
 			Ticket:           int32(binary.LittleEndian.Uint32(item)),
 			Symbol:           string(item[8:20]),
+			Comment:          tradeText(item[0x94:0xb4]),
 			Digits:           int32(binary.LittleEndian.Uint32(item[0x14:])),
 			Command:          int32(binary.LittleEndian.Uint32(item[0x18:])),
 			VolumeHundredths: int32(binary.LittleEndian.Uint32(item[0x1c:])),
@@ -66,4 +69,11 @@ func ParseTradeRecords(data []byte) ([]TradeInfo, error) {
 		data = data[TradeRecordSize:]
 	}
 	return result, nil
+}
+
+func tradeText(value []byte) string {
+	if end := bytes.IndexByte(value, 0); end >= 0 {
+		value = value[:end]
+	}
+	return string(value)
 }

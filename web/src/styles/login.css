@@ -103,6 +103,11 @@
   width: 100%;
   max-width: 360px;
 }
+.login-language {
+  position: absolute;
+  top: 20px;
+  right: 28px;
+}
 .login-form h2 {
   font-size: 24px;
   margin: 22px 0 10px;

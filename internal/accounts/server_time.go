@@ -128,6 +128,7 @@ func appendTimeRule(tx *gorm.DB, server *storage.Server, entry timeRuleEntry, ev
 	server.ActiveTimeRulesetID = &rule.ID
 	return tx.Model(&storage.Account{}).Where("server_id = ? AND removed_at_ms IS NULL", server.ID).Updates(map[string]any{
 		"next_daily_sync_at_ms": 0, "daily_failure_count": 0, "daily_sync_paused": false,
+		"next_history_sync_at_ms": 0, "history_sync_paused": false,
 	}).Error
 }
 
