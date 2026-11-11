@@ -162,6 +162,11 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 		if err := tx.First(&run, "id = ? AND state = 'running'", job.Run.ID).Error; err != nil {
 			return err
 		}
+		settings, err := readCollectionSettings(tx)
+		if err != nil {
+			return err
+		}
+		snapshot.CollectionIntervalSeconds = &settings.SnapshotIntervalSeconds
 		if err := tx.Create(&snapshot).Error; err != nil {
 			return err
 		}
@@ -182,10 +187,6 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 		if next != nil {
 			nextAt = *next
 		} else {
-			settings, err := readCollectionSettings(tx)
-			if err != nil {
-				return err
-			}
 			nextAt = NextSnapshotAt(current.ID, time.UnixMilli(snapshot.ObservedToMS), time.Duration(settings.SnapshotIntervalSeconds)*time.Second).UnixMilli()
 		}
 		updates := map[string]any{"current_snapshot_id": snapshot.ID, "next_sync_at_ms": nextAt, "failure_count": 0}

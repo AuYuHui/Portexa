@@ -30,6 +30,7 @@ import AccountForm from "../components/AccountForm.vue";
 import PositionTable from "../components/PositionTable.vue";
 import DailySummary from "../components/DailySummary.vue";
 import FundingSummary from "../components/FundingSummary.vue";
+import EquityTrend from "../components/charts/EquityTrend.vue";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -229,6 +230,7 @@ async function toggleSync() {
           </p>
         </article>
       </section>
+      <EquityTrend :account-id="id" />
       <DailySummary v-if="data.account.daily" :account="data.account" />
       <FundingSummary v-if="data.account.funding" :account="data.account" />
       <section class="panel">

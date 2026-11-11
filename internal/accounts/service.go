@@ -268,7 +268,10 @@ func (s *Service) CreateAccount(ctx context.Context, input AccountInput) (storag
 		if _, err := s.validEndpoint(tx, input.EndpointID, input.ServerID); err != nil {
 			return err
 		}
-		return tx.Create(&account).Error
+		if err := tx.Create(&account).Error; err != nil {
+			return err
+		}
+		return tx.Create(&storage.AccountUnitChange{AccountID: account.ID, UnitRevision: account.UnitRevision, EffectiveAtMS: now}).Error
 	})
 	return account, err
 }
@@ -351,6 +354,11 @@ func (s *Service) UpdateAccount(ctx context.Context, id string, patch AccountPat
 			}
 		}
 		account.ConfigVersion++
+		if account.UnitRevision != oldUnitRevision {
+			if err := tx.Create(&storage.AccountUnitChange{AccountID: id, UnitRevision: account.UnitRevision, EffectiveAtMS: now}).Error; err != nil {
+				return err
+			}
+		}
 		dailyPaused, dailyFailures := account.DailySyncPaused, account.DailyFailureCount
 		clockPaused, clockFailures := account.ClockSyncPaused, account.ClockFailureCount
 		historyPaused := account.HistorySyncPaused

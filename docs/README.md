@@ -15,6 +15,7 @@ The English README covers features, desktop screenshots, setup, and development.
 | [启动与管理 / Getting started](product-start.md) | 构建、HTTPS、首次接入、私有数据、日志、备份与恢复 |
 | [桌面截图示例 / Desktop screenshots](screenshots.md) | 中英文界面、合成数值解释和重新生成步骤 |
 | [账户统计 / Account statistics](account-statistics.md) | 当日净利润、胜负、保证金、历史回填与出入金分类 |
+| [资产走势 / Asset trends](asset-trends.md) | 组合与账户曲线、时间范围、单位、缺口及采样口径 |
 | [服务器发现 / Server discovery](server-discovery.md) | 候选目录、独立核验、风险接受及地址变更 |
 | [MT4 SDK](../packages/mt4/README.md) | `Probe` / `Fetch`、协议类型、错误和资源限制 |
 | [验证命令 / Probe CLI](../cmd/mt4probe/README.md) | 私有输入、联网探测、脱敏输出与离线校验 |

@@ -21,6 +21,7 @@ import { api } from "../api";
 import type { Overview } from "../types";
 import { money, signedMoney, date, positive } from "../format";
 import AccountTable from "../components/AccountTable.vue";
+import EquityTrend from "../components/charts/EquityTrend.vue";
 
 const { t } = useI18n();
 const search = ref("");
@@ -157,6 +158,7 @@ const healthy = computed(
           {{ date(total.observed_to_ms) }}</span
         >
       </div>
+      <EquityTrend />
       <section class="panel account-panel">
         <div class="panel-heading">
           <div>

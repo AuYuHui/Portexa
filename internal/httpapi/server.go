@@ -117,6 +117,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/auth/touch", s.protected(s.touch))
 	s.mux.HandleFunc("PUT /api/auth/password", s.protected(s.password))
 	s.mux.HandleFunc("GET /api/overview", s.protected(s.overview))
+	s.mux.HandleFunc("GET /api/portfolio/equity-history", s.protected(s.assetTrend))
 	s.mux.HandleFunc("GET /api/settings/collection", s.protected(s.collectionSettings))
 	s.mux.HandleFunc("PUT /api/settings/collection", s.protected(s.updateCollectionSettings))
 	s.mux.HandleFunc("GET /api/servers", s.protected(s.servers))
@@ -137,6 +138,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/accounts/{id}/funds", s.protected(s.funds))
 	s.mux.HandleFunc("PUT /api/accounts/{id}/funds/{ticket}/classification", s.protected(s.classifyFund))
 	s.mux.HandleFunc("GET /api/accounts/{id}/snapshots", s.protected(s.snapshots))
+	s.mux.HandleFunc("GET /api/accounts/{id}/equity-history", s.protected(s.assetTrend))
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		s.protected(func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 404, map[string]string{"error": "接口不存在"})

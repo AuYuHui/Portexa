@@ -11,6 +11,7 @@ Portexa is a self-hosted, read-only dashboard for multiple MetaTrader 4 accounts
 ## Features
 
 - **Multi-account overview.** View balance, equity, floating net P&L, margin levels, collection status, and sampling times together.
+- **Asset history.** View portfolio trends on the overview and account trends in details, with 24-hour to 90-day and custom ranges, balance/equity controls, native units and confirmed USD conversion. Gaps remain blank; membership changes and verified cash flows are annotated.
 - **Explicit currency units.** Confirmed USD and USC accounts contribute to a USD subtotal at 100 USC = 1 USD. Original amounts remain available; other currencies are listed separately.
 - **Daily trading statistics.** See net realized profit, balance change, closed trades, win rate, and gains/losses by MT4 server date.
 - **History and cash flows.** Backfill available history, recognize deposits and withdrawals from explicit order comments, and correct classifications with an audit trail.

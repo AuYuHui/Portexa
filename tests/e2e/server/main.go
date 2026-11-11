@@ -36,6 +36,7 @@ func run() error {
 	webDir := flag.String("web", ".local/web", "synthetic browser fixture static files")
 	automaticTime := flag.Bool("automatic-time", false, "use a synthetic server matching a published calendar")
 	tradeClock := flag.Bool("trade-clock", false, "calibrate an unknown synthetic server using newly closed trades")
+	assetTrends := flag.Bool("asset-trends", false, "seed synthetic asset history and membership changes")
 	flag.Parse()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -127,6 +128,11 @@ func run() error {
 			if err = service.UpdateAccount(ctx, account.ID, accounts.AccountPatch{SyncEnabled: &enabled}); err != nil {
 				return err
 			}
+		}
+	}
+	if *assetTrends {
+		if err := seedAssetTrends(ctx, service); err != nil {
+			return err
 		}
 	}
 	if *tradeClock {

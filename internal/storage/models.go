@@ -113,21 +113,22 @@ type SyncRun struct {
 func (SyncRun) TableName() string { return "sync_runs" }
 
 type Snapshot struct {
-	ID                string           `gorm:"column:id;primaryKey" json:"id"`
-	AccountID         string           `gorm:"column:account_id" json:"account_id"`
-	SyncRunID         string           `gorm:"column:sync_run_id" json:"-"`
-	ObservedFromMS    int64            `gorm:"column:observed_from_ms" json:"observed_from_ms"`
-	ObservedToMS      int64            `gorm:"column:observed_to_ms" json:"observed_to_ms"`
-	NativeCurrency    string           `gorm:"column:native_currency" json:"native_currency"`
-	USDScale          *decimal.Decimal `gorm:"column:usd_scale;type:text" json:"usd_scale"`
-	UnitRevision      int64            `gorm:"column:unit_revision" json:"unit_revision"`
-	Balance           decimal.Decimal  `gorm:"column:balance;type:text" json:"balance"`
-	Credit            decimal.Decimal  `gorm:"column:credit;type:text" json:"credit"`
-	Equity            decimal.Decimal  `gorm:"column:equity;type:text" json:"equity"`
-	FloatingNetProfit decimal.Decimal  `gorm:"column:floating_net_profit;type:text" json:"floating_net_profit"`
-	Margin            *decimal.Decimal `gorm:"column:margin;type:text" json:"margin"`
-	MarginAvailable   bool             `gorm:"column:margin_available" json:"margin_available"`
-	Leverage          uint32           `gorm:"column:leverage" json:"leverage"`
+	CollectionIntervalSeconds *int             `gorm:"column:collection_interval_seconds" json:"collection_interval_seconds"`
+	ID                        string           `gorm:"column:id;primaryKey" json:"id"`
+	AccountID                 string           `gorm:"column:account_id" json:"account_id"`
+	SyncRunID                 string           `gorm:"column:sync_run_id" json:"-"`
+	ObservedFromMS            int64            `gorm:"column:observed_from_ms" json:"observed_from_ms"`
+	ObservedToMS              int64            `gorm:"column:observed_to_ms" json:"observed_to_ms"`
+	NativeCurrency            string           `gorm:"column:native_currency" json:"native_currency"`
+	USDScale                  *decimal.Decimal `gorm:"column:usd_scale;type:text" json:"usd_scale"`
+	UnitRevision              int64            `gorm:"column:unit_revision" json:"unit_revision"`
+	Balance                   decimal.Decimal  `gorm:"column:balance;type:text" json:"balance"`
+	Credit                    decimal.Decimal  `gorm:"column:credit;type:text" json:"credit"`
+	Equity                    decimal.Decimal  `gorm:"column:equity;type:text" json:"equity"`
+	FloatingNetProfit         decimal.Decimal  `gorm:"column:floating_net_profit;type:text" json:"floating_net_profit"`
+	Margin                    *decimal.Decimal `gorm:"column:margin;type:text" json:"margin"`
+	MarginAvailable           bool             `gorm:"column:margin_available" json:"margin_available"`
+	Leverage                  uint32           `gorm:"column:leverage" json:"leverage"`
 }
 
 func (Snapshot) TableName() string { return "account_snapshots" }
