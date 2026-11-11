@@ -12,6 +12,7 @@
 | [tools/mt4-capture](tools/mt4-capture/README.md) | 本地采集工具 |
 | [research](research/README.md) | 保留的早期实验 |
 | [docs/architecture.md](docs/architecture.md) | 目录、依赖方向及独立发布方式 |
+| [docs/product-plan.md](docs/product-plan.md) | 多账户聚合产品方案、Analytics 口径及单用户登录规则 |
 | [docs/research](docs/research/README.md) | 验证记录与协议研究依据 |
 
 模块按项目命名，不绑定个人托管账户。单文件不超过1000行，结构检查会自动执行此限制。
