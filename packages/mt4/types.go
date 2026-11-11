@@ -48,8 +48,11 @@ type Account struct {
 // Trade exposes the synchronized order fields without business aggregation.
 // Command: 0 buy, 1 sell, 2..5 pending, 6 balance, 7 credit.
 type Trade struct {
-	Ticket           int32
-	Symbol           string
+	Ticket int32
+	Symbol string
+	// Comment is the server's NUL-terminated 32-byte order annotation.
+	// It is source data, not a deposit/withdrawal classification.
+	Comment          string
 	Digits, Command  int32
 	VolumeHundredths int32
 	Time20, Time40   uint32

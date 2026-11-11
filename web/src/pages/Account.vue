@@ -13,13 +13,21 @@ import {
 } from "@lucide/vue";
 import { api } from "../api";
 import { refreshAccounts } from "../state";
-import { money, signedMoney, date, failureLabel, positive } from "../format";
+import {
+  money,
+  signedMoney,
+  date,
+  failureLabel,
+  positive,
+  marginLevel,
+} from "../format";
 import type { Detail, Snapshot } from "../types";
 import StatusBadge from "../components/StatusBadge.vue";
 import Modal from "../components/Modal.vue";
 import AccountForm from "../components/AccountForm.vue";
 import PositionTable from "../components/PositionTable.vue";
 import DailySummary from "../components/DailySummary.vue";
+import FundingSummary from "../components/FundingSummary.vue";
 const route = useRoute();
 const id = computed(() => String(route.params.id));
 const sort = ref("ticket");
@@ -159,11 +167,16 @@ async function toggleSync() {
       <section class="summary-grid detail-metrics">
         <article class="summary-card">
           <div class="card-label">
-            账户净值 <span class="badge badge-neutral">{{ current?.native_currency || "原币" }}</span>
+            账户净值
+            <span class="badge badge-neutral">{{
+              current?.native_currency || "原币"
+            }}</span>
           </div>
           <div class="metric-value num">
             {{ money(current?.equity) }}
-            <small v-if="current?.native_currency">{{ current.native_currency }}</small>
+            <small v-if="current?.native_currency">{{
+              current.native_currency
+            }}</small>
           </div>
           <p class="metric-note">含信用金，保留 SDK 口径</p>
         </article>
@@ -171,9 +184,14 @@ async function toggleSync() {
           <div class="card-label">余额 / 信用金</div>
           <div class="metric-value num">
             {{ money(current?.balance) }}
-            <small v-if="current?.native_currency">{{ current.native_currency }}</small>
+            <small v-if="current?.native_currency">{{
+              current.native_currency
+            }}</small>
           </div>
-          <p class="metric-note num">信用金 {{ money(current?.credit) }} {{ current?.native_currency || "" }}</p>
+          <p class="metric-note num">
+            信用金 {{ money(current?.credit) }}
+            {{ current?.native_currency || "" }}
+          </p>
         </article>
         <article class="summary-card">
           <div class="card-label">浮动净盈亏</div>
@@ -185,26 +203,30 @@ async function toggleSync() {
             }"
           >
             {{ signedMoney(current?.floating_net_profit) }}
-            <small v-if="current?.native_currency">{{ current.native_currency }}</small>
+            <small v-if="current?.native_currency">{{
+              current.native_currency
+            }}</small>
           </div>
           <p class="metric-note">当前买卖持仓，含已报告费用</p>
         </article>
         <article class="summary-card">
-          <div class="card-label">已用保证金</div>
+          <div class="card-label" title="账户净值 ÷ 已用保证金 × 100%">
+            保证金水平
+          </div>
           <div class="metric-value num">
-            {{ current?.margin_available ? money(current.margin) : "—" }}
-            <small v-if="current?.margin_available && current?.native_currency">{{ current.native_currency }}</small>
+            {{ marginLevel(current) }}
           </div>
           <p class="metric-note">
             {{
               current?.margin_available
-                ? `杠杆 1:${current.leverage}`
-                : "当前协议数据不足时不估造"
+                ? `已用 ${money(current.margin)} ${current.native_currency} · 杠杆 1:${current.leverage}`
+                : "保证金数据不可用"
             }}
           </p>
         </article>
       </section>
       <DailySummary v-if="data.account.daily" :account="data.account" />
+      <FundingSummary v-if="data.account.funding" :account="data.account" />
       <section class="panel">
         <div class="panel-heading">
           <div class="tabs" aria-label="订单类型">
@@ -238,7 +260,12 @@ async function toggleSync() {
           尚无完整快照，不能将缺失持仓视为零持仓。
         </p>
         <div class="panel-footer">
-          <span><Info :size="14" />开仓时间为服务器墙钟{{ data.server_time_status === "verified" ? `（${data.account.daily.time_zone}）` : "，时区尚未核验" }}。</span
+          <span
+            ><Info :size="14" />开仓时间为服务器墙钟{{
+              data.server_time_status === "verified"
+                ? `（${data.account.daily.time_zone}）`
+                : "，时区尚未核验"
+            }}。</span
           ><span>金额按原币展示</span>
         </div>
       </section>

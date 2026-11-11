@@ -25,6 +25,11 @@ type DailyReport struct {
 	BalanceChange     *decimal.Decimal `gorm:"column:balance_change;type:text" json:"balance_change"`
 	CreditChange      *decimal.Decimal `gorm:"column:credit_change;type:text" json:"credit_change"`
 	ClosedTrades      int              `gorm:"column:closed_trades" json:"closed_trades"`
+	WinningTrades     *int             `gorm:"column:winning_trades" json:"winning_trades"`
+	LosingTrades      *int             `gorm:"column:losing_trades" json:"losing_trades"`
+	BreakevenTrades   *int             `gorm:"column:breakeven_trades" json:"breakeven_trades"`
+	GrossProfit       *decimal.Decimal `gorm:"column:gross_profit;type:text" json:"gross_profit"`
+	GrossLoss         *decimal.Decimal `gorm:"column:gross_loss;type:text" json:"gross_loss"`
 	ErrorCode         *string          `gorm:"column:error_code" json:"-"`
 	RawStatus         *int             `gorm:"column:raw_status" json:"-"`
 	CompletionReason  *string          `gorm:"column:completion_reason" json:"-"`

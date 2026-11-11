@@ -9,7 +9,16 @@ import {
 } from "@tanstack/vue-table";
 import { ArrowUpRight, Wallet, Plus } from "@lucide/vue";
 import type { Account } from "../types";
-import { money, signedMoney, date, positive, dailyLabel } from "../format";
+import {
+  money,
+  signedMoney,
+  date,
+  positive,
+  dailyLabel,
+  percent,
+  marginLevel,
+  fundingLabel,
+} from "../format";
 import StatusBadge from "./StatusBadge.vue";
 const props = defineProps<{ accounts: Account[]; search: string }>();
 const filtered = computed(() =>
@@ -30,8 +39,13 @@ function dailyCell(account: Account, field: "net_profit" | "balance_change") {
       { class: value ? (positive(value) ? "positive" : "negative") : "" },
       signedMoney(value),
     ),
-    h("small", { class: "cell-note muted", title: `${daily.date} ${daily.time_zone}` },
-      daily.report ? `${daily.date}${daily.state !== "succeeded" || daily.stale ? ` · ${label}` : ""}` : label),
+    h(
+      "small",
+      { class: "cell-note muted", title: `${daily.date} ${daily.time_zone}` },
+      daily.report
+        ? `${daily.date}${daily.state !== "succeeded" || daily.stale ? ` · ${label}` : ""}`
+        : label,
+    ),
   ]);
 }
 const columns: ColumnDef<Account>[] = [
@@ -103,6 +117,89 @@ const columns: ColumnDef<Account>[] = [
     cell: ({ row: { original: a } }) => dailyCell(a, "balance_change"),
   },
   {
+    id: "daily_trades",
+    header: "当日平仓 / 胜率",
+    cell: ({ row: { original: a } }) => {
+      const report = a.daily?.report;
+      return h(
+        "span",
+        { title: "按服务器日期统计；净盈利笔数 ÷ 全部平仓笔数，含持平单" },
+        [
+          h(
+            "strong",
+            {},
+            report
+              ? `${report.closed_trades} 笔 · ${percent(report.win_rate)}`
+              : "—",
+          ),
+          h(
+            "small",
+            { class: "cell-note muted" },
+            report?.winning_trades != null
+              ? `盈 ${report.winning_trades} / 亏 ${report.losing_trades} / 平 ${report.breakeven_trades}`
+              : a.daily
+                ? dailyLabel(a.daily.state, a.daily.stale)
+                : "等待历史采集",
+          ),
+        ],
+      );
+    },
+  },
+  {
+    id: "daily_gains",
+    header: "当日盈利 / 亏损",
+    cell: ({ row: { original: a } }) =>
+      h(
+        "span",
+        { title: "原币净盈亏分别汇总，亏损展示绝对值，均含已报告费用" },
+        [
+          h(
+            "strong",
+            { class: "positive" },
+            money(a.daily?.report?.gross_profit),
+          ),
+          h(
+            "small",
+            { class: "cell-note negative" },
+            money(a.daily?.report?.gross_loss),
+          ),
+        ],
+      ),
+  },
+  {
+    id: "margin_level",
+    header: "保证金水平",
+    cell: ({ row: { original: a } }) =>
+      h(
+        "span",
+        { title: "账户净值 ÷ 已用保证金 × 100%" },
+        marginLevel(a.snapshot),
+      ),
+  },
+  {
+    id: "funding",
+    header: "累计入金 / 出金",
+    cell: ({ row: { original: a } }) =>
+      h(
+        "span",
+        { title: "根据备注自动识别外部出入金，支持人工校正；其他资金不计入" },
+        [
+          h(
+            "strong",
+            {},
+            `${money(a.funding?.deposits)} / ${money(a.funding?.withdrawals)}`,
+          ),
+          h(
+            "small",
+            { class: "cell-note muted" },
+            a.funding
+              ? `${a.funding.coverage_complete && a.funding.state === "ready" ? "自动统计" : fundingLabel(a.funding.state)}${a.funding.unclassified_count ? ` · ${a.funding.unclassified_count} 笔待识别` : ""}${a.funding.stale ? " · 过期" : ""}`
+              : "等待历史采集",
+          ),
+        ],
+      ),
+  },
+  {
     id: "state",
     header: "同步状态",
     cell: ({ row: { original: a } }) =>
@@ -129,6 +226,17 @@ const columns: ColumnDef<Account>[] = [
       ),
   },
 ];
+const numericColumns = [
+  "balance",
+  "equity",
+  "profit",
+  "daily_profit",
+  "daily_balance",
+  "daily_trades",
+  "daily_gains",
+  "margin_level",
+  "funding",
+];
 const table = useVueTable({
   get data() {
     return filtered.value;
@@ -146,9 +254,7 @@ const table = useVueTable({
             v-for="header in group.headers"
             :key="header.id"
             :class="{
-              'text-right': ['balance', 'equity', 'profit', 'daily_profit', 'daily_balance'].includes(
-                header.column.id,
-              ),
+              'text-right': numericColumns.includes(header.column.id),
             }"
           >
             <FlexRender
@@ -164,9 +270,7 @@ const table = useVueTable({
             v-for="cell in row.getVisibleCells()"
             :key="cell.id"
             :class="{
-              'text-right num': ['balance', 'equity', 'profit', 'daily_profit', 'daily_balance'].includes(
-                cell.column.id,
-              ),
+              'text-right num': numericColumns.includes(cell.column.id),
             }"
           >
             <FlexRender
@@ -184,12 +288,17 @@ const table = useVueTable({
         <p class="muted small">
           完成服务器登记与核验后，在此接入只读投资者凭据并开始数据聚合。
         </p>
-        <RouterLink to="/settings?add=account" class="btn btn-primary btn-small">
+        <RouterLink
+          to="/settings?add=account"
+          class="btn btn-primary btn-small"
+        >
           <Plus :size="15" />接入首个账户
         </RouterLink>
       </template>
       <template v-else>
-        <p class="empty-inline">未找到匹配的账户，请尝试搜索其他名称、账号或经纪商。</p>
+        <p class="empty-inline">
+          未找到匹配的账户，请尝试搜索其他名称、账号或经纪商。
+        </p>
       </template>
     </div>
   </div>

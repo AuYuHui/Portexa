@@ -118,6 +118,7 @@ func (e *Engine) schedule(ctx context.Context) {
 	e.scheduleSnapshots(ctx)
 	e.scheduleClock(ctx)
 	e.scheduleDaily(ctx)
+	e.scheduleHistory(ctx)
 }
 
 func (e *Engine) scheduleSnapshots(ctx context.Context) {

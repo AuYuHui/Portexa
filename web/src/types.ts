@@ -13,6 +13,7 @@ export interface Snapshot {
   floating_net_profit: string;
   margin: string | null;
   margin_available: boolean;
+  margin_level?: string | null;
   leverage: number;
 }
 export interface Run {
@@ -42,6 +43,7 @@ export interface Account {
   last_run: Run | null;
   stale: boolean;
   daily: DailyView;
+  funding?: FundingView;
 }
 export interface DailyReport {
   date: string;
@@ -54,6 +56,57 @@ export interface DailyReport {
   balance_change: string;
   credit_change: string;
   closed_trades: number;
+  winning_trades?: number | null;
+  losing_trades?: number | null;
+  breakeven_trades?: number | null;
+  gross_profit?: string | null;
+  gross_loss?: string | null;
+  win_rate?: string | null;
+}
+export interface FundingView {
+  state: string;
+  native_currency: string;
+  deposits: string | null;
+  withdrawals: string | null;
+  unclassified_count: number;
+  confirmed_count: number;
+  automatic_count?: number;
+  manual_count?: number;
+  coverage_complete: boolean;
+  covered_through_wall: number;
+  pending_windows: number;
+  blocked_windows: number;
+  last_sync_at_ms: number | null;
+  stale: boolean;
+  last_run: Run | null;
+}
+export interface FundClassification {
+  revision: number;
+  based_trade_revision: number;
+  category: string;
+  reason: string;
+  created_at_ms: number;
+  source?: "automatic" | "manual";
+  rule_version?: string;
+}
+export interface FundEntry {
+  ticket: number;
+  revision: number;
+  command: number;
+  native_currency: string;
+  event_time_wall: number;
+  profit: string;
+  commission: string;
+  swap: string;
+  taxes: string;
+  net_profit: string;
+  comment?: string;
+  classification: FundClassification | null;
+  needs_review: boolean;
+}
+export interface FundsPage {
+  items: FundEntry[];
+  next_cursor: string;
 }
 export interface DailyView {
   date: string;

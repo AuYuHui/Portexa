@@ -192,6 +192,19 @@ func RestoreNew(ctx context.Context, source, destination string) error {
 			if err := tx.Model(&SyncRun{}).Where("state IN ('running', 'queued')").Updates(map[string]any{"state": "interrupted", "finished_at_ms": now, "completion_reason": "restored"}).Error; err != nil {
 				return err
 			}
+			if err := tx.Model(&HistoryRun{}).Where("state='running'").Updates(map[string]any{
+				"state": "interrupted", "finished_at_ms": gorm.Expr("MAX(?,started_at_ms)", now), "completion_reason": "restored",
+			}).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&HistoryCoverage{}).Where("state='running'").Updates(map[string]any{
+				"state": "pending", "next_attempt_at_ms": 0,
+			}).Error; err != nil {
+				return err
+			}
+			if err := DiscardUnpublishedHistory(tx); err != nil {
+				return err
+			}
 			if err := tx.Model(&DailyReport{}).Where("state = 'running'").Updates(map[string]any{
 				"state": "interrupted", "finished_at_ms": now, "completion_reason": "restored",
 			}).Error; err != nil {

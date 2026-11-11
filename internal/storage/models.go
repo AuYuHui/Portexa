@@ -76,6 +76,8 @@ type Account struct {
 	NextDailySyncAtMS        int64            `gorm:"column:next_daily_sync_at_ms" json:"-"`
 	DailyFailureCount        int64            `gorm:"column:daily_failure_count" json:"-"`
 	DailySyncPaused          bool             `gorm:"column:daily_sync_paused" json:"-"`
+	NextHistorySyncAtMS      int64            `gorm:"column:next_history_sync_at_ms" json:"-"`
+	HistorySyncPaused        bool             `gorm:"column:history_sync_paused" json:"-"`
 	NextClockSyncAtMS        int64            `gorm:"column:next_clock_sync_at_ms" json:"-"`
 	ClockFailureCount        int64            `gorm:"column:clock_failure_count" json:"-"`
 	ClockSyncPaused          bool             `gorm:"column:clock_sync_paused" json:"-"`

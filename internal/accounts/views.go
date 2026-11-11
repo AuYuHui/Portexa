@@ -49,6 +49,7 @@ type AccountView struct {
 	Stale                   bool              `json:"stale"`
 	CreatedAtMS             int64             `json:"created_at_ms"`
 	Daily                   DailyView         `json:"daily"`
+	Funding                 FundingView       `json:"funding"`
 }
 
 type AccountDetail struct {
@@ -201,6 +202,10 @@ func readView(tx *gorm.DB, account storage.Account, now int64) (AccountView, err
 		view.SyncState = "queued"
 	}
 	view.Daily, err = readDailyView(tx, account, server, time.UnixMilli(now))
+	if err != nil {
+		return view, err
+	}
+	view.Funding, err = readFundingView(tx, account, server, view.Snapshot, time.UnixMilli(now))
 	return view, err
 }
 

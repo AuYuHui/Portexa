@@ -46,6 +46,9 @@ func (s *Service) RequestSync(ctx context.Context, id string) error {
 
 func (s *Service) Recover(ctx context.Context) error {
 	return s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
+		if err := recoverHistory(tx, s.Now().UnixMilli(), "process_restart"); err != nil {
+			return err
+		}
 		if err := tx.Model(&storage.SyncRun{}).Where("state IN ('running', 'queued')").Updates(map[string]any{
 			"state": "interrupted", "finished_at_ms": s.Now().UnixMilli(), "completion_reason": "process_restart",
 		}).Error; err != nil {

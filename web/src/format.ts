@@ -1,3 +1,5 @@
+import type { Snapshot } from "./types";
+
 // Format decimal strings directly. Formatting never feeds back into money calculations.
 function formatDecimal(
   value: string | null | undefined,
@@ -28,6 +30,43 @@ function formatDecimal(
 export function money(value: string | null | undefined, places = 2): string {
   return formatDecimal(value, places, true);
 }
+export function percent(value: string | null | undefined): string {
+  const formatted = money(value);
+  return formatted === "—" ? formatted : `${formatted}%`;
+}
+export function marginLevel(snapshot: Snapshot | null | undefined): string {
+  if (!snapshot?.margin_available || snapshot.margin == null) return "—";
+  if (/^0(?:\.0+)?$/.test(snapshot.margin)) return "无占用";
+  return percent(snapshot.margin_level);
+}
+export function fundingLabel(state: string): string {
+  return (
+    (
+      {
+        idle: "等待历史采集",
+        running: "历史同步中",
+        partial: "历史回填中",
+        ready: "历史已回填",
+        failed: "历史采集失败",
+        blocked: "历史存在缺口",
+        paused: "历史采集暂停",
+        time_zone_unconfirmed: "时间校准中",
+      } as Record<string, string>
+    )[state] || state
+  );
+}
+export const fundCategories: Record<string, string> = {
+  deposit: "外部入金",
+  withdrawal: "外部出金",
+  rebate: "返佣",
+  fee: "费用",
+  profit_share_income: "分成收入",
+  profit_share_expense: "分成支出",
+  transfer_in: "内部转入",
+  transfer_out: "内部转出",
+  adjustment: "其他调整",
+  unclassified: "待分类",
+};
 export function signedMoney(
   value: string | null | undefined,
   places = 2,
@@ -43,7 +82,10 @@ export function signedMoney(
   }
   return str;
 }
-export function price(value: string | null | undefined, digits: number): string {
+export function price(
+  value: string | null | undefined,
+  digits: number,
+): string {
   return formatDecimal(value, digits, false);
 }
 export function date(value: number | null | undefined, seconds = true): string {
@@ -94,6 +136,8 @@ export function failureLabel(code: string | null | undefined) {
         unsupported_protocol: "暂不支持该协议",
         resource_limit: "超过采集资源上限",
         snapshot_invalid: "响应不完整，保留上次数据",
+        history_invalid: "历史响应不完整，保留上次数据",
+        history_window_too_large: "历史区间较大，正在拆分采集",
         configuration_changed: "配置变化，旧任务已取消",
         invalid_config: "配置不支持，请核对",
         read_only_required: "需要投资者密码",

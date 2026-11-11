@@ -71,17 +71,11 @@ func run() error {
 			currency = *account.Currency
 		}
 		result := testutil.Result(currency)
+		result.Account.Margin, result.Account.MarginAvailable = 250, true
 		if options.History != nil {
 			result.HistoryRead, result.HistoryComplete = true, true
 			result.HistoryCovered = []mt4.HistoryRange{*options.History}
-			start := options.History.Start
-			result.History = []mt4.Trade{
-				{Ticket: 70001, Command: 0, OpenTime: start - 100, CloseTime: start + 120, Profit: 12.34, Commission: -0.11, Swap: -0.11, Taxes: -0.02},
-				{Ticket: 70002, Command: 1, OpenTime: start + 60, CloseTime: start + 240, Profit: -2.50, Commission: -0.10},
-				{Ticket: 70003, Command: 6, OpenTime: start + 300, Profit: 100},
-				{Ticket: 70004, Command: 6, CloseTime: start + 360, Profit: -20},
-				{Ticket: 70005, Command: 7, OpenTime: start + 400, Profit: 25},
-			}
+			result.History = syntheticHistory(*options.History)
 		}
 		return result, nil
 	}
@@ -111,6 +105,7 @@ func run() error {
 			result := testutil.Result(currency)
 			result.Account.Balance = []float64{12450.5, 824500, 3500, 6200}[i]
 			result.Account.Credit = 0
+			result.Account.Margin, result.Account.MarginAvailable = []float64{250, 80000, 500, 0}[i], true
 			result.Trades[0].Profit = []float64{122.32, 3150.75, 55.42, 0.22}[i]
 			result.Account.Equity = result.Account.Balance + result.Trades[0].NetProfit()
 			stamp := time.Now().UnixMilli() - int64(i*1300)

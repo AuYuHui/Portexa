@@ -353,9 +353,11 @@ func (s *Service) UpdateAccount(ctx context.Context, id string, patch AccountPat
 		account.ConfigVersion++
 		dailyPaused, dailyFailures := account.DailySyncPaused, account.DailyFailureCount
 		clockPaused, clockFailures := account.ClockSyncPaused, account.ClockFailureCount
+		historyPaused := account.HistorySyncPaused
 		if patch.Password != nil || account.PinnedEndpointID != oldEndpoint || account.UnitRevision != oldUnitRevision || (!wasEnabled && account.SyncEnabled) {
 			dailyPaused, dailyFailures = false, 0
 			clockPaused, clockFailures = false, 0
+			historyPaused = false
 		}
 		if err := tx.Model(&storage.Account{}).Where("id = ?", id).Updates(map[string]any{
 			"label": account.Label, "pinned_endpoint_id": account.PinnedEndpointID, "credential_envelope": account.CredentialEnvelope,
@@ -364,6 +366,7 @@ func (s *Service) UpdateAccount(ctx context.Context, id string, patch AccountPat
 			"sync_enabled": account.SyncEnabled, "next_sync_at_ms": now, "failure_count": 0,
 			"next_daily_sync_at_ms": 0, "daily_failure_count": dailyFailures, "daily_sync_paused": dailyPaused,
 			"next_clock_sync_at_ms": 0, "clock_failure_count": clockFailures, "clock_sync_paused": clockPaused,
+			"next_history_sync_at_ms": 0, "history_sync_paused": historyPaused,
 		}).Error; err != nil {
 			return err
 		}
