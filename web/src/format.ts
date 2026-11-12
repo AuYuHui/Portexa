@@ -36,6 +36,10 @@ export function percent(value: string | null | undefined): string {
   const formatted = money(value);
   return formatted === "—" ? formatted : `${formatted}%`;
 }
+export function signedPercent(value: string | null | undefined): string {
+  const formatted = signedMoney(value);
+  return formatted === "—" ? formatted : `${formatted}%`;
+}
 export function marginLevel(snapshot: Snapshot | null | undefined): string {
   if (!snapshot?.margin_available || snapshot.margin == null) return "—";
   if (/^0(?:\.0+)?$/.test(snapshot.margin)) return t('format.noMarginUsed');

@@ -13,7 +13,7 @@ import { RouterLink } from "vue-router";
 import { api } from "../api";
 import { useAnalytics } from "../composables/useAnalytics";
 import { localizeMessage } from "../i18n";
-import { money, signedMoney, percent } from "../format";
+import { money, signedMoney, percent, positive } from "../format";
 import { trendDate } from "../components/charts/trendFormat";
 import {
   performanceReasons,
@@ -170,7 +170,10 @@ function openDay(day: PerformanceDay) {
       ><label
         >{{ t("trend.end")
         }}<input v-model="customTo" type="datetime-local" required /></label
-      ><button class="btn btn-primary">{{ t("trend.apply") }}</button>
+      ><div class="custom-actions">
+        <button class="btn btn-primary" type="submit">{{ t("trend.apply") }}</button>
+        <button class="btn" type="button" @click="selectRange('30d')">{{ t("accountForm.cancel") }}</button>
+      </div>
     </form>
     <p v-if="invalid" role="alert" class="notice notice-error">
       {{ t("trend.invalidRange") }}
@@ -190,47 +193,56 @@ function openDay(day: PerformanceDay) {
       <div v-for="n in 4" :key="n" class="skeleton" />
     </div>
     <template v-if="data && result">
-      <div
-        class="performance-assurance"
-        :class="{ 'has-issues': result.quality.reasons.length || data.stale }"
-      >
-        <ShieldCheck :size="17" /><strong>{{
-          result.quality.reasons.length
-            ? t("analytics.partialEvidence")
-            : t("analytics.evidenceReady")
-        }}</strong
-        ><span>{{
-          t("analytics.observations", {
-            valid: result.quality.valid_points,
-            total: result.quality.expected_points,
-          })
-        }}</span
-        ><span class="performance-cutoff"
-          ><Clock3 :size="13" />{{ t("analytics.asOf") }}
-          {{ trendDate(result.to_ms) }}</span
+      <div class="performance-meta-bar">
+        <p class="performance-scope-note">
+          {{ trendDate(result.from_ms) }} — {{ trendDate(result.to_ms) }} ·
+          {{ t("trend.beijing") }} ·
+          {{ account ? currentAccount?.label : t("analytics.usdScope")
+          }}<span v-if="data.stale"> · {{ t("analytics.stale") }}</span
+          ><span v-if="data.pending_accounts || data.excluded_accounts">
+            ·
+            {{
+              t("analytics.excluded", {
+                pending: data.pending_accounts,
+                excluded: data.excluded_accounts,
+              })
+            }}</span
+          >
+        </p>
+        <div
+          class="performance-assurance"
+          :class="{ 'has-issues': result.quality.reasons.length || data.stale }"
         >
-      </div>
-      <p class="performance-scope-note">
-        {{ trendDate(result.from_ms) }} — {{ trendDate(result.to_ms) }} ·
-        {{ t("trend.beijing") }} ·
-        {{ account ? currentAccount?.label : t("analytics.usdScope")
-        }}<span v-if="data.stale"> · {{ t("analytics.stale") }}</span
-        ><span v-if="data.pending_accounts || data.excluded_accounts">
-          ·
-          {{
-            t("analytics.excluded", {
-              pending: data.pending_accounts,
-              excluded: data.excluded_accounts,
+          <ShieldCheck :size="15" /><strong>{{
+            result.quality.reasons.length
+              ? t("analytics.partialEvidence")
+              : t("analytics.evidenceReady")
+          }}</strong
+          ><span>{{
+            t("analytics.observations", {
+              valid: result.quality.valid_points,
+              total: result.quality.expected_points,
             })
           }}</span
-        >
-      </p>
+          ><span class="performance-cutoff"
+            ><Clock3 :size="13" />{{ t("analytics.asOf") }}
+            {{ trendDate(result.to_ms) }}</span
+          >
+        </div>
+      </div>
       <PerformanceKpis :result="result" />
       <div class="performance-bridge">
         <span>{{ t("analytics.profitBreakdown") }}</span
         ><span v-for="item in breakdown" :key="item.label"
           >{{ item.label
-          }}<strong class="num">{{ signedMoney(item.value) }}</strong></span
+          }}<strong
+            class="num"
+            :class="{
+              positive: item.value && positive(item.value),
+              negative: item.value?.startsWith('-'),
+            }"
+            >{{ signedMoney(item.value) }}</strong
+          ></span
         ><small>{{ result.currency }}</small>
       </div>
       <section

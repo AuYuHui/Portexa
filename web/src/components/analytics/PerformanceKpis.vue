@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { Wallet, TrendingUp, CircleCheck, Activity, Info } from "@lucide/vue";
-import { signedMoney, percent } from "../../format";
+import { signedMoney, percent, signedPercent, positive } from "../../format";
 import type { PerformanceResult } from "../../types/analytics";
 import { performanceReasons } from "./performanceFormat";
 import { trendDate } from "../charts/trendFormat";
@@ -59,13 +59,19 @@ const cards = computed(() => [
       </div>
       <div
         class="performance-kpi-value num"
-        :class="{ 'is-loss': card.metric.value?.startsWith('-') }"
+        :class="{
+          'is-loss': card.key === 'net' && card.metric.value?.startsWith('-'),
+          positive: card.key !== 'net' && card.key !== 'drawdown' && card.metric.value && positive(card.metric.value),
+          negative: card.key !== 'net' && card.metric.value?.startsWith('-'),
+        }"
         :data-kpi="card.key"
       >
         {{
-          card.percentage
-            ? percent(card.metric.value)
-            : signedMoney(card.metric.value)
+          card.key === "return"
+            ? signedPercent(card.metric.value)
+            : card.percentage
+              ? percent(card.metric.value)
+              : signedMoney(card.metric.value)
         }}
         <small v-if="!card.percentage">{{ result.currency }}</small>
       </div>

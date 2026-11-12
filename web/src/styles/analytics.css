@@ -67,6 +67,28 @@
   padding: 8px;
   background: #fff;
 }
+.performance-meta-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin: 4px 0 16px;
+  flex-wrap: wrap;
+}
+.performance-meta-bar .performance-scope-note {
+  margin: 0;
+  flex: 1 1 auto;
+}
+.performance-meta-bar .performance-assurance {
+  padding: 6px 12px;
+  margin: 0;
+  flex-shrink: 0;
+}
+.custom-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 .performance-assurance {
   display: flex;
   gap: 9px;
@@ -148,11 +170,24 @@
 .performance-kpi-primary .performance-kpi-value small {
   color: #bce5d7;
 }
+.performance-kpi-value.positive {
+  color: #059669 !important;
+}
+.performance-kpi-value.positive small {
+  color: #059669;
+  opacity: 0.8;
+}
+.performance-kpi-value.negative,
 .performance-kpi-value.is-loss {
+  color: #dc2626 !important;
+}
+.performance-kpi-value.negative small,
+.performance-kpi-value.is-loss small {
   color: #dc2626;
+  opacity: 0.8;
 }
 .performance-kpi-primary .performance-kpi-value.is-loss {
-  color: #fecaca;
+  color: #fecaca !important;
 }
 .performance-kpi-status {
   display: flex;

@@ -176,9 +176,18 @@ onMounted(() => {
           <div class="server-card-actions">
             <button
               v-if="typeof server.time_ruleset_id === 'string'"
-              class="text-button" @click="editTime(server)"
-            ><Clock :size="15" />{{ t('settings.serverTime') }}</button>
-            <button class="text-button" @click="newRevision(server)">{{ t('settings.newEndpointRevision') }} <ArrowUpRight :size="15" /></button>
+              class="btn btn-small"
+              :class="{ 'btn-highlight': !server.time_zone_verified }"
+              @click="editTime(server)"
+            >
+              <Clock :size="14" />
+              {{ t('settings.serverTime') }}
+              <span v-if="!server.time_zone_verified" class="badge-dot-warning" :title="t('account.timeZoneUnverified')" />
+            </button>
+            <button class="btn btn-small" @click="newRevision(server)">
+              {{ t('settings.newEndpointRevision') }}
+              <ArrowUpRight :size="14" />
+            </button>
           </div>
         </div>
         <div

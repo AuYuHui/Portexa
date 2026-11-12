@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { ChevronLeft, ChevronRight } from "@lucide/vue";
-import { signedMoney } from "../../format";
+import { signedMoney, positive } from "../../format";
 import type { PerformanceDay, PerformanceResult } from "../../types/analytics";
 const props = defineProps<{
   days: PerformanceDay[];
@@ -95,7 +95,12 @@ function tone(day?: PerformanceDay) {
     </div>
     <p class="performance-month-total">
       {{ t("analytics.monthProfit") }}
-      <strong class="num"
+      <strong
+        class="num"
+        :class="{
+          positive: monthValue?.net_profit.value && positive(monthValue.net_profit.value),
+          negative: monthValue?.net_profit.value?.startsWith('-'),
+        }"
         >{{ signedMoney(monthValue?.net_profit.value) }} {{ currency }}</strong
       ><span v-if="monthValue?.partial">
         · {{ t("analytics.selectedMonthRange") }}</span

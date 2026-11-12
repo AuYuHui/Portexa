@@ -103,9 +103,26 @@
 }
 .server-card-actions {
   display: flex;
-  gap: 16px;
+  gap: 10px;
+  align-items: center;
   flex-wrap: wrap;
   margin-left: auto;
+}
+.btn-highlight {
+  border-color: #fde68a !important;
+  background-color: #fffbeb !important;
+  color: #b45309 !important;
+}
+.btn-highlight:hover {
+  background-color: #fef3c7 !important;
+}
+.badge-dot-warning {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  margin-left: 2px;
 }
 .server-time-result {
   display: flex;
