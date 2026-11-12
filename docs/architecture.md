@@ -14,6 +14,7 @@ Portexa/
 ├── internal/auth/                # 单密码认证、会话和撤销
 ├── internal/httpapi/             # 同源 API、Cookie、Origin、CSRF 与静态服务
 ├── internal/accounts/            # 可信接入、加密凭据管理和资金聚合
+├── internal/analytics/           # Decimal 收益、采样回撤、日历与指标质量
 ├── internal/syncer/              # 有界快照调度、SDK 适配与结果校验
 ├── internal/storage/             # STRICT 迁移、GORM、单写队列与在线备份
 ├── internal/logging/             # slog JSONL、大小/每日轮转、压缩与七天保留
@@ -52,7 +53,7 @@ Portexa/
 
 ## 后续业务与独立发布
 
-业务通过 `mt4.Fetch` 取得协议快照，在主工程完成资金聚合、存储和调度。当前已交付历史回填、当日统计、自动出入金分类及人工校正；收益率、回撤与归档仍属后续阶段。这些业务职责不加入协议模块。
+业务通过 `mt4.Fetch` 取得协议快照，在主工程完成资金聚合、存储和调度。当前已交付历史回填、当日统计、自动出入金分类、人工校正及[收益风险分析](analytics.md)，归档仍属后续阶段。`internal/analytics` 只消费已适配的样本与事件，负责 Decimal 计算、指标质量、收益日历及显示抽样；来源适配及修订校验在 `internal/accounts`。这些业务职责不加入协议模块。
 
 `packages/mt4` 自带 `go.mod/go.sum`、说明、MIT 许可证、第三方许可和测试，关闭 workspace 后可独立检查。未来迁入独立仓库时，保留这个目录的内容、许可证和第三方声明，设定正式发布模块地址并更新调用方即可；协议本身没有主工程耦合。当前 `portexa/mt4` 是本地模块路径，不能将仓库地址直接当作已经发布的 `go get` 接口。
 

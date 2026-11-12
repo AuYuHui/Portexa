@@ -25,6 +25,7 @@ func TestAssetTrendUpgradeRetainsDataAndUnknownCadence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stripAnalyticsSchema(t, db)
 	for _, statement := range []string{
 		"DROP TABLE account_unit_changes",
 		"DROP INDEX snapshots_account_minute",

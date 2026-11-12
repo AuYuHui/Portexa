@@ -15,6 +15,7 @@ The English README covers features, desktop screenshots, setup, and development.
 | [启动与管理 / Getting started](product-start.md) | 构建、HTTPS、首次接入、私有数据、日志、备份与恢复 |
 | [桌面截图示例 / Desktop screenshots](screenshots.md) | 中英文界面、合成数值解释和重新生成步骤 |
 | [账户统计 / Account statistics](account-statistics.md) | 当日净利润、胜负、保证金、历史回填与出入金分类 |
+| [收益与风险分析 / Analytics](analytics.md) | 区间净收益、估算收益率、采样回撤、日历、账户比较与数据依据 |
 | [资产走势 / Asset trends](asset-trends.md) | 组合与账户曲线、时间范围、单位、缺口及采样口径 |
 | [服务器发现 / Server discovery](server-discovery.md) | 候选目录、独立核验、风险接受及地址变更 |
 | [MT4 SDK](../packages/mt4/README.md) | `Probe` / `Fetch`、协议类型、错误和资源限制 |
@@ -28,7 +29,7 @@ The English README covers features, desktop screenshots, setup, and development.
 | [实施规格 / Implementation](phase1-implementation.md) | 登录、采集和看板契约，及后续已交付扩展 |
 | [数据模型 / Data model](product-data-model.md) | 键、外键、状态、版本和迁移 |
 | [运行规则 / Runtime](product-runtime.md) | 调度、资源配额、凭据、备份及计划中的归档规则 |
-| [产品方案 / Product plan](product-plan.md) | 产品边界、统计定义与后续收益率/回撤规划 |
+| [产品方案 / Product plan](product-plan.md) | 产品边界、统计定义与分阶段交付规划 |
 
 ## 验证与研究 / Validation and research
 

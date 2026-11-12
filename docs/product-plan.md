@@ -2,7 +2,7 @@
 
 [English README](../README.md) · [中文 README](../README.zh-CN.md) · [文档索引](README.md)
 
-本文包含后续规划。当前可用功能、安装步骤和桌面示例以[项目说明](../README.zh-CN.md)、[启动指南](product-start.md)和[截图说明](screenshots.md)为入口；收益率、回撤与归档尚未交付。
+本文包含后续规划。当前可用功能、安装步骤和桌面示例以[项目说明](../README.zh-CN.md)、[启动指南](product-start.md)和[截图说明](screenshots.md)为入口；收益率与采样回撤的已实现口径见[Analytics](analytics.md)，归档尚未交付。
 
 WP2 已补充组合与单账户资产历史视图，具体交互、接口、采样缺口及单位版本规则见[资产走势](asset-trends.md)。原始资产变化与后续资金流调整收益分别展示。
 

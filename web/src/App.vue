@@ -11,6 +11,7 @@ import {
   ArrowUpRight,
   LoaderCircle,
   Layers3,
+  ChartNoAxesCombined,
 } from "@lucide/vue";
 import { useSession } from "./session";
 import Login from "./pages/Login.vue";
@@ -74,6 +75,8 @@ onUnmounted(() => {
             class="nav-arrow"
             :size="15"
         /></RouterLink>
+        <RouterLink to="/analytics" class="nav-link" active-class="nav-active"
+          ><ChartNoAxesCombined :size="19" />{{ t('analytics.title') }}</RouterLink>
         <RouterLink to="/settings" class="nav-link" active-class="nav-active"
           ><SlidersHorizontal :size="19" />{{ t('settings.connectionsSettings') }}</RouterLink
         >
@@ -91,7 +94,7 @@ onUnmounted(() => {
         <span class="breadcrumb"
           >{{ t('app.workspace') }} <span>/</span>
           <strong>{{
-            $route.path === "/settings"
+            $route.path === "/analytics" ? t('analytics.title') : $route.path === "/settings"
               ? t('settings.connectionsSettings')
               : $route.path.startsWith("/accounts/")
                 ? t('app.accountDetails')
@@ -106,7 +109,7 @@ onUnmounted(() => {
       <RouterView />
       <footer class="footer">
         <span>PORTEXA <span class="muted">/</span> {{ t('app.clearAssetsInformedDecisions') }}</span
-        ><span>{{ t('app.readOnlyAccountAggregationPhaseOne') }}</span>
+        ><span>{{ t('app.readOnlyAccountAggregation') }}</span>
       </footer>
     </main>
   </div>

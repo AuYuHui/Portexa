@@ -67,6 +67,7 @@ export const fundCategories = computed<Record<string, string>>(() => ({
   transfer_in: t('format.internalTransferIn'),
   transfer_out: t('format.internalTransferOut'),
   adjustment: t('format.otherAdjustment'),
+  capital_adjustment: t('analytics.capitalAdjustment'),
   unclassified: t('format.unclassified'),
 }));
 export function signedMoney(

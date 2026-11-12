@@ -37,6 +37,7 @@ func run() error {
 	automaticTime := flag.Bool("automatic-time", false, "use a synthetic server matching a published calendar")
 	tradeClock := flag.Bool("trade-clock", false, "calibrate an unknown synthetic server using newly closed trades")
 	assetTrends := flag.Bool("asset-trends", false, "seed synthetic asset history and membership changes")
+	analyticsMode := flag.Bool("analytics", false, "seed reconciled synthetic performance evidence without starting collection")
 	flag.Parse()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -135,6 +136,11 @@ func run() error {
 			return err
 		}
 	}
+	if *analyticsMode {
+		if err := seedAnalytics(ctx, service); err != nil {
+			return err
+		}
+	}
 	if *tradeClock {
 		if err := seedTradeClock(ctx, service); err != nil {
 			return err
@@ -154,7 +160,14 @@ func run() error {
 	}
 	httpServer := &http.Server{Addr: *listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 	done := make(chan error, 1)
-	go func() { done <- engine.Run(ctx) }()
+	go func() {
+		if *analyticsMode {
+			<-ctx.Done()
+			done <- nil
+		} else {
+			done <- engine.Run(ctx)
+		}
+	}()
 	go func() { <-ctx.Done(); _ = httpServer.Close() }()
 	fmt.Println("Synthetic browser fixture on", *listen)
 	err = httpServer.ListenAndServe()

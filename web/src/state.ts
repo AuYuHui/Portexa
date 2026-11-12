@@ -8,7 +8,7 @@ export const queryClient = new QueryClient({
 export const refreshAccounts = () =>
   queryClient.invalidateQueries({
     predicate: (q) =>
-      ["overview", "account", "snapshots", "servers", "funds", "equity-history"].includes(
+      ["overview", "account", "snapshots", "servers", "funds", "equity-history", "analytics", "analytics-activity", "accounts-for-analytics"].includes(
         String(q.queryKey[0]),
       ),
   });

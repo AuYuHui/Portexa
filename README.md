@@ -11,6 +11,7 @@ Portexa is a self-hosted, read-only dashboard for multiple MetaTrader 4 accounts
 ## Features
 
 - **Multi-account overview.** View balance, equity, floating net P&L, margin levels, collection status, and sampling times together.
+- **Return and risk analytics.** Inspect cash-flow-adjusted net profit, estimated returns, sampled drawdown, daily profit and account comparisons, with per-metric coverage and reconciliation evidence. See [calculation rules](docs/analytics.md).
 - **Asset history.** View portfolio trends on the overview and account trends in details, with 24-hour to 90-day and custom ranges, balance/equity controls, native units and confirmed USD conversion. Gaps remain blank; membership changes and verified cash flows are annotated.
 - **Explicit currency units.** Confirmed USD and USC accounts contribute to a USD subtotal at 100 USC = 1 USD. Original amounts remain available; other currencies are listed separately.
 - **Daily trading statistics.** See net realized profit, balance change, closed trades, win rate, and gains/losses by MT4 server date.
@@ -20,7 +21,7 @@ Portexa is a self-hosted, read-only dashboard for multiple MetaTrader 4 accounts
 - **Chinese and English UI.** Switch languages on the sign-in page or dashboard. Your preference is saved in the browser; account names and original comments retain their source text.
 - **Standalone Go SDK.** Use `Probe` and `Fetch` from `packages/mt4` independently of the dashboard and storage layers.
 
-The current release focuses on account monitoring and cash-flow statistics. Return curves, drawdown analytics, and snapshot archival are planned. Compatibility depends on the broker's protocol profile and available history; see the [validation records](docs/research/README.md) for the tested scope and dates.
+The current release includes account monitoring, cash-flow statistics and sampled return/risk analytics. Snapshot archival is planned. Compatibility depends on the broker's protocol profile and available history; see the [validation records](docs/research/README.md) for the tested scope and dates.
 
 ## Screenshots
 

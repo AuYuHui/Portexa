@@ -62,7 +62,7 @@ func (s *Service) ClassifyFund(ctx context.Context, id string, ticket int32, inp
 			if sign >= 0 {
 				return &InputError{"该分类要求负向余额流水"}
 			}
-		case "adjustment", "unclassified":
+		case "adjustment", "capital_adjustment", "unclassified":
 		default:
 			return &InputError{"不支持的资金分类"}
 		}

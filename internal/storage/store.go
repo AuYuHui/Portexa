@@ -46,13 +46,16 @@ var collectionSchema string
 //go:embed migrations/008_asset_trends.sql
 var assetTrendsSchema string
 
+//go:embed migrations/009_analytics.sql
+var analyticsSchema string
+
 var ErrNotFound = gorm.ErrRecordNotFound
 var ErrConflict = errors.New("state conflict")
 var ErrDenied = errors.New("operation denied")
 var ErrClosed = errors.New("store closed")
 
 const ApplicationID = 0x50545841
-const SchemaVersion = 8
+const SchemaVersion = 9
 
 type Priority int
 
@@ -263,6 +266,11 @@ func migrate(db *sql.DB) error {
 	}
 	if version < 8 {
 		if _, err = tx.Exec(assetTrendsSchema); err != nil {
+			return err
+		}
+	}
+	if version < 9 {
+		if _, err = tx.Exec(analyticsSchema); err != nil {
 			return err
 		}
 	}

@@ -8,6 +8,7 @@ import App from "./App.vue";
 import Overview from "./pages/Overview.vue";
 import Account from "./pages/Account.vue";
 import Settings from "./pages/Settings.vue";
+import { defineAsyncComponent } from "vue";
 import "./style.css";
 
 const router = createRouter({
@@ -17,12 +18,13 @@ const router = createRouter({
     { path: "/", component: Overview },
     { path: "/accounts/:id", component: Account },
     { path: "/settings", component: Settings },
+    { path: "/analytics", component: defineAsyncComponent(() => import("./pages/Analytics.vue")) },
     { path: "/:pathMatch(.*)*", redirect: "/" },
   ],
 });
 watchEffect(() => {
   const path = router.currentRoute.value.path;
-  const title = path === "/settings"
+  const title = path === "/analytics" ? t("analytics.title") : path === "/settings"
     ? t("settings.connectionsSettings")
     : path.startsWith("/accounts/")
       ? t("app.accountDetails")
