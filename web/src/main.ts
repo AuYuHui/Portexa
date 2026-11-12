@@ -13,7 +13,12 @@ import "./style.css";
 
 const router = createRouter({
   history: createWebHistory(),
-  scrollBehavior: () => ({ top: 0 }),
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition;
+    // Chart controls and filters update the query on the current page.
+    if (to.path === from.path) return false;
+    return { top: 0 };
+  },
   routes: [
     { path: "/", component: Overview },
     { path: "/accounts/:id", component: Account },
