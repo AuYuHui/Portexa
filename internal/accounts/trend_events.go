@@ -25,12 +25,16 @@ func (s *Service) trendFundEvents(ctx context.Context, accounts []storage.Accoun
 		}
 		entries, found := calendar[account.ServerID]
 		if !found {
-			var rules []serverTimeRule
-			if err := s.Store.Read.WithContext(ctx).Where("server_id=? AND verified_at_ms IS NOT NULL", account.ServerID).
-				Order("revision").Find(&rules).Error; err != nil {
+			var server storage.Server
+			if err := s.Store.Read.WithContext(ctx).First(&server, "id=?", account.ServerID).Error; err != nil {
 				return err
 			}
-			entries = trendTimeEntries(rules, input.FromMS, input.ToMS)
+			margin := int64(26 * time.Hour / time.Millisecond)
+			var err error
+			entries, _, err = historicalTimeEntries(ctx, s.Store.Read, server, max(0, input.FromMS-margin), input.ToMS+margin)
+			if err != nil {
+				return err
+			}
 			calendar[account.ServerID] = entries
 		}
 		var orders []storage.HistoryOrder
@@ -55,7 +59,9 @@ func (s *Service) trendFundEvents(ctx context.Context, accounts []storage.Accoun
 			}
 			stamp, confirmed := trendEventUTC(order.EventTimeWall, entries)
 			if !confirmed {
-				view.UnplacedEvents++
+				if wallCouldAffect(order.EventTimeWall, eventWallRanges(entries, input.FromMS, input.ToMS)) {
+					view.UnplacedEvents++
+				}
 				continue
 			}
 			if stamp < input.FromMS || stamp >= input.ToMS {
@@ -125,7 +131,7 @@ func trendTimeEntries(rules []serverTimeRule, from, to int64) []timeRuleEntry {
 func trendEventUTC(wall uint32, entries []timeRuleEntry) (int64, bool) {
 	candidates := map[int64]bool{}
 	for _, entry := range entries {
-		if entry.Kind != "iana" && entry.Kind != "broker_us_dst" {
+		if entry.Kind != "iana" && entry.Kind != "broker_us_dst" && (entry.Kind != "observed_offset" || entry.UntilUTCMS == nil) {
 			continue
 		}
 		offsets := map[int]bool{}

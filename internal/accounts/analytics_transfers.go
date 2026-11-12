@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 	"portexa/internal/analytics"
@@ -67,11 +68,12 @@ func (s *Service) transferEndpoint(ctx context.Context, tx *gorm.DB, id string, 
 	if server.ActiveTimeRulesetID == nil {
 		return nil, nil
 	}
-	var rules []serverTimeRule
-	if err := tx.Where("server_id=? AND verified_at_ms IS NOT NULL", account.ServerID).Order("revision").Find(&rules).Error; err != nil {
+	wall, margin := int64(order.EventTimeWall)*1000, int64(14*time.Hour/time.Millisecond)
+	entries, _, err := historicalTimeEntries(ctx, tx, server, max(0, wall-margin), wall+margin)
+	if err != nil {
 		return nil, err
 	}
-	stamp, ok := trendEventUTC(order.EventTimeWall, trendTimeEntries(rules, 0, 2147483647_000))
+	stamp, ok := trendEventUTC(order.EventTimeWall, entries)
 	if !ok {
 		return nil, nil
 	}

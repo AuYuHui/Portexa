@@ -230,6 +230,14 @@ function openDay(day: PerformanceDay) {
           >
         </div>
       </div>
+      <p v-if="result.quality.reasons.length" class="notice notice-warning performance-evidence-note" data-analysis-reasons>
+        {{ t('analytics.completedWithGaps') }} {{ performanceReasons(result.quality.reasons) }}
+      </p>
+      <p class="performance-scope-note" data-analysis-coverage>
+        {{ t('analytics.coverageHint') }}
+        <span v-if="result.quality.observed_from_ms">{{ t('analytics.firstObservation', { time: trendDate(result.quality.observed_from_ms) }) }}</span>
+        <span v-if="result.quality.unknown_cadence">{{ t('analytics.legacySamples', { count: result.quality.unknown_cadence }) }}</span>
+      </p>
       <PerformanceKpis :result="result" />
       <div class="performance-bridge">
         <span>{{ t("analytics.profitBreakdown") }}</span

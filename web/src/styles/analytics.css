@@ -82,7 +82,9 @@
 .performance-meta-bar .performance-assurance {
   padding: 6px 12px;
   margin: 0;
-  flex-shrink: 0;
+  min-width: 0;
+  max-width: 100%;
+  flex-shrink: 1;
 }
 .custom-actions {
   display: flex;

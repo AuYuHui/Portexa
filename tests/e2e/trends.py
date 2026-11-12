@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 @contextmanager
-def synthetic_server(server, web, flags=("-automatic-time", "-asset-trends")):
+def synthetic_server(server, web, flags=("-automatic-time", "-asset-trends"), startup_timeout=40):
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
@@ -32,7 +32,7 @@ def synthetic_server(server, web, flags=("-automatic-time", "-asset-trends")):
             cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
         )
         try:
-            deadline = time.monotonic() + 40
+            deadline = time.monotonic() + startup_timeout
             while True:
                 if process.poll() is not None:
                     log.seek(0)
@@ -90,6 +90,19 @@ def check_locale(browser, origin, locale, artifacts):
         assert body["to_ms"] - body["from_ms"] == days * 86_400_000
         expect(portfolio.get_by_role("button", name=name, exact=True)).to_have_attribute("aria-pressed", "true")
         expect(portfolio.locator("canvas")).to_be_visible()
+        if days > 7:
+            assert body["included_from_ms"] > body["from_ms"]
+            expect(portfolio.locator("[data-before-inclusion]")).to_be_visible()
+            portfolio.locator(".trend-details summary").click()
+            table = portfolio.locator(".trend-table")
+            expect(table).to_contain_text("Valuation time" if english else "估值时点")
+            expect(table.locator("tbody tr").first).to_contain_text("Valid sample" if english else "有效采样")
+            expect(table).not_to_contain_text("No included accounts yet" if english else "尚无已纳入账户")
+            assert table.locator("tbody tr").count() > 0
+            portfolio.locator(".trend-table tbody tr").first.get_by_role("button").click()
+            expect(portfolio.locator("[data-selected-trend]")).to_contain_text("Sampling window" if english else "采样范围")
+            portfolio.screenshot(path=str(artifacts / f"portfolio-details-{locale}-{days}d.png"))
+            portfolio.locator(".trend-details summary").click()
     # Returning to a fresh cached range correctly avoids another HTTP request.
     portfolio.get_by_role("button", name="7D", exact=True).click()
     expect(portfolio.get_by_role("button", name="7D", exact=True)).to_have_attribute("aria-pressed", "true")

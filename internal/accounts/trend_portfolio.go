@@ -50,6 +50,9 @@ func (s *Service) PortfolioTrend(ctx context.Context, input TrendRequest) (Trend
 			continue
 		}
 		boundaries = append(boundaries, *account.IncludedAtMS)
+		if view.IncludedFromMS == 0 || *account.IncludedAtMS < view.IncludedFromMS {
+			view.IncludedFromMS = *account.IncludedAtMS
+		}
 		if account.RemovedAtMS != nil {
 			boundaries = append(boundaries, *account.RemovedAtMS)
 		}

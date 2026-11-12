@@ -24,6 +24,7 @@ export interface PerformanceQuality {
   raw_samples: number;
   unclassified: number;
   unresolved_times: number;
+  unknown_cadence: number;
   balance_residual: string | null;
   credit_residual: string | null;
   reconciliation_tolerance: string | null;

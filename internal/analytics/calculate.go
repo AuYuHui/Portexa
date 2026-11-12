@@ -132,6 +132,9 @@ func Calculate(ctx context.Context, input Input, details bool) (Result, error) {
 		reasons[i] = sampleReason(sample, input.Events)
 		if reasons[i] == "" {
 			q.ValidPoints++
+			if sample.UnknownCadence {
+				q.UnknownCadence++
+			}
 			if q.ObservedFromMS == 0 {
 				q.ObservedFromMS = sample.ObservedFromMS
 			}

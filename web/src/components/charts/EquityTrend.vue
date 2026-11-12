@@ -26,7 +26,12 @@ const events = computed(() => (data.value?.events || []).filter((event) => event
 const valid = computed(() => points.value.filter((point) => point.equity !== null));
 const plottable = computed(() => valid.value.some((point) => chartAmount(point.equity) !== null || chartAmount(point.balance) !== null));
 const activePoint = computed(() => selected.value && points.value.includes(selected.value) ? selected.value : valid.value.at(-1));
-const detailPoints = computed(() => points.value.slice(detailPage.value * 20, detailPage.value * 20 + 20));
+const historyPoints = computed(() => points.value.filter((point) => props.accountId
+  ? !!point.snapshot_id
+  : point.equity !== null && point.observed_to_ms > 0));
+const detailPoints = computed(() => historyPoints.value.slice(detailPage.value * 20, detailPage.value * 20 + 20));
+const beforeInclusion = computed(() => !props.accountId && !!data.value?.included_from_ms
+  && data.value.from_ms < data.value.included_from_ms);
 const chartKey = computed(() => [props.accountId, range.value, unit.value, currency.value, customFrom.value, customTo.value].join(":"));
 const partial = computed(() => !!data.value && !!(data.value.gap_points || data.value.break_count || data.value.pending_accounts || data.value.unknown_cadence));
 const emptyReason = computed(() => {
@@ -76,6 +81,9 @@ watch(currency, () => { selected.value = undefined; detailPage.value = 0; });
       <p v-if="data.pending_accounts || data.excluded_accounts" class="trend-scope-note">
         {{ t('trend.excluded', { pending: data.pending_accounts, excluded: data.excluded_accounts }) }}
       </p>
+      <p v-if="beforeInclusion" class="trend-scope-note" data-before-inclusion>
+        {{ t('trend.beforeInclusion', { time: trendDate(data.included_from_ms) }) }}
+      </p>
       <template v-if="activePoint">
         <div class="trend-values" aria-live="polite">
           <div><span class="trend-legend equity">{{ t('account.equity') }}</span><strong class="num">{{ money(activePoint.equity) }} <small>{{ currency }}</small></strong></div>
@@ -105,11 +113,13 @@ watch(currency, () => { selected.value = undefined; detailPage.value = 0; });
         </li></ul>
       </details>
       <details v-if="points.length" class="trend-details" @toggle="detailsOpen = ($event.target as HTMLDetailsElement).open">
-        <summary>{{ t('trend.details') }} <span class="muted">{{ t('trend.clickSample') }}</span></summary>
+        <summary>{{ accountId ? t('trend.snapshotDetails') : t('trend.valuationDetails') }} <span class="muted">{{ accountId ? t('trend.clickSample') : t('trend.clickValuation') }}</span></summary>
         <template v-if="detailsOpen">
-          <div class="table-scroll">
+          <p v-if="data.downsampled" class="trend-scope-note">{{ t('trend.sampledDetails') }}</p>
+          <p v-if="!historyPoints.length" class="trend-scope-note">{{ t('trend.noHistoryDetails') }}</p>
+          <div v-else class="table-scroll">
             <table class="data-table trend-table">
-              <thead><tr><th>{{ t('account.sampleCompleted') }}</th><th class="text-right">{{ t('account.equity') }}</th><th class="text-right">{{ t('account.balance') }}</th><th>{{ t('trend.quality') }}</th></tr></thead>
+              <thead><tr><th>{{ accountId ? t('account.sampleCompleted') : t('trend.valuationTime') }}</th><th class="text-right">{{ t('account.equity') }}</th><th class="text-right">{{ t('account.balance') }}</th><th>{{ t('trend.quality') }}</th></tr></thead>
               <tbody><tr v-for="point in detailPoints" :key="[point.time_ms, point.snapshot_id].join(':')">
                 <td><button class="text-button num" type="button" @click="selected = point">{{ trendDate(point.time_ms) }}</button></td>
                 <td class="text-right num">{{ money(point.equity) }} {{ point.currency }}</td>
@@ -118,10 +128,10 @@ watch(currency, () => { selected.value = undefined; detailPage.value = 0; });
               </tr></tbody>
             </table>
           </div>
-          <div class="trend-pagination">
+          <div v-if="historyPoints.length" class="trend-pagination">
             <button class="btn btn-small" type="button" :disabled="detailPage === 0" @click="detailPage--">{{ t('trend.previous') }}</button>
-            <span class="muted small">{{ detailPage + 1 }} / {{ Math.ceil(points.length / 20) }}</span>
-            <button class="btn btn-small" type="button" :disabled="(detailPage + 1) * 20 >= points.length" @click="detailPage++">{{ t('trend.next') }}</button>
+            <span class="muted small">{{ detailPage + 1 }} / {{ Math.ceil(historyPoints.length / 20) }}</span>
+            <button class="btn btn-small" type="button" :disabled="(detailPage + 1) * 20 >= historyPoints.length" @click="detailPage++">{{ t('trend.next') }}</button>
           </div>
         </template>
       </details>

@@ -4,7 +4,7 @@ package analytics
 
 import "github.com/shopspring/decimal"
 
-const Version = "analytics-v1-md24-minute"
+const Version = "analytics-v2-md24-observed-time"
 const Minute int64 = 60_000
 const MaxAge int64 = 90_000
 const MaxRange int64 = 90 * 24 * 60 * Minute
@@ -24,6 +24,7 @@ type Sample struct {
 	Reason         string
 	Expected       int
 	Included       int
+	UnknownCadence bool
 }
 
 type Event struct {
@@ -91,6 +92,7 @@ type Quality struct {
 	RawSamples              int              `json:"raw_samples"`
 	Unclassified            int              `json:"unclassified"`
 	UnresolvedTimes         int              `json:"unresolved_times"`
+	UnknownCadence          int              `json:"unknown_cadence"`
 	BalanceResidual         *decimal.Decimal `json:"balance_residual"`
 	CreditResidual          *decimal.Decimal `json:"credit_residual"`
 	ReconciliationTolerance *decimal.Decimal `json:"reconciliation_tolerance"`

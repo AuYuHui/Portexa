@@ -48,6 +48,7 @@ def check_locale(browser, origin, locale, artifacts):
         assert sum(values) == Decimal(month["net_profit"]["value"])
     expect(page.locator(".performance-plot canvas")).to_be_visible()
     expect(page.locator(".performance-kpis article")).to_have_count(4)
+    expect(page.locator("[data-analysis-coverage]")).to_contain_text("not calculation progress" if english else "不是计算进度")
     expect(page.get_by_role("heading", name="Account contribution" if english else "账户贡献", exact=True)).to_be_visible()
     no_page_overflow(page)
     page.screenshot(path=str(artifacts / f"analytics-{locale}-desktop.png"), full_page=True)
@@ -113,6 +114,14 @@ def check_locale(browser, origin, locale, artifacts):
     assert all(day["trades"] is None for day in missing["days"])
     expect(page.locator('[data-kpi="net"]')).to_contain_text("—")
     expect(page.locator(".performance-plot-empty")).to_be_visible()
+    expect(page.locator("[data-analysis-reasons]")).to_contain_text("Calculation complete" if english else "计算已完成")
+    expect(page.locator("[data-analysis-reasons]")).to_contain_text("No valid beginning valuation" if english else "缺少有效期初估值")
+    page.screenshot(path=str(artifacts / f"missing-evidence-{locale}.png"), full_page=True)
+    for width in (390, 320):
+        page.set_viewport_size({"width": width, "height": 844})
+        no_page_overflow(page)
+        page.screenshot(path=str(artifacts / f"missing-evidence-{locale}-{width}.png"), full_page=True)
+    page.set_viewport_size({"width": 1440, "height": 1100})
 
     with page.expect_response(analysis_response):
         page.locator("#analytics-account").select_option("")
@@ -122,8 +131,8 @@ def check_locale(browser, origin, locale, artifacts):
     for width in (390, 320):
         page.set_viewport_size({"width": width, "height": 844})
         expect(page.locator(".performance-plot canvas")).to_be_visible()
-        no_page_overflow(page)
         page.screenshot(path=str(artifacts / f"analytics-{locale}-{width}.png"), full_page=True)
+        no_page_overflow(page)
 
     def fail_analysis(route):
         route.fulfill(status=503, json={"error": "Synthetic analysis unavailable"})
@@ -145,7 +154,9 @@ def main():
     parser.add_argument("--artifacts", type=Path, default=ROOT / ".local/browser/analytics")
     args = parser.parse_args()
     args.artifacts.mkdir(parents=True, exist_ok=True)
-    with synthetic_server(args.server.resolve(), args.web.resolve(), flags=("-analytics",)) as origin, sync_playwright() as p:
+    # Seeding 31 days across three accounts writes over 130,000 synthetic
+    # snapshots before HTTP starts; measured startup can exceed 40 seconds.
+    with synthetic_server(args.server.resolve(), args.web.resolve(), flags=("-analytics",), startup_timeout=90) as origin, sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         try:
             for locale in ("zh-CN", "en"):

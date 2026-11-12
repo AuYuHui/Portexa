@@ -21,14 +21,15 @@ type analyticsCoverage struct {
 }
 
 type analyticsSource struct {
-	account    storage.Account
-	server     storage.Server
-	entries    []timeRuleEntry
-	coverage   []analyticsCoverage
-	input      analytics.Input
-	cutoff     int64
-	hash       hash.Hash
-	readOrders int
+	account         storage.Account
+	server          storage.Server
+	entries         []timeRuleEntry
+	coverage        []analyticsCoverage
+	input           analytics.Input
+	cutoff          int64
+	hash            hash.Hash
+	readOrders      int
+	unresolvedWalls []uint32
 }
 
 func (s *Service) analyticsSource(ctx context.Context, account storage.Account, from, to int64, unit string) (*analyticsSource, error) {
@@ -49,18 +50,16 @@ func (s *Service) analyticsSource(ctx context.Context, account storage.Account, 
 	if err := s.Store.Read.WithContext(ctx).First(&source.server, "id=?", account.ServerID).Error; err != nil {
 		return nil, err
 	}
-	var rules []serverTimeRule
-	if err := s.Store.Read.WithContext(ctx).Where("server_id=? AND verified_at_ms IS NOT NULL", account.ServerID).
-		Order("revision").Find(&rules).Error; err != nil {
+	margin := int64(26 * time.Hour / time.Millisecond)
+	entries, evidence, err := historicalTimeEntries(ctx, s.Store.Read, source.server, max(0, from-margin-analytics.MaxAge-1000), to+margin)
+	if err != nil {
 		return nil, err
 	}
-	source.entries = trendTimeEntries(rules, 0, 2147483647_000)
+	source.entries = entries
 	if len(source.entries) == 0 {
 		source.input.LedgerReasons = append(source.input.LedgerReasons, "time_unresolved")
 	}
-	for _, rule := range rules {
-		fmt.Fprintf(source.hash, "rule:%s:%s|", rule.ID, rule.RulesJSON)
-	}
+	fmt.Fprintf(source.hash, "calendar:%s|", evidence)
 	query := s.Store.Read.WithContext(ctx).Table("history_coverage c").
 		Joins("JOIN history_runs r ON r.coverage_id=c.id AND r.account_id=c.account_id AND r.state='succeeded'").
 		Where("c.account_id=? AND c.unit_revision=?", account.ID, account.UnitRevision).
@@ -104,7 +103,7 @@ func (source *analyticsSource) wall(stamp int64) (uint32, bool) {
 		}
 		instant := time.UnixMilli(stamp)
 		zone, _, err := serverLocation(entry, instant)
-		if err != nil || entry.Kind != "iana" && entry.Kind != "broker_us_dst" {
+		if err != nil {
 			return 0, false
 		}
 		_, offset := instant.In(zone).Zone()
@@ -118,6 +117,21 @@ func (source *analyticsSource) wall(stamp int64) (uint32, bool) {
 }
 
 func (source *analyticsSource) covered(from, to int64) bool {
+	throughUTC := from
+	for _, entry := range source.entries {
+		if entry.FromUTCMS > throughUTC {
+			break
+		}
+		if entry.UntilUTCMS != nil && *entry.UntilUTCMS > throughUTC {
+			throughUTC = *entry.UntilUTCMS
+		}
+		if throughUTC >= to {
+			break
+		}
+	}
+	if throughUTC < to {
+		return false
+	}
 	a, okA := source.wall(from)
 	b, okB := source.wall(to - 1)
 	// A discontinuous or repeated server minute needs its own verified window.
@@ -180,7 +194,7 @@ func (s *Service) analyticsEvents(ctx context.Context, source *analyticsSource, 
 			fmt.Fprintf(source.hash, "order:%d:%d:%x:%s:%s|", order.Ticket, order.Revision, order.SourceHash, category, classification)
 			instant, ok := trendEventUTC(order.EventTimeWall, source.entries)
 			if !ok {
-				source.input.UnresolvedTimes++
+				source.unresolvedWalls = append(source.unresolvedWalls, order.EventTimeWall)
 				continue
 			}
 			if instant < from || instant >= to {
@@ -252,9 +266,7 @@ func (s *Service) analyticsSamples(ctx context.Context, source *analyticsSource,
 				p.ID, p.ObservedFromMS, p.ObservedToMS = previous.ID, previous.ObservedFromMS, previous.ObservedToMS
 				if at-previous.ObservedToMS <= analytics.MaxAge && previous.ObservedToMS-previous.ObservedFromMS <= analytics.MaxAge {
 					p.Reason = ""
-					if previous.CollectionIntervalSeconds == nil {
-						p.Reason = "unknown_cadence"
-					}
+					p.UnknownCadence = previous.CollectionIntervalSeconds == nil
 					if previous.UnitRevision != source.account.UnitRevision || source.account.Currency == nil || previous.NativeCurrency != *source.account.Currency {
 						p.Reason = "unit_changed"
 					}
@@ -292,6 +304,19 @@ func (s *Service) analyticsSamples(ctx context.Context, source *analyticsSource,
 		return err
 	}
 	fill(to + 1)
+	// SQL padding is not part of the requested trading interval. Include the
+	// first valuation's uncertainty window when checking failed inversions.
+	uncertainFrom := from
+	if len(input.Samples) > 0 && input.Samples[0].Reason == "" {
+		uncertainFrom = min(from, input.Samples[0].ObservedFromMS-999)
+	}
+	ranges := eventWallRanges(source.entries, uncertainFrom, to+1)
+	input.UnresolvedTimes = 0
+	for _, wall := range source.unresolvedWalls {
+		if wallCouldAffect(wall, ranges) {
+			input.UnresolvedTimes++
+		}
+	}
 	input.Fingerprint = hex.EncodeToString(source.hash.Sum(nil))
 	return nil
 }

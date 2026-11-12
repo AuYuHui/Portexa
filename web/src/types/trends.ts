@@ -54,5 +54,6 @@ export interface TrendSeries {
   unplaced_events: number;
   events_truncated: boolean;
   last_observed_to_ms: number;
+  included_from_ms: number;
   stale: boolean;
 }

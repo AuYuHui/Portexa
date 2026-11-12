@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/shopspring/decimal"
 	"portexa/internal/analytics"
@@ -46,6 +47,7 @@ func (s *Service) addAnalyticsPortfolio(ctx context.Context, p *analyticsPortfol
 			continue
 		}
 		slot.Included++
+		slot.UnknownCadence = slot.UnknownCadence || sample.UnknownCadence
 		if slot.ObservedFromMS == 0 || sample.ObservedFromMS < slot.ObservedFromMS {
 			slot.ObservedFromMS = sample.ObservedFromMS
 		}
@@ -132,6 +134,14 @@ func (s *Service) finishAnalyticsPortfolio(ctx context.Context, p *analyticsPort
 				continue
 			}
 			stamp, ok := trendEventUTC(order.EventTimeWall, source.entries)
+			if !ok {
+				wall, margin := int64(order.EventTimeWall)*1000, int64(14*time.Hour/time.Millisecond)
+				entries, _, err := historicalTimeEntries(ctx, s.Store.Read, source.server, max(0, wall-margin), wall+margin)
+				if err != nil {
+					return err
+				}
+				stamp, ok = trendEventUTC(order.EventTimeWall, entries)
+			}
 			if !ok {
 				input.CapitalReasons = append(input.CapitalReasons, "transfer_unresolved")
 				continue

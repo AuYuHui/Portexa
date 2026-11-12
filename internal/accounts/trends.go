@@ -72,6 +72,7 @@ type TrendSeries struct {
 	UnplacedEvents   int          `json:"unplaced_events"`
 	EventsTruncated  bool         `json:"events_truncated"`
 	LastObservedToMS int64        `json:"last_observed_to_ms"`
+	IncludedFromMS   int64        `json:"included_from_ms"`
 	Stale            bool         `json:"stale"`
 }
 

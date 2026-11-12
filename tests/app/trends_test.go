@@ -141,6 +141,9 @@ func TestAssetTrendPortfolioMembershipMissingDataAndPause(t *testing.T) {
 	if err != nil || view.PendingAccounts != 1 || view.ExcludedAccounts != 1 {
 		t.Fatal("scope unavailable", view, err)
 	}
+	if view.IncludedFromMS != start.Add(5*time.Second).UnixMilli() {
+		t.Fatal("collection start did not use actual membership evidence", view.IncludedFromMS)
+	}
 	byTime := map[int64]accounts.TrendPoint{}
 	for _, point := range view.Points {
 		byTime[point.TimeMS] = point
