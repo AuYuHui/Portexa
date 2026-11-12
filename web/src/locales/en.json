@@ -412,6 +412,9 @@
     "openTimeServerWallClock": "Open time · Server wall clock",
     "commissionSwapTaxes": "Commission {value1} / Swap {value2} / Taxes {value3}",
     "feesIncluded": "Fees included",
+    "showingCount": "Showing {shown} of {total} orders",
+    "showAll": "Show all",
+    "showLess": "Show less",
     "noOrdersOfThisTypeInTheCurrent": "No orders of this type in the current complete snapshot."
   },
   "reviewForm": {

@@ -261,7 +261,11 @@ async function toggleSync() {
             </select></label
           >
         </div>
-        <PositionTable v-if="current" :positions="positions" />
+        <PositionTable
+          v-if="current"
+          :key="`${id}:${tab}`"
+          :positions="positions"
+        />
         <p v-else class="empty-inline">
           {{ t('account.noCompleteSnapshotYetMissingPositionsDoNot') }}
         </p>

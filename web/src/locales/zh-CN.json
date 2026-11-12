@@ -412,6 +412,9 @@
     "openTimeServerWallClock": "开仓时间 · 服务器墙钟",
     "commissionSwapTaxes": "佣金 {value1} / 隔夜费 {value2} / 税费 {value3}",
     "feesIncluded": "已含费用",
+    "showingCount": "显示 {shown} / {total} 项",
+    "showAll": "展开全部",
+    "showLess": "收起",
     "noOrdersOfThisTypeInTheCurrent": "当前完整快照中没有此类订单。"
   },
   "reviewForm": {
