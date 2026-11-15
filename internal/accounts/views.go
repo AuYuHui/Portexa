@@ -189,8 +189,16 @@ func readView(tx *gorm.DB, account storage.Account, now int64, settings storage.
 			return view, err
 		}
 		view.Snapshot = &snapshot
-		if restSnapshotTemplateActive(account, snapshot, settings, time.UnixMilli(now)) {
-			view.MarketRest = marketrest.Reduced(time.UnixMilli(now))
+		active, err := restSnapshotTemplateActive(tx, account, snapshot, settings, time.UnixMilli(now))
+		if err != nil {
+			return view, err
+		}
+		if active {
+			from, to, _, err := snapshotRestBounds(tx, snapshot, time.UnixMilli(now))
+			if err != nil {
+				return view, err
+			}
+			view.MarketRest = marketrest.ReducedWindow(time.UnixMilli(now), from, to)
 			if view.MarketRest {
 				view.EffectiveCollectionIntervalSeconds = max(settings.SnapshotIntervalSeconds, 300)
 				staleAfter = max(staleAfter, marketrest.Interval+marketrest.Grace)

@@ -201,7 +201,9 @@ func (s *Service) addPortfolioAccount(ctx context.Context, account storage.Accou
 	if analyticsMember(account, at-1) {
 		limit := trendMaxAgeMS
 		if tail != nil && tail.RestVerified {
-			if _, _, closed := marketrest.Window(time.UnixMilli(at)); closed {
+			if _, _, closed, err := snapshotRestBounds(s.Store.Read.WithContext(ctx), *tail, time.UnixMilli(at)); err != nil {
+				return err
+			} else if closed {
 				limit = (marketrest.Interval + marketrest.Grace).Milliseconds()
 			}
 		}

@@ -122,6 +122,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/analytics/transfers", s.protected(s.matchAnalyticsTransfer))
 	s.mux.HandleFunc("GET /api/portfolio/equity-history", s.protected(s.assetTrend))
 	s.mux.HandleFunc("GET /api/settings/collection", s.protected(s.collectionSettings))
+	s.mux.HandleFunc("GET /api/market-rest/learning", s.protected(s.restLearning))
 	s.mux.HandleFunc("PUT /api/settings/collection", s.protected(s.updateCollectionSettings))
 	s.mux.HandleFunc("GET /api/servers", s.protected(s.servers))
 	s.mux.HandleFunc("GET /api/server-directory", s.protected(s.searchDirectory))

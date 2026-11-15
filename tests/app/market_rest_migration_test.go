@@ -15,6 +15,7 @@ import (
 // user_version number while leaving the new tables/columns in place.
 func stripMarketRestSchema(t *testing.T, db *sql.DB) {
 	t.Helper()
+	stripRestLearningSchema(t, db)
 	for _, statement := range []string{
 		"ALTER TABLE collection_settings DROP COLUMN market_rest_policy_revision",
 		"ALTER TABLE account_snapshots DROP COLUMN rest_policy_revision",

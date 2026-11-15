@@ -130,7 +130,9 @@ func (s *Service) PublishHistory(ctx context.Context, job HistoryJob, orders []s
 				ON CONFLICT(account_id,ticket) DO UPDATE SET revision=excluded.revision`, job.Run.ID).Error; err != nil {
 				return err
 			}
-			if _, end, closed := marketrest.Window(time.UnixMilli(finished)); closed && snapshot.RestVerified {
+			if _, end, closed, err := snapshotRestBounds(tx, snapshot, time.UnixMilli(finished)); err != nil {
+				return err
+			} else if closed && snapshot.RestVerified {
 				for _, order := range changed {
 					if order.EventTimeWall >= job.Day.Start {
 						updates := map[string]any{"rest_blocked_until_ms": end.UnixMilli()}
@@ -163,7 +165,7 @@ func (s *Service) PublishHistory(ctx context.Context, job HistoryJob, orders []s
 		}
 		nextAttempt := finished + refresh.Milliseconds()
 		if refresh == marketrest.HistoryInterval {
-			nextAttempt = min(nextAttempt, job.Day.NextDayUTC.UnixMilli(), marketrest.NextGuard(time.UnixMilli(finished)).UnixMilli())
+			nextAttempt = min(nextAttempt, job.Day.NextDayUTC.UnixMilli(), restRefreshGuard(tx, current, time.UnixMilli(finished)))
 		}
 		if err = tx.Model(&job.Coverage).Updates(map[string]any{"state": "complete", "checked_at_ms": finished, "failure_count": 0,
 			"next_attempt_at_ms": nextAttempt}).Error; err != nil {

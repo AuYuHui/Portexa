@@ -30,6 +30,7 @@ type analyticsSource struct {
 	hash            hash.Hash
 	readOrders      int
 	unresolvedWalls []uint32
+	restWindows     map[string]storage.MarketRestWindow
 	restPolicies    map[int64]storage.MarketRestPolicy
 }
 
@@ -329,7 +330,7 @@ func (s *Service) analyticsSamples(ctx context.Context, source *analyticsSource,
 			cadence = *row.CollectionIntervalSeconds
 		}
 		fmt.Fprintf(source.hash, "sample:%s:%d:%d:%s:%s:%s:%s:%d:%d:%t:%s:%d|", row.ID, row.ObservedFromMS, row.ObservedToMS,
-			row.Balance, row.Credit, row.Equity, row.FloatingNetProfit, row.UnitRevision, row.RestPolicyRevision, row.RestVerified, row.StateFingerprint, cadence)
+			row.Balance, row.Credit, row.Equity, row.FloatingNetProfit, row.UnitRevision, row.RestPolicyRevision, row.RestVerified, row.StateFingerprint+":"+row.RestWindowID, cadence)
 		previous = &row
 		return nil
 	})

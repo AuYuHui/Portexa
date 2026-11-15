@@ -139,7 +139,9 @@ func (s *Service) AccountTrend(ctx context.Context, id string, input TrendReques
 	}
 	staleAfter := snapshotStaleAfter(settings)
 	if latest != nil && latest.RestVerified && latest.RestPolicyRevision == settings.MarketRestPolicyRevision && settings.MarketRestTemplate == marketrest.Template {
-		if _, _, closed := marketrest.Window(time.UnixMilli(min(view.ToMS, view.AsOfMS))); closed {
+		if _, _, closed, err := snapshotRestBounds(s.Store.Read.WithContext(ctx), *latest, time.UnixMilli(min(view.ToMS, view.AsOfMS))); err != nil {
+			return view, err
+		} else if closed {
 			staleAfter = max(staleAfter, marketrest.Interval+marketrest.Grace)
 		}
 	}

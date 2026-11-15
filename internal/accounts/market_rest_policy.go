@@ -31,6 +31,10 @@ func restPolicyIncludes(policy storage.MarketRestPolicy, id string, at int64) bo
 }
 
 func updateRestPolicy(tx *gorm.DB, settings *storage.CollectionSettings, input CollectionInput, now int64) (bool, error) {
+	learning := settings.MarketRestLearningEnabled
+	if input.MarketRestLearningEnabled != nil {
+		learning = *input.MarketRestLearningEnabled
+	}
 	template, ids := settings.MarketRestTemplate, slices.Clone(settings.MarketRestExcludedAccountIDs)
 	if input.MarketRestTemplate != nil {
 		template = *input.MarketRestTemplate
@@ -57,7 +61,7 @@ func updateRestPolicy(tx *gorm.DB, settings *storage.CollectionSettings, input C
 			}
 		}
 	}
-	if template == settings.MarketRestTemplate && slices.Equal(ids, settings.MarketRestExcludedAccountIDs) {
+	if learning == settings.MarketRestLearningEnabled && template == settings.MarketRestTemplate && slices.Equal(ids, settings.MarketRestExcludedAccountIDs) {
 		return false, nil
 	}
 	if ids == nil {
@@ -71,10 +75,15 @@ func updateRestPolicy(tx *gorm.DB, settings *storage.CollectionSettings, input C
 	if err = tx.Model(&storage.MarketRestPolicy{}).Select("COALESCE(MAX(revision),0)+1").Scan(&revision).Error; err != nil {
 		return false, err
 	}
-	policy := storage.MarketRestPolicy{Revision: revision, Template: template, EffectiveAtMS: now, ExcludedAccountsJSON: string(raw)}
+	epoch := settings.MarketRestLearningEpochMS
+	if learning && (!settings.MarketRestLearningEnabled || settings.MarketRestTemplate == marketrest.Off) {
+		epoch = now
+	}
+	policy := storage.MarketRestPolicy{LearningEnabled: learning, LearningEpochMS: epoch, Revision: revision, Template: template, EffectiveAtMS: now, ExcludedAccountsJSON: string(raw)}
 	if err = tx.Create(&policy).Error; err != nil {
 		return false, err
 	}
 	settings.MarketRestPolicyRevision, settings.MarketRestTemplate, settings.MarketRestExcludedAccountIDs = revision, template, ids
+	settings.MarketRestLearningEnabled, settings.MarketRestLearningEpochMS = learning, epoch
 	return true, nil
 }

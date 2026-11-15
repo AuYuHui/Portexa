@@ -22,6 +22,8 @@ const busy = ref(false);
 const saved = ref(false);
 const saveError = ref("");
 const restDraft = ref<string>();
+const learningDraft = ref<boolean>();
+const restLearning = computed({get:()=>learningDraft.value ?? data.value?.market_rest_learning_enabled ?? false,set:(value:boolean)=>{learningDraft.value=value;editing();}});
 const excludedDraft = ref<string[]>();
 function editing() { saved.value = false; saveError.value = ""; }
 const restTemplate = computed({
@@ -41,7 +43,7 @@ const interval = computed({
     saveError.value = "";
   },
 });
-const changed = computed(() => data.value && (interval.value !== data.value.snapshot_interval_seconds || restTemplate.value !== (data.value.market_rest_template ?? "off") || !sameIDs(restExcluded.value, data.value.market_rest_excluded_account_ids ?? [])));
+const changed = computed(() => data.value && (restLearning.value !== (data.value.market_rest_learning_enabled ?? false) || interval.value !== data.value.snapshot_interval_seconds || restTemplate.value !== (data.value.market_rest_template ?? "off") || !sameIDs(restExcluded.value, data.value.market_rest_excluded_account_ids ?? [])));
 
 async function save() {
   if (!changed.value || busy.value) return;
@@ -52,12 +54,14 @@ async function save() {
     await queryClient.cancelQueries({ queryKey: ["collection-settings"] });
     const result = await api<CollectionSettings>("/settings/collection", "PUT", {
       snapshot_interval_seconds: interval.value,
-      ...(data.value?.market_rest_template !== undefined ? {market_rest_template: restTemplate.value, market_rest_excluded_account_ids: restExcluded.value} : {}),
+      ...(data.value?.market_rest_template !== undefined ? {market_rest_learning_enabled: restLearning.value, market_rest_template: restTemplate.value, market_rest_excluded_account_ids: restExcluded.value} : {}),
     });
     queryClient.setQueryData(["collection-settings"], result);
     draft.value = undefined;
     restDraft.value = undefined;
     excludedDraft.value = undefined;
+    learningDraft.value = undefined;
+    await queryClient.invalidateQueries({queryKey:["rest-learning"]});
     saved.value = true;
     await refreshAccounts();
   } catch (e) {
@@ -102,7 +106,7 @@ async function save() {
       <p v-if="interval === 300" class="muted small collection-description">
         {{ t('collectionSettings.longIntervalClockHint') }}
       </p>
-      <MarketRestSettings v-if="data.market_rest_template !== undefined" v-model:template="restTemplate" v-model:excluded="restExcluded" :disabled="busy" />
+      <MarketRestSettings v-if="data.market_rest_template !== undefined" v-model:learning="restLearning" v-model:template="restTemplate" v-model:excluded="restExcluded" :disabled="busy" />
       <p v-if="saved" role="status" class="collection-saved">
         <CheckCircle2 :size="15" />{{ t('collectionSettings.savedEnabledAccountsWillUseTheNewInterval') }}
       </p>

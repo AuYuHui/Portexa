@@ -55,13 +55,16 @@ var analyticsClockSchema string
 //go:embed migrations/011_market_rest.sql
 var marketRestSchema string
 
+//go:embed migrations/012_rest_learning.sql
+var restLearningSchema string
+
 var ErrNotFound = gorm.ErrRecordNotFound
 var ErrConflict = errors.New("state conflict")
 var ErrDenied = errors.New("operation denied")
 var ErrClosed = errors.New("store closed")
 
 const ApplicationID = 0x50545841
-const SchemaVersion = 11
+const SchemaVersion = 12
 
 type Priority int
 
@@ -287,6 +290,11 @@ func migrate(db *sql.DB) error {
 	}
 	if version < 11 {
 		if _, err = tx.Exec(marketRestSchema); err != nil {
+			return err
+		}
+	}
+	if version < 12 {
+		if _, err = tx.Exec(restLearningSchema); err != nil {
 			return err
 		}
 	}

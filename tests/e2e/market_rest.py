@@ -34,6 +34,42 @@ def check_locale(browser, origin, locale, artifacts):
     template = region.get_by_role("combobox", name="Built-in market rest template" if english else "内置休市模板", exact=True)
     save = region.get_by_role("button", name="Save collection settings" if english else "保存采集设置", exact=True)
     expect(template).to_have_value("fx_metals_weekend_v1")
+    learning = region.get_by_label("Learn weekend market rest hours automatically" if english else "自动学习周末休市时段", exact=True)
+    expect(learning).to_be_checked()
+    groups = context.request.get(origin + "/api/market-rest/learning")
+    assert groups.status == 200 and all(item["valid_weekends"] == 0 for item in groups.json())
+    assert all(item.get("active") is None for item in groups.json())
+    expect(region.locator("[data-rest-learning]")).to_be_visible()
+    # Render an adopted model in the real component without pretending the
+    # two-hour HTTP fixture has four weeks of evidence. Backend adoption is
+    # covered by TestRestLearningAdoptionSchedulingFinancialProofAndConflict.
+    model = {"id": "synthetic-model", "close_minute": 1050, "open_minute": 3870, "expires_at_ms": 1}
+    payload = [{"id": "synthetic-learning-view", "server_id": "synthetic", "server_name": "Synthetic learning", "symbol": "XAUUSD.c", "state": "adopted", "reason": "validated", "valid_weekends": 4, "candidate": model, "active": model}]
+    def model_view(route):
+        route.fulfill(json=payload)
+    page.route("**/api/market-rest/learning", model_view)
+    page.reload()
+    status = region.locator("[data-rest-learning]")
+    expect(status).to_contain_text("Adopted" if english else "已采用")
+    expect(status).to_contain_text("4/4")
+    expect(status).to_contain_text("America/New_York")
+    expect(status).to_contain_text("17:30")
+    for width in (1440, 390, 320):
+        page.set_viewport_size({"width": width, "height": 1100 if width == 1440 else 844})
+        no_page_overflow(page)
+        status.screenshot(path=str(artifacts / f"learning-{locale}-{width}.png"))
+    page.unroute("**/api/market-rest/learning", model_view)
+    page.set_viewport_size({"width": 1440, "height": 1100})
+    page.reload()
+    expect(learning).to_be_checked()
+    learning.uncheck()
+    save.click()
+    expect(save).to_be_disabled()
+    assert context.request.get(origin + "/api/settings/collection").json()["market_rest_learning_enabled"] is False
+    learning.check()
+    save.click()
+    expect(save).to_be_disabled()
+    assert context.request.get(origin + "/api/settings/collection").json()["market_rest_learning_enabled"] is True
     template.select_option("off")
     save.click()
     expect(region.get_by_role("status")).to_be_visible()
@@ -55,6 +91,12 @@ def check_locale(browser, origin, locale, artifacts):
     expect(region.get_by_role("status")).to_be_visible()
     expect(save).to_be_disabled()
     region.screenshot(path=str(artifacts / f"settings-{locale}.png"))
+    for width in (390, 320):
+        page.set_viewport_size({"width": width, "height": 844})
+        no_page_overflow(page)
+        expect(learning).to_be_visible()
+        region.screenshot(path=str(artifacts / f"settings-{locale}-{width}.png"))
+    page.set_viewport_size({"width": 1440, "height": 1100})
 
     query = urlencode({"range": "custom", "account": account["id"], "unit": "USD", "from": start, "to": end})
     with page.expect_response("**/api/analytics?*") as result:

@@ -28,3 +28,12 @@ func (s *Server) updateCollectionSettings(w http.ResponseWriter, r *http.Request
 	s.scheduler.Wake()
 	writeJSON(w, http.StatusOK, settings)
 }
+
+func (s *Server) restLearning(w http.ResponseWriter, r *http.Request) {
+	result, err := s.accounts.RestLearning(r.Context())
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}

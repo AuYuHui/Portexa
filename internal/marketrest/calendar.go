@@ -31,7 +31,11 @@ func Window(at time.Time) (from, to time.Time, closed bool) {
 
 func Reduced(at time.Time) bool {
 	from, to, closed := Window(at)
-	if !closed || at.Before(from.Add(5*time.Minute)) || !at.Before(to.Add(-5*time.Minute)) {
+	return closed && ReducedWindow(at, from, to)
+}
+
+func ReducedWindow(at, from, to time.Time) bool {
+	if at.Before(from.Add(5*time.Minute)) || !at.Before(to.Add(-5*time.Minute)) {
 		return false
 	}
 	local := at.In(beijing)
@@ -43,6 +47,10 @@ func Reduced(at time.Time) bool {
 // wake before it even if the next regular five-minute phase would be later.
 func NextGuard(at time.Time) time.Time {
 	_, end, _ := Window(at)
+	return NextWindowGuard(at, end)
+}
+
+func NextWindowGuard(at, end time.Time) time.Time {
 	local := at.In(beijing)
 	guard := time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, beijing).Add(-2 * time.Minute)
 	if !guard.After(at) {

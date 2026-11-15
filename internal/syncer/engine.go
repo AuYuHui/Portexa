@@ -23,21 +23,23 @@ type Options struct {
 }
 
 type Engine struct {
-	accounts          *accounts.Service
-	fetch             Fetcher
-	interval, timeout time.Duration
-	sem               chan struct{}
-	wake              chan struct{}
-	mu                sync.Mutex
-	active            map[string]context.CancelFunc
-	wg                sync.WaitGroup
-	fatal             chan error
-	logger            *slog.Logger
-	historySem        chan struct{}
-	historyInterval   time.Duration
-	historyActive     map[string]bool
-	historyYielded    map[string]bool
-	nextTimeRefresh   time.Time
+	accounts           *accounts.Service
+	fetch              Fetcher
+	interval, timeout  time.Duration
+	sem                chan struct{}
+	wake               chan struct{}
+	mu                 sync.Mutex
+	active             map[string]context.CancelFunc
+	wg                 sync.WaitGroup
+	fatal              chan error
+	logger             *slog.Logger
+	historySem         chan struct{}
+	historyInterval    time.Duration
+	historyActive      map[string]bool
+	historyYielded     map[string]bool
+	nextTimeRefresh    time.Time
+	nextLearningReview time.Time
+	learningActive     bool
 }
 
 func New(service *accounts.Service, fetch Fetcher, options Options) *Engine {
@@ -111,6 +113,7 @@ func (e *Engine) schedule(ctx context.Context) {
 		}
 		e.nextTimeRefresh = time.Now().Add(30 * time.Second)
 	}
+	e.scheduleRestLearning(ctx)
 	e.scheduleSnapshots(ctx)
 	e.scheduleClock(ctx)
 	e.scheduleDaily(ctx)
@@ -246,4 +249,24 @@ func classify(err error) accounts.Failure {
 		failure.Code = "timeout"
 	}
 	return failure
+}
+
+func (e *Engine) scheduleRestLearning(ctx context.Context) {
+	e.mu.Lock()
+	if e.learningActive || time.Now().Before(e.nextLearningReview) {
+		e.mu.Unlock()
+		return
+	}
+	e.learningActive = true
+	e.nextLearningReview = time.Now().Add(time.Minute)
+	e.wg.Add(1)
+	e.mu.Unlock()
+	go func() {
+		defer func() { e.mu.Lock(); e.learningActive = false; e.mu.Unlock(); e.wg.Done() }()
+		reviewCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		if err := e.accounts.ReviewRestLearning(reviewCtx); err != nil && ctx.Err() == nil {
+			e.logger.Warn("market_learning_review_deferred")
+		}
+	}()
 }

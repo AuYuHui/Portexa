@@ -136,6 +136,7 @@ export interface CollectionSettings {
   snapshot_interval_seconds: number;
   updated_at_ms: number;
   market_rest_template?: string;
+  market_rest_learning_enabled?: boolean;
   market_rest_policy_revision?: number;
   market_rest_excluded_account_ids?: string[];
 }
@@ -224,3 +225,6 @@ export interface DirectoryCandidate {
   fetched_at_ms: number;
   expires_at_ms: number;
 }
+
+export interface RestLearningModel { id: string; close_minute: number; open_minute: number; expires_at_ms: number; }
+export interface RestLearningGroup { id: string; server_id: string; server_name: string; symbol: string; state: string; reason: string; valid_weekends: number; candidate?: RestLearningModel; active?: RestLearningModel; }

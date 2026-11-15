@@ -10,6 +10,7 @@ import (
 )
 
 type CollectionInput struct {
+	MarketRestLearningEnabled    *bool     `json:"market_rest_learning_enabled"`
 	SnapshotIntervalSeconds      int       `json:"snapshot_interval_seconds"`
 	MarketRestTemplate           *string   `json:"market_rest_template"`
 	MarketRestExcludedAccountIDs *[]string `json:"market_rest_excluded_account_ids"`
@@ -25,6 +26,8 @@ func readCollectionSettings(tx *gorm.DB) (storage.CollectionSettings, error) {
 		return settings, err
 	}
 	settings.MarketRestTemplate = policy.Template
+	settings.MarketRestLearningEnabled = policy.LearningEnabled
+	settings.MarketRestLearningEpochMS = policy.LearningEpochMS
 	settings.MarketRestExcludedAccountIDs, err = restExclusions(policy)
 	return settings, err
 }

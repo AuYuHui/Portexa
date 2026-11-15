@@ -114,6 +114,7 @@ type SyncRun struct {
 func (SyncRun) TableName() string { return "sync_runs" }
 
 type Snapshot struct {
+	RestWindowID              string           `gorm:"column:rest_window_id" json:"rest_window_id"`
 	RestPolicyRevision        int64            `gorm:"column:rest_policy_revision" json:"rest_policy_revision"`
 	RestVerified              bool             `gorm:"column:rest_verified" json:"rest_verified"`
 	StateFingerprint          string           `gorm:"column:state_fingerprint" json:"-"`

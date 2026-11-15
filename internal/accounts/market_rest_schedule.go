@@ -43,8 +43,11 @@ func restSchedule(tx *gorm.DB, account storage.Account, snapshot *storage.Snapsh
 		return interval, 0, err
 	}
 	at := time.UnixMilli(snapshot.ObservedToMS)
-	_, end, closed := marketrest.Window(at)
-	if !closed || account.Currency == nil || account.UnitVerifiedAtMS == nil || *account.Currency != snapshot.NativeCurrency || account.UnitRevision != snapshot.UnitRevision || !restPolicyIncludes(policy, account.ID, snapshot.ObservedFromMS) || snapshot.ObservedFromMS > snapshot.ObservedToMS || snapshot.ObservedToMS-snapshot.ObservedFromMS > marketrest.Grace.Milliseconds() {
+	possibleFrom, possibleTo := marketrest.LearnedWindow(at, 17*60, 2*1440+17*60)
+	if at.Before(possibleFrom) || !at.Before(possibleTo) {
+		return interval, 0, nil
+	}
+	if account.Currency == nil || account.UnitVerifiedAtMS == nil || *account.Currency != snapshot.NativeCurrency || account.UnitRevision != snapshot.UnitRevision || !restPolicyIncludes(policy, account.ID, snapshot.ObservedFromMS) || snapshot.ObservedFromMS > snapshot.ObservedToMS || snapshot.ObservedToMS-snapshot.ObservedFromMS > marketrest.Grace.Milliseconds() {
 		return interval, 0, nil
 	}
 	if account.RestBlockedUntilMS > snapshot.ObservedToMS {
@@ -52,7 +55,7 @@ func restSchedule(tx *gorm.DB, account storage.Account, snapshot *storage.Snapsh
 	}
 	for _, position := range positions {
 		if !marketrest.SupportedSymbol(position.Symbol) {
-			return interval, end.UnixMilli(), nil
+			return interval, possibleTo.UnixMilli(), nil
 		}
 	}
 	// Cash-only/new accounts provide no market evidence. Recent published
@@ -67,9 +70,26 @@ func restSchedule(tx *gorm.DB, account storage.Account, snapshot *storage.Snapsh
 	}
 	for _, symbol := range recent {
 		if !marketrest.SupportedSymbol(symbol) {
-			return interval, end.UnixMilli(), nil
+			return interval, possibleTo.UnixMilli(), nil
 		}
 	}
+	symbols := slices.Clone(recent)
+	observable := map[string]bool{}
+	for _, p := range positions {
+		symbols = append(symbols, p.Symbol)
+		if (p.Command == 0 || p.Command == 1) && p.VolumeHundredths > 0 && p.CurrentPrice.IsPositive() {
+			observable[normalizeRestSymbol(p.Symbol)] = true
+		}
+	}
+	window, closed, err := resolveRestWindow(tx, account, policy, symbols, observable, at)
+	if err != nil {
+		return interval, 0, err
+	}
+	if !closed {
+		return interval, 0, nil
+	}
+	from, end := time.UnixMilli(window.FromMS), time.UnixMilli(window.UntilMS)
+	snapshot.RestWindowID = window.ID
 	snapshot.RestPolicyRevision = policy.Revision
 	if account.CurrentSnapshotID == nil {
 		return interval, 0, nil
@@ -78,7 +98,7 @@ func restSchedule(tx *gorm.DB, account storage.Account, snapshot *storage.Snapsh
 	if err = tx.First(&before, "id=? AND account_id=?", *account.CurrentSnapshotID, account.ID).Error; err != nil {
 		return interval, 0, err
 	}
-	if before.StateFingerprint == "" || before.RestPolicyRevision != policy.Revision {
+	if before.StateFingerprint == "" || before.RestPolicyRevision != policy.Revision || before.RestWindowID != snapshot.RestWindowID {
 		return interval, 0, nil
 	}
 	maxGap := marketrest.Grace.Milliseconds()
@@ -93,7 +113,7 @@ func restSchedule(tx *gorm.DB, account storage.Account, snapshot *storage.Snapsh
 		return interval, 0, nil
 	}
 	snapshot.RestVerified = true
-	if marketrest.Reduced(at) {
+	if marketrest.ReducedWindow(at, from, end) {
 		interval = max(interval, marketrest.Interval)
 	} else {
 		interval = min(interval, time.Minute)
@@ -101,20 +121,22 @@ func restSchedule(tx *gorm.DB, account storage.Account, snapshot *storage.Snapsh
 	return interval, 0, nil
 }
 
-func restNextSnapshot(id string, at time.Time, interval time.Duration, verified bool) int64 {
+func restNextSnapshot(tx *gorm.DB, id string, snapshot storage.Snapshot, interval time.Duration) (int64, error) {
+	at := time.UnixMilli(snapshot.ObservedToMS)
 	next := NextSnapshotAt(id, at, interval)
-	if verified && marketrest.Reduced(at) && interval >= marketrest.Interval {
-		if guard := marketrest.NextGuard(at); guard.After(at) && guard.Before(next) {
+	from, to, closed, err := snapshotRestBounds(tx, snapshot, at)
+	if err != nil {
+		return 0, err
+	}
+	if snapshot.RestVerified && closed && marketrest.ReducedWindow(at, from, to) && interval >= marketrest.Interval {
+		if guard := marketrest.NextWindowGuard(at, to); guard.After(at) && guard.Before(next) {
 			next = guard
 		}
 	}
-	return next.UnixMilli()
+	return next.UnixMilli(), nil
 }
 
 func restBackgroundRefresh(tx *gorm.DB, account storage.Account, at time.Time) (time.Duration, error) {
-	if !marketrest.Reduced(at) {
-		return 0, nil
-	}
 	stable, err := restCurrentlyStable(tx, account, at)
 	if err != nil {
 		return 0, err
@@ -136,14 +158,42 @@ func restHistoryFreshness(tx *gorm.DB, account storage.Account, at time.Time) (t
 	return 10 * time.Minute, nil
 }
 
-func restSnapshotTemplateActive(account storage.Account, snapshot storage.Snapshot, settings storage.CollectionSettings, at time.Time) bool {
-	_, _, closed := marketrest.Window(at)
-	return closed && account.SyncEnabled && account.FailureCount == 0 && account.RestBlockedUntilMS <= at.UnixMilli() && snapshot.RestVerified && snapshot.RestPolicyRevision == settings.MarketRestPolicyRevision && settings.MarketRestTemplate == marketrest.Template && !slices.Contains(settings.MarketRestExcludedAccountIDs, account.ID) && account.Currency != nil && account.UnitVerifiedAtMS != nil && snapshot.UnitRevision == account.UnitRevision && snapshot.NativeCurrency == *account.Currency
+func restSnapshotTemplateActive(tx *gorm.DB, account storage.Account, snapshot storage.Snapshot, settings storage.CollectionSettings, at time.Time) (bool, error) {
+	_, _, closed, err := snapshotRestBounds(tx, snapshot, at)
+	if err != nil {
+		return false, err
+	}
+	if !(closed && account.SyncEnabled && account.FailureCount == 0 && account.RestBlockedUntilMS <= at.UnixMilli() && snapshot.RestVerified && snapshot.RestPolicyRevision == settings.MarketRestPolicyRevision && settings.MarketRestTemplate == marketrest.Template && !slices.Contains(settings.MarketRestExcludedAccountIDs, account.ID) && account.Currency != nil && account.UnitVerifiedAtMS != nil && snapshot.UnitRevision == account.UnitRevision && snapshot.NativeCurrency == *account.Currency) {
+		return false, nil
+	}
+	// A conflict discovered by another account takes effect immediately.
+	if snapshot.RestWindowID != "" {
+		var w storage.MarketRestWindow
+		if err = tx.First(&w, "id=?", snapshot.RestWindowID).Error; err != nil {
+			return false, err
+		}
+		var ids []string
+		if err = json.Unmarshal([]byte(w.ModelIDsJSON), &ids); err != nil {
+			return false, err
+		}
+		for _, id := range ids {
+			var event storage.MarketLearningEvent
+			if err = tx.Where("model_id=?", id).Order("id DESC").First(&event).Error; err != nil {
+				return false, err
+			}
+			var model storage.MarketLearningModel
+			if err = tx.First(&model, "id=?", id).Error; err != nil {
+				return false, err
+			}
+			if event.State != "adopted" || model.ExpiresAtMS <= at.UnixMilli() {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
 }
-
 func restCurrentlyStable(tx *gorm.DB, account storage.Account, at time.Time) (bool, error) {
-	_, _, closed := marketrest.Window(at)
-	if !closed || !account.SyncEnabled || account.FailureCount > 0 || account.CurrentSnapshotID == nil || account.RestBlockedUntilMS > at.UnixMilli() {
+	if !account.SyncEnabled || account.FailureCount > 0 || account.CurrentSnapshotID == nil || account.RestBlockedUntilMS > at.UnixMilli() {
 		return false, nil
 	}
 	settings, err := readCollectionSettings(tx)
@@ -154,6 +204,14 @@ func restCurrentlyStable(tx *gorm.DB, account storage.Account, at time.Time) (bo
 	if err = tx.First(&latest, "id=? AND account_id=?", *account.CurrentSnapshotID, account.ID).Error; err != nil {
 		return false, err
 	}
+	active, err := restSnapshotTemplateActive(tx, account, latest, settings, at)
+	if err != nil {
+		return false, err
+	}
+	from, to, _, err := snapshotRestBounds(tx, latest, at)
+	if err != nil {
+		return false, err
+	}
 	age := at.UnixMilli() - latest.ObservedToMS
-	return restSnapshotTemplateActive(account, latest, settings, at) && age >= 0 && age <= (marketrest.Interval+marketrest.Grace).Milliseconds(), nil
+	return active && marketrest.ReducedWindow(at, from, to) && age >= 0 && age <= (marketrest.Interval+marketrest.Grace).Milliseconds(), nil
 }

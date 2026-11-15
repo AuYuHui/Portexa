@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"portexa/internal/marketrest"
 	"portexa/internal/storage"
 	"portexa/mt4"
 )
@@ -170,7 +169,7 @@ func (s *Service) PublishDaily(ctx context.Context, job DailyJob, report storage
 				return err
 			} else if rest > 0 {
 				next = max(next, *report.FinishedAtMS+rest.Milliseconds())
-				next = min(next, job.Day.NextDayUTC.UnixMilli(), marketrest.NextGuard(time.UnixMilli(*report.FinishedAtMS)).UnixMilli())
+				next = min(next, job.Day.NextDayUTC.UnixMilli(), restRefreshGuard(tx, current, time.UnixMilli(*report.FinishedAtMS)))
 			}
 		}
 		return tx.Model(&current).Updates(map[string]any{"next_daily_sync_at_ms": next, "daily_failure_count": 0, "daily_sync_paused": false}).Error

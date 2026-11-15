@@ -175,6 +175,9 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 		if err := tx.Create(&snapshot).Error; err != nil {
 			return err
 		}
+		if err := captureRestActivity(tx, current, snapshot, positions, settings); err != nil {
+			return err
+		}
 		if len(observations) > 0 && current.CurrentSnapshotID != nil && job.Account.CurrentSnapshotID != nil && *current.CurrentSnapshotID == *job.Account.CurrentSnapshotID {
 			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(&observations, 100).Error; err != nil {
 				return err
@@ -192,7 +195,10 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 		if next != nil {
 			nextAt = *next
 		} else {
-			nextAt = restNextSnapshot(current.ID, time.UnixMilli(snapshot.ObservedToMS), interval, snapshot.RestVerified)
+			nextAt, err = restNextSnapshot(tx, current.ID, snapshot, interval)
+			if err != nil {
+				return err
+			}
 		}
 		updates := map[string]any{"current_snapshot_id": snapshot.ID, "next_sync_at_ms": nextAt, "failure_count": 0}
 		if blockedUntil > 0 {

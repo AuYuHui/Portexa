@@ -11,11 +11,17 @@ import (
 )
 
 func restPairPossible(a, b storage.Snapshot) bool {
+	if a.RestWindowID != b.RestWindowID {
+		return false
+	}
 	if !a.RestVerified || !b.RestVerified || a.RestPolicyRevision == 0 || a.RestPolicyRevision != b.RestPolicyRevision || a.StateFingerprint == "" || a.StateFingerprint != b.StateFingerprint || a.AccountID != b.AccountID || a.UnitRevision != b.UnitRevision || a.NativeCurrency != b.NativeCurrency || a.CollectionIntervalSeconds == nil {
 		return false
 	}
 	if b.ObservedFromMS < a.ObservedToMS || b.ObservedToMS-a.ObservedToMS > int64(*a.CollectionIntervalSeconds)*1000+marketrest.Grace.Milliseconds() || a.ObservedToMS-a.ObservedFromMS > analytics.MaxAge || b.ObservedToMS-b.ObservedFromMS > analytics.MaxAge {
 		return false
+	}
+	if a.RestWindowID != "" {
+		return true
 	}
 	_, end, closed := marketrest.Window(time.UnixMilli(a.ObservedFromMS - 999))
 	return closed && b.ObservedToMS < end.UnixMilli()
@@ -26,6 +32,22 @@ func restPairPossible(a, b storage.Snapshot) bool {
 func (s *Service) restBridge(ctx context.Context, source *analyticsSource, a, b storage.Snapshot, unit string) (bool, error) {
 	if !restPairPossible(a, b) {
 		return false, nil
+	}
+	if a.RestWindowID != "" {
+		if source.restWindows == nil {
+			source.restWindows = map[string]storage.MarketRestWindow{}
+		}
+		w, ok := source.restWindows[a.RestWindowID]
+		if !ok {
+			if err := s.Store.Read.WithContext(ctx).First(&w, "id=? AND account_id=? AND policy_revision=?", a.RestWindowID, a.AccountID, a.RestPolicyRevision).Error; err != nil {
+				return false, err
+			}
+			source.restWindows[w.ID] = w
+			fmt.Fprintf(source.hash, "rest-window:%s:%d:%d:%d:%s|", w.ID, w.FromMS, w.UntilMS, w.EffectiveAtMS, w.ModelIDsJSON)
+		}
+		if a.ObservedFromMS-999 < max(w.FromMS, w.EffectiveAtMS) || b.ObservedToMS >= w.UntilMS {
+			return false, nil
+		}
 	}
 	if source.restPolicies == nil {
 		source.restPolicies = map[int64]storage.MarketRestPolicy{}
