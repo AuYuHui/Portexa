@@ -34,7 +34,7 @@ Go 标准 HTTP 服务提供同源 API 与构建后的 Vue 静态资源。SQLite 
 | `PUT /api/auth/password` | 核验原密码并设置新密码，撤销所有会话 |
 | `GET /api/overview` | 最近已知资金合计、账户列表、采样范围和缺失状态 |
 | `GET /api/settings/collection` | 当前全局快照采集周期及设置更新时间 |
-| `PUT /api/settings/collection` | 保存 `snapshot_interval_seconds`，仅允许30、60、120、300秒；后续调度无需重启即生效 |
+| `PUT /api/settings/collection` | 保存 `snapshot_interval_seconds`（30、60、120、300秒）及可选休市模板、例外账户；后续调度无需重启即生效，见[休市规则](market-rest.md) |
 | `GET /api/servers` | 服务器及接入点状态，不包含凭据 |
 | `PUT /api/servers/{id}/time-zone` | 切回自动时间或保存高级手动校正，按规则版本防止覆盖并发修改 |
 | `GET /api/server-directory?q=...` | 登录后搜索 MT4 经纪商或服务器，返回短期有效候选 |

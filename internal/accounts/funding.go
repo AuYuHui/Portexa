@@ -57,6 +57,10 @@ func readFundingView(tx *gorm.DB, account storage.Account, server storage.Server
 		}
 	}
 	known := false
+	freshness, err := restHistoryFreshness(tx, account, now)
+	if err != nil {
+		return view, err
+	}
 	recentThrough := day.Start
 	for _, window := range coverage {
 		if window.CheckedAtMS != nil {
@@ -68,7 +72,7 @@ func readFundingView(tx *gorm.DB, account storage.Account, server storage.Server
 			if window.StartWall <= view.CoveredThroughWall && window.EndWall > view.CoveredThroughWall {
 				view.CoveredThroughWall = window.EndWall
 			}
-			if window.StartWall <= recentThrough && window.EndWall > recentThrough && now.UnixMilli()-*window.CheckedAtMS <= (10*time.Minute).Milliseconds() {
+			if window.StartWall <= recentThrough && window.EndWall > recentThrough && now.UnixMilli()-*window.CheckedAtMS <= freshness.Milliseconds() {
 				recentThrough = window.EndWall
 			}
 		}

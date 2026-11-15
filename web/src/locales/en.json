@@ -246,6 +246,17 @@
     "noMatchingAccountsTryAnotherNameLoginOr": "No matching accounts. Try another name, login, or broker."
   },
   "collectionSettings": {
+    "marketRest": "Market rest sampling",
+    "marketRestTemplate": "Built-in market rest template",
+    "marketRestOff": "Off — always use the regular interval",
+    "marketRestWeekend": "Forex / metals weekend (conservative window)",
+    "marketRestWindow": "Friday 18:00 to Sunday 16:00, New York time, with automatic DST. Regular sampling resumes near session boundaries and Beijing midnight.",
+    "marketRestIntervals": "After stable snapshots, collect every 5 minutes and check daily/recent history every 15 minutes. Manual refresh and history backfill remain available.",
+    "marketRestSafety": "Applies to recognized forex/metals accounts. Unknown instruments, account changes or collection failures restore regular sampling. Carried valuations require matching bracketing snapshots and complete ledger evidence.",
+    "marketRestExceptions": "Exceptions: always use regular sampling",
+    "restActive": "{count} accounts using market rest sampling (5 minutes)",
+    "restValuations": "{count} market-rest minute valuations are supported by matching bracketing snapshots and complete history; values are sampled estimates.",
+    "restPoint": "Verified market-rest carried valuation",
     "collectionSettings": "Collection settings",
     "setASharedFundsAndPositionsCollectionInterval": "Set a shared funds and positions collection interval for enabled accounts. No restart required.",
     "loadingCollectionSettings": "Loading collection settings…",

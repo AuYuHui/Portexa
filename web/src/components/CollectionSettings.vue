@@ -7,6 +7,7 @@ import { Clock, RefreshCw, CheckCircle2 } from "@lucide/vue";
 import { api } from "../api";
 import { queryClient, refreshAccounts } from "../state";
 import type { CollectionSettings } from "../types";
+import MarketRestSettings from "./MarketRestSettings.vue";
 
 const { t } = useI18n();
 
@@ -20,6 +21,18 @@ const draft = ref<number>();
 const busy = ref(false);
 const saved = ref(false);
 const saveError = ref("");
+const restDraft = ref<string>();
+const excludedDraft = ref<string[]>();
+function editing() { saved.value = false; saveError.value = ""; }
+const restTemplate = computed({
+  get: () => restDraft.value ?? data.value?.market_rest_template ?? "off",
+  set: (value: string) => { restDraft.value = value; editing(); },
+});
+const restExcluded = computed({
+  get: () => excludedDraft.value ?? data.value?.market_rest_excluded_account_ids ?? [],
+  set: (value: string[]) => { excludedDraft.value = value; editing(); },
+});
+function sameIDs(a: string[], b: string[]) { return JSON.stringify([...a].sort()) === JSON.stringify([...b].sort()); }
 const interval = computed({
   get: () => draft.value ?? data.value?.snapshot_interval_seconds ?? 60,
   set: (value: number) => {
@@ -28,7 +41,7 @@ const interval = computed({
     saveError.value = "";
   },
 });
-const changed = computed(() => data.value && interval.value !== data.value.snapshot_interval_seconds);
+const changed = computed(() => data.value && (interval.value !== data.value.snapshot_interval_seconds || restTemplate.value !== (data.value.market_rest_template ?? "off") || !sameIDs(restExcluded.value, data.value.market_rest_excluded_account_ids ?? [])));
 
 async function save() {
   if (!changed.value || busy.value) return;
@@ -39,9 +52,12 @@ async function save() {
     await queryClient.cancelQueries({ queryKey: ["collection-settings"] });
     const result = await api<CollectionSettings>("/settings/collection", "PUT", {
       snapshot_interval_seconds: interval.value,
+      ...(data.value?.market_rest_template !== undefined ? {market_rest_template: restTemplate.value, market_rest_excluded_account_ids: restExcluded.value} : {}),
     });
     queryClient.setQueryData(["collection-settings"], result);
     draft.value = undefined;
+    restDraft.value = undefined;
+    excludedDraft.value = undefined;
     saved.value = true;
     await refreshAccounts();
   } catch (e) {
@@ -86,6 +102,7 @@ async function save() {
       <p v-if="interval === 300" class="muted small collection-description">
         {{ t('collectionSettings.longIntervalClockHint') }}
       </p>
+      <MarketRestSettings v-if="data.market_rest_template !== undefined" v-model:template="restTemplate" v-model:excluded="restExcluded" :disabled="busy" />
       <p v-if="saved" role="status" class="collection-saved">
         <CheckCircle2 :size="15" />{{ t('collectionSettings.savedEnabledAccountsWillUseTheNewInterval') }}
       </p>

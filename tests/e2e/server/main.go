@@ -38,6 +38,7 @@ func run() error {
 	tradeClock := flag.Bool("trade-clock", false, "calibrate an unknown synthetic server using newly closed trades")
 	assetTrends := flag.Bool("asset-trends", false, "seed synthetic asset history and membership changes")
 	analyticsMode := flag.Bool("analytics", false, "seed reconciled synthetic performance evidence without starting collection")
+	marketRestMode := flag.Bool("market-rest", false, "seed verified synthetic weekend sampling without starting collection")
 	flag.Parse()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -141,6 +142,11 @@ func run() error {
 			return err
 		}
 	}
+	if *marketRestMode {
+		if err := seedMarketRest(ctx, service); err != nil {
+			return err
+		}
+	}
 	if *tradeClock {
 		if err := seedTradeClock(ctx, service); err != nil {
 			return err
@@ -161,7 +167,7 @@ func run() error {
 	httpServer := &http.Server{Addr: *listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 	done := make(chan error, 1)
 	go func() {
-		if *analyticsMode {
+		if *analyticsMode || *marketRestMode {
 			<-ctx.Done()
 			done <- nil
 		} else {

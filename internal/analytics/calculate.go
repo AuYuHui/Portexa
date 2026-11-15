@@ -152,6 +152,9 @@ func Calculate(ctx context.Context, input Input, details bool) (Result, error) {
 		reasons[i] = SampleReason(sample, input.Events)
 		if reasons[i] == "" {
 			q.ValidPoints++
+			if sample.RestCarried {
+				q.RestCarriedPoints++
+			}
 			if sample.UnknownCadence {
 				q.UnknownCadence++
 			}

@@ -137,6 +137,7 @@ async function toggleSync() {
         <StatusBadge
           :state="data.account.sync_state"
           :stale="data.account.stale"
+          :rest="data.account.market_rest"
         /><span class="muted small">{{
           current
             ? t('account.latestSample', { value1: date(current.observed_from_ms), value2: date(current.observed_to_ms) })

@@ -92,7 +92,7 @@ func calendar(ctx context.Context, input Input) ([]Day, error) {
 			Partial: day.Partial, NetProfit: result.Metrics.NetProfit,
 			Realized: result.Metrics.Realized, FloatingChange: result.Metrics.FloatingChange,
 			OtherIncome: result.Metrics.OtherIncome, Costs: result.Metrics.Costs, Trades: trades,
-			BoundaryOffsetMS: result.Quality.BoundaryOffsetMS, LaterBoundary: result.Quality.LaterBoundary}
+			BoundaryOffsetMS: result.Quality.BoundaryOffsetMS, LaterBoundary: result.Quality.LaterBoundary, RestCarriedPoints: result.Quality.RestCarriedPoints}
 	}
 	return days, nil
 }

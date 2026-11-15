@@ -73,6 +73,9 @@ const breakdown = computed(() => [
     <p v-if="day.net_profit.reasons.length" class="notice notice-warning">
       {{ performanceReasons(day.net_profit.reasons) }}
     </p>
+    <p v-if="day.rest_carried_points" class="muted small" data-rest-evidence>
+      {{ t("collectionSettings.restValuations", { count: day.rest_carried_points }) }}
+    </p>
     <h3>{{ t("analytics.activity") }}</h3>
     <p class="muted small">{{ t("analytics.activityHint") }}</p>
     <p v-if="error" role="alert" class="notice notice-error">

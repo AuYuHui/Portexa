@@ -237,6 +237,7 @@ function openDay(day: PerformanceDay) {
         {{ t('analytics.coverageHint') }}
         <span v-if="result.quality.observed_from_ms">{{ t('analytics.firstObservation', { time: trendDate(result.quality.observed_from_ms) }) }}</span>
         <span v-if="result.quality.unknown_cadence">{{ t('analytics.legacySamples', { count: result.quality.unknown_cadence }) }}</span>
+        <span v-if="result.quality.rest_carried_points" data-rest-evidence>{{ t('collectionSettings.restValuations', { count: result.quality.rest_carried_points }) }}</span>
       </p>
       <PerformanceKpis :result="result" />
       <div class="performance-bridge">

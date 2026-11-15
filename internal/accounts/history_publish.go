@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"portexa/internal/marketrest"
 	"portexa/internal/storage"
 )
 
@@ -129,6 +130,24 @@ func (s *Service) PublishHistory(ctx context.Context, job HistoryJob, orders []s
 				ON CONFLICT(account_id,ticket) DO UPDATE SET revision=excluded.revision`, job.Run.ID).Error; err != nil {
 				return err
 			}
+			if _, end, closed := marketrest.Window(time.UnixMilli(finished)); closed && snapshot.RestVerified {
+				for _, order := range changed {
+					if order.EventTimeWall >= job.Day.Start {
+						updates := map[string]any{"rest_blocked_until_ms": end.UnixMilli()}
+						if current.FailureCount == 0 {
+							updates["next_sync_at_ms"] = min(current.NextSyncAtMS, finished)
+						}
+						if current.DailyFailureCount == 0 && !current.DailySyncPaused {
+							updates["next_daily_sync_at_ms"] = min(current.NextDailySyncAtMS, finished+1000)
+						}
+						if err = tx.Model(&current).Updates(updates).Error; err != nil {
+							return err
+						}
+						current.RestBlockedUntilMS = end.UnixMilli()
+						break
+					}
+				}
+			}
 		}
 		if err = tx.Model(&run).Updates(map[string]any{"state": "succeeded", "finished_at_ms": finished, "completion_reason": "complete"}).Error; err != nil {
 			return err
@@ -136,9 +155,18 @@ func (s *Service) PublishHistory(ctx context.Context, job HistoryJob, orders []s
 		refresh := 24 * time.Hour
 		if job.Coverage.StartWall >= job.Day.Start {
 			refresh = 5 * time.Minute
+			if rest, err := restBackgroundRefresh(tx, current, time.UnixMilli(finished)); err != nil {
+				return err
+			} else if rest > refresh {
+				refresh = rest
+			}
+		}
+		nextAttempt := finished + refresh.Milliseconds()
+		if refresh == marketrest.HistoryInterval {
+			nextAttempt = min(nextAttempt, job.Day.NextDayUTC.UnixMilli(), marketrest.NextGuard(time.UnixMilli(finished)).UnixMilli())
 		}
 		if err = tx.Model(&job.Coverage).Updates(map[string]any{"state": "complete", "checked_at_ms": finished, "failure_count": 0,
-			"next_attempt_at_ms": finished + refresh.Milliseconds()}).Error; err != nil {
+			"next_attempt_at_ms": nextAttempt}).Error; err != nil {
 			return err
 		}
 		return tx.Model(&current).Updates(map[string]any{"next_history_sync_at_ms": finished + 1000, "history_sync_paused": false}).Error

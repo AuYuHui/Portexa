@@ -19,7 +19,7 @@ export function pointQuality(point: TrendPoint): string {
     unit_changed: t("trend.unitChanged"),
   };
   return point.reason ? reasons[point.reason] || t("trend.unavailable")
-    : !point.cadence_known ? t("trend.cadenceUnknownPoint") : t("trend.completePoint");
+    : point.rest_carried ? t("collectionSettings.restPoint") : !point.cadence_known ? t("trend.cadenceUnknownPoint") : t("trend.completePoint");
 }
 
 export function eventName(event: TrendEvent): string {

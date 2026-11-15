@@ -139,6 +139,7 @@ watch(currency, () => { selected.value = undefined; detailPage.value = 0; });
         <Info :size="14" /><p>{{ t('trend.assetNotReturn') }} {{ t('trend.creditIncluded') }}
           <span v-if="!accountId">{{ t('trend.alignment') }}</span>
           <span v-if="data.unknown_cadence">{{ t('trend.unknownCadence') }}</span>
+          <span v-if="data.rest_carried_points" data-rest-evidence>{{ t('collectionSettings.restValuations', { count: data.rest_carried_points }) }}</span>
           <span v-if="data.unplaced_events || data.events_truncated">{{ t('trend.partialEvents') }}</span>
           {{ t('trend.markersScope') }}
         </p>

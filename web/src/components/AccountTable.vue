@@ -206,7 +206,7 @@ const columns: ColumnDef<Account>[] = [
     id: "state",
     header: () => t('accountTable.syncStatus'),
     cell: ({ row: { original: a } }) =>
-      h(StatusBadge, { state: a.sync_state, stale: a.stale }),
+      h(StatusBadge, { state: a.sync_state, stale: a.stale, rest: a.market_rest }),
   },
   {
     id: "time",

@@ -35,6 +35,7 @@ export interface PerformanceQuality {
   last_sample_id: string;
   boundary_offset_ms: number;
   later_boundary: boolean;
+  rest_carried_points: number;
 }
 export interface PerformancePoint {
   time_ms: number;
@@ -56,6 +57,7 @@ export interface PerformanceDay {
   other_income: PerformanceMetric;
   costs: PerformanceMetric;
   trades: number | null;
+  rest_carried_points: number;
   boundary_offset_ms: number;
   later_boundary: boolean;
 }

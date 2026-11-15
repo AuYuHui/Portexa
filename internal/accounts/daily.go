@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"portexa/internal/marketrest"
 	"portexa/internal/storage"
 	"portexa/mt4"
 )
@@ -164,6 +165,14 @@ func (s *Service) PublishDaily(ctx context.Context, job DailyJob, report storage
 		if result.RowsAffected != 1 {
 			return storage.ErrConflict
 		}
+		if report.FinishedAtMS != nil {
+			if rest, err := restBackgroundRefresh(tx, current, time.UnixMilli(*report.FinishedAtMS)); err != nil {
+				return err
+			} else if rest > 0 {
+				next = max(next, *report.FinishedAtMS+rest.Milliseconds())
+				next = min(next, job.Day.NextDayUTC.UnixMilli(), marketrest.NextGuard(time.UnixMilli(*report.FinishedAtMS)).UnixMilli())
+			}
+		}
 		return tx.Model(&current).Updates(map[string]any{"next_daily_sync_at_ms": next, "daily_failure_count": 0, "daily_sync_paused": false}).Error
 	})
 }
@@ -227,7 +236,11 @@ func readDailyView(tx *gorm.DB, account storage.Account, server storage.Server, 
 	}
 	if err == nil {
 		view.Report = &report
-		view.Stale = report.FinishedAtMS == nil || now.UnixMilli()-*report.FinishedAtMS > (10*time.Minute).Milliseconds()
+		freshness, err := restHistoryFreshness(tx, account, now)
+		if err != nil {
+			return view, err
+		}
+		view.Stale = report.FinishedAtMS == nil || now.UnixMilli()-*report.FinishedAtMS > freshness.Milliseconds()
 	}
 	if !account.SyncEnabled || account.DailySyncPaused {
 		view.State = "paused"

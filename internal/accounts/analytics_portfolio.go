@@ -48,6 +48,15 @@ func (s *Service) addAnalyticsPortfolio(ctx context.Context, p *analyticsPortfol
 			continue
 		}
 		slot.Included++
+		alignedFrom, alignedTo := sample.ObservedFromMS, sample.ObservedToMS
+		if sample.RestCarried {
+			alignedFrom, alignedTo = sample.TimeMS, sample.TimeMS
+		}
+		if slot.AlignedFromMS == 0 || alignedFrom < slot.AlignedFromMS {
+			slot.AlignedFromMS = alignedFrom
+		}
+		slot.AlignedToMS = max(slot.AlignedToMS, alignedTo)
+		slot.RestCarried = slot.RestCarried || sample.RestCarried
 		slot.Windows = append(slot.Windows, sample.Windows...)
 		slot.UnknownCadence = slot.UnknownCadence || sample.UnknownCadence
 		if slot.ObservedFromMS == 0 || sample.ObservedFromMS < slot.ObservedFromMS {
@@ -234,7 +243,7 @@ func (s *Service) finishAnalyticsPortfolio(ctx context.Context, p *analyticsPort
 			point.Reason = "no_members"
 		} else if point.Expected != point.Included {
 			point.Reason = "missing_samples"
-		} else if point.ObservedToMS-point.ObservedFromMS > analytics.MaxAge {
+		} else if point.AlignedToMS-point.AlignedFromMS > analytics.MaxAge {
 			point.Reason = "sampling_skew"
 		}
 		if point.Expected > 0 {

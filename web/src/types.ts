@@ -42,6 +42,8 @@ export interface Account {
   snapshot: Snapshot | null;
   last_run: Run | null;
   stale: boolean;
+  market_rest?: boolean;
+  effective_collection_interval_seconds?: number;
   daily: DailyView;
   funding?: FundingView;
 }
@@ -133,6 +135,9 @@ export interface Totals {
 export interface CollectionSettings {
   snapshot_interval_seconds: number;
   updated_at_ms: number;
+  market_rest_template?: string;
+  market_rest_policy_revision?: number;
+  market_rest_excluded_account_ids?: string[];
 }
 
 export interface Overview {

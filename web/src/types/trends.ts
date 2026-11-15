@@ -18,6 +18,7 @@ export interface TrendPoint {
   expected_accounts: number;
   included_accounts: number;
   cadence_known: boolean;
+  rest_carried: boolean;
 }
 
 export interface TrendEvent {
@@ -56,4 +57,5 @@ export interface TrendSeries {
   last_observed_to_ms: number;
   included_from_ms: number;
   stale: boolean;
+  rest_carried_points: number;
 }

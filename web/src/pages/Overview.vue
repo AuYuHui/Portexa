@@ -181,6 +181,7 @@ const healthy = computed(
           <span
             ><span class="status-dot" />{{ t('overview.collectionSchedule', { seconds: data.collection_settings?.snapshot_interval_seconds ?? 60 }) }}</span
           ><span>{{ t('overview.dashboardUpdated') }} {{ date(data.as_of_ms) }}</span>
+          <span v-if="data.accounts.some(account => account.market_rest)" data-market-rest>{{ t('collectionSettings.restActive', { count: data.accounts.filter(account => account.market_rest).length }) }}</span>
         </div>
       </section>
       <section class="bottom-grid">

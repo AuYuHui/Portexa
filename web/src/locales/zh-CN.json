@@ -246,6 +246,17 @@
     "noMatchingAccountsTryAnotherNameLoginOr": "未找到匹配的账户，请尝试搜索其他名称、账号或经纪商。"
   },
   "collectionSettings": {
+    "marketRest": "休市降频",
+    "marketRestTemplate": "内置休市模板",
+    "marketRestOff": "关闭，始终按常规周期采集",
+    "marketRestWeekend": "外汇 / 贵金属周末（保守时段）",
+    "marketRestWindow": "纽约时间周五 18:00 至周日 16:00，自动适配夏令时。开闭市附近及北京时间日界前后恢复常规采集。",
+    "marketRestIntervals": "确认稳定后，快照每 5 分钟、当日统计及近期历史每 15 分钟核对；手动刷新和历史补漏保持可用。",
+    "marketRestSafety": "适用于已识别的外汇、贵金属账户；未知品种、资金持仓变化或采集异常会恢复常规频率。估值延续须由前后快照和完整流水共同核验。",
+    "marketRestExceptions": "例外账户：始终按常规周期采集",
+    "restActive": "{count} 个账户正在休市降频（5 分钟）",
+    "restValuations": "{count} 个休市分钟估值已由前后快照和完整流水核验，按采样估算展示。",
+    "restPoint": "休市延续估值（已核对）",
     "collectionSettings": "采集设置",
     "setASharedFundsAndPositionsCollectionInterval": "统一设置已启用账户的资金与持仓采集周期，保存后无需重启。",
     "loadingCollectionSettings": "正在加载采集设置…",

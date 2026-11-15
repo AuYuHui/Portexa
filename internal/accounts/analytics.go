@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"portexa/internal/analytics"
+	"portexa/internal/marketrest"
 	"portexa/internal/storage"
 )
 
@@ -140,6 +141,23 @@ func (s *Service) Analytics(ctx context.Context, requested AnalyticsRequest) (An
 			return view, err
 		}
 	}
+	freshness := 10 * time.Minute
+	allRest, required := true, 0
+	for _, source := range sources {
+		if input.AccountID == "" && (source.account.USDScale == nil || source.account.IncludedAtMS == nil) {
+			continue
+		}
+		required++
+		stable, err := restCurrentlyStable(s.Store.Read.WithContext(ctx), source.account, s.Now())
+		if err != nil {
+			return view, err
+		}
+		allRest = allRest && stable
+	}
+	if required > 0 && allRest {
+		freshness = marketrest.HistoryInterval + marketrest.Grace
+	}
+	view.Stale = cutoff < view.GeneratedAtMS-freshness.Milliseconds()
 	current, err := analyticsRevision(s.Store.Read.WithContext(ctx))
 	if err != nil {
 		return view, err
@@ -147,7 +165,6 @@ func (s *Service) Analytics(ctx context.Context, requested AnalyticsRequest) (An
 	if current != view.SourceRevision {
 		return view, ErrAnalyticsChanged
 	}
-	view.Stale = cutoff < view.GeneratedAtMS-(10*time.Minute).Milliseconds()
 	sort.SliceStable(view.Accounts, func(i, j int) bool {
 		a, b := view.Accounts[i].Metrics.ReturnPct.Value, view.Accounts[j].Metrics.ReturnPct.Value
 		if a == nil {

@@ -57,6 +57,7 @@ func (e Endpoint) Approved() bool {
 }
 
 type Account struct {
+	RestBlockedUntilMS       int64            `gorm:"column:rest_blocked_until_ms" json:"-"`
 	ID                       string           `gorm:"column:id;primaryKey" json:"-"`
 	ServerID                 string           `gorm:"column:server_id" json:"-"`
 	PinnedEndpointID         string           `gorm:"column:pinned_endpoint_id" json:"-"`
@@ -113,6 +114,9 @@ type SyncRun struct {
 func (SyncRun) TableName() string { return "sync_runs" }
 
 type Snapshot struct {
+	RestPolicyRevision        int64            `gorm:"column:rest_policy_revision" json:"rest_policy_revision"`
+	RestVerified              bool             `gorm:"column:rest_verified" json:"rest_verified"`
+	StateFingerprint          string           `gorm:"column:state_fingerprint" json:"-"`
 	CollectionIntervalSeconds *int             `gorm:"column:collection_interval_seconds" json:"collection_interval_seconds"`
 	ID                        string           `gorm:"column:id;primaryKey" json:"id"`
 	AccountID                 string           `gorm:"column:account_id" json:"account_id"`

@@ -4,7 +4,7 @@ package analytics
 
 import "github.com/shopspring/decimal"
 
-const Version = "analytics-v4-md24-boundary-valuations"
+const Version = "analytics-v5-md24-market-rest"
 const Minute int64 = 60_000
 const MaxAge int64 = 90_000
 const MaxRange int64 = 90 * 24 * 60 * Minute
@@ -12,20 +12,22 @@ const MaxRange int64 = 90 * 24 * 60 * Minute
 var Tolerance = decimal.RequireFromString("0.00000001")
 
 type Sample struct {
-	TimeMS         int64
-	ObservedFromMS int64
-	ObservedToMS   int64
-	ID             string
-	Balance        decimal.Decimal
-	Credit         decimal.Decimal
-	Equity         decimal.Decimal
-	Floating       decimal.Decimal
-	Tolerance      decimal.Decimal
-	Reason         string
-	Expected       int
-	Included       int
-	UnknownCadence bool
-	Windows        []ValuationWindow
+	TimeMS                     int64
+	ObservedFromMS             int64
+	ObservedToMS               int64
+	ID                         string
+	Balance                    decimal.Decimal
+	Credit                     decimal.Decimal
+	Equity                     decimal.Decimal
+	Floating                   decimal.Decimal
+	Tolerance                  decimal.Decimal
+	Reason                     string
+	Expected                   int
+	Included                   int
+	UnknownCadence             bool
+	Windows                    []ValuationWindow
+	RestCarried                bool
+	AlignedFromMS, AlignedToMS int64
 }
 
 // ValuationWindow preserves each account's collection interval when valuations
@@ -123,6 +125,7 @@ type Quality struct {
 	LastSampleID            string           `json:"last_sample_id"`
 	BoundaryOffsetMS        int64            `json:"boundary_offset_ms"`
 	LaterBoundary           bool             `json:"later_boundary"`
+	RestCarriedPoints       int              `json:"rest_carried_points"`
 }
 
 type Point struct {
@@ -136,18 +139,19 @@ type Point struct {
 }
 
 type Day struct {
-	Date             string `json:"date"`
-	FromMS           int64  `json:"from_ms"`
-	ToMS             int64  `json:"to_ms"`
-	Partial          bool   `json:"partial"`
-	NetProfit        Metric `json:"net_profit"`
-	Realized         Metric `json:"realized"`
-	FloatingChange   Metric `json:"floating_change"`
-	OtherIncome      Metric `json:"other_income"`
-	Costs            Metric `json:"costs"`
-	Trades           *int   `json:"trades"`
-	BoundaryOffsetMS int64  `json:"boundary_offset_ms"`
-	LaterBoundary    bool   `json:"later_boundary"`
+	Date              string `json:"date"`
+	FromMS            int64  `json:"from_ms"`
+	ToMS              int64  `json:"to_ms"`
+	Partial           bool   `json:"partial"`
+	NetProfit         Metric `json:"net_profit"`
+	Realized          Metric `json:"realized"`
+	FloatingChange    Metric `json:"floating_change"`
+	OtherIncome       Metric `json:"other_income"`
+	Costs             Metric `json:"costs"`
+	Trades            *int   `json:"trades"`
+	BoundaryOffsetMS  int64  `json:"boundary_offset_ms"`
+	LaterBoundary     bool   `json:"later_boundary"`
+	RestCarriedPoints int    `json:"rest_carried_points"`
 }
 
 type Month struct {

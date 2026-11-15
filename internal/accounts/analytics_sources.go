@@ -11,6 +11,7 @@ import (
 
 	"gorm.io/gorm"
 	"portexa/internal/analytics"
+	"portexa/internal/marketrest"
 	"portexa/internal/storage"
 )
 
@@ -29,6 +30,7 @@ type analyticsSource struct {
 	hash            hash.Hash
 	readOrders      int
 	unresolvedWalls []uint32
+	restPolicies    map[int64]storage.MarketRestPolicy
 }
 
 func (s *Service) analyticsSource(ctx context.Context, account storage.Account, from, to int64, unit string) (*analyticsSource, error) {
@@ -80,8 +82,9 @@ func (s *Service) analyticsSource(ctx context.Context, account storage.Account, 
 			source.cutoff = min(to, through/analytics.Minute*analytics.Minute)
 		}
 	}
+	requestedCutoff := source.cutoff
 	var last storage.Snapshot
-	latest := s.Store.Read.WithContext(ctx).Select("observed_to_ms").Where("account_id=? AND observed_to_ms<=?", account.ID, source.cutoff).
+	latest := s.Store.Read.WithContext(ctx).Where("account_id=? AND observed_to_ms<=?", account.ID, source.cutoff).
 		Order("observed_to_ms DESC,id DESC").Limit(1).Find(&last)
 	if latest.Error != nil {
 		return nil, latest.Error
@@ -89,8 +92,26 @@ func (s *Service) analyticsSource(ctx context.Context, account storage.Account, 
 	if latest.RowsAffected > 0 {
 		source.cutoff = min(source.cutoff, (last.ObservedToMS+analytics.Minute-1)/analytics.Minute*analytics.Minute)
 	}
-	if err := s.analyticsEvents(ctx, source, from-analytics.MaxAge-1000, to+analytics.MaxAge+1, unit); err != nil {
+	if err := s.analyticsEvents(ctx, source, from-(marketrest.Interval+marketrest.Grace).Milliseconds()-1000, to+(marketrest.Interval+marketrest.Grace).Milliseconds()+1, unit); err != nil {
 		return nil, err
+	}
+	// An already verified historical rest interval can cover a requested end
+	// between samples. A live, unbracketed tail still uses the original cutoff.
+	if last.RestVerified && source.cutoff < requestedCutoff && requestedCutoff-last.ObservedToMS <= (marketrest.Interval+marketrest.Grace).Milliseconds() {
+		var after storage.Snapshot
+		row := s.Store.Read.WithContext(ctx).Where("account_id=? AND observed_to_ms>=? AND observed_to_ms<=?", account.ID, requestedCutoff, min(requestedCutoff+(marketrest.Interval+marketrest.Grace).Milliseconds(), s.Now().UnixMilli())).Order("observed_to_ms,id").Limit(1).Find(&after)
+		if row.Error != nil {
+			return nil, row.Error
+		}
+		if row.RowsAffected > 0 {
+			valid, err := s.restBridge(ctx, source, last, after, unit)
+			if err != nil {
+				return nil, err
+			}
+			if valid {
+				source.cutoff = requestedCutoff
+			}
+		}
 	}
 	return source, nil
 }
@@ -268,8 +289,27 @@ func (s *Service) analyticsSamples(ctx context.Context, source *analyticsSource,
 			index++
 		}
 	}
-	err := s.visitTrendSnapshots(ctx, source.account.ID, max(0, from-analytics.MaxAge), min(to+analytics.MaxAge+1, s.Now().UnixMilli()+1), func(row storage.Snapshot) error {
+	padding := (marketrest.Interval + marketrest.Grace).Milliseconds()
+	err := s.visitTrendSnapshots(ctx, source.account.ID, max(0, from-padding), min(to+padding+1, s.Now().UnixMilli()+1), func(row storage.Snapshot) error {
 		fill(row.ObservedToMS)
+		if previous != nil && restPairPossible(*previous, row) {
+			valid, err := s.restBridge(ctx, source, *previous, row, unit)
+			if err != nil {
+				return err
+			}
+			if valid {
+				start := max(0, int((previous.ObservedToMS-from+analytics.Minute-1)/analytics.Minute))
+				for i := start; i < index; i++ {
+					if input.Samples[i].Reason != "missing_samples" {
+						continue
+					}
+					p := source.valuation(previous, previous.ObservedToMS, unit)
+					p.TimeMS = from + int64(i)*analytics.Minute
+					p.RestCarried = true
+					input.Samples[i] = p
+				}
+			}
+		}
 		// Retain the original earlier valuation whenever it is unambiguous.
 		// Otherwise try the first later snapshot whose ledger state belongs
 		// to this same boundary, with independently complete bridge evidence.
@@ -284,8 +324,12 @@ func (s *Service) analyticsSamples(ctx context.Context, source *analyticsSource,
 			}
 		}
 		input.RawSamples++
-		fmt.Fprintf(source.hash, "sample:%s:%d:%d:%s:%s:%s:%s:%d|", row.ID, row.ObservedFromMS, row.ObservedToMS,
-			row.Balance, row.Credit, row.Equity, row.FloatingNetProfit, row.UnitRevision)
+		cadence := -1
+		if row.CollectionIntervalSeconds != nil {
+			cadence = *row.CollectionIntervalSeconds
+		}
+		fmt.Fprintf(source.hash, "sample:%s:%d:%d:%s:%s:%s:%s:%d:%d:%t:%s:%d|", row.ID, row.ObservedFromMS, row.ObservedToMS,
+			row.Balance, row.Credit, row.Equity, row.FloatingNetProfit, row.UnitRevision, row.RestPolicyRevision, row.RestVerified, row.StateFingerprint, cadence)
 		previous = &row
 		return nil
 	})

@@ -9,6 +9,7 @@ import (
 
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+	"portexa/internal/marketrest"
 	"portexa/internal/storage"
 )
 
@@ -29,27 +30,29 @@ type PositionView struct {
 }
 
 type AccountView struct {
-	ID                      string            `json:"id"`
-	ServerID                string            `json:"server_id"`
-	ServerName              string            `json:"server_name"`
-	BrokerName              string            `json:"broker_name"`
-	EndpointID              string            `json:"endpoint_id"`
-	EndpointApproved        bool              `json:"endpoint_approved"`
-	Login                   uint32            `json:"login"`
-	Label                   string            `json:"label"`
-	ConfirmedCurrency       *string           `json:"confirmed_currency"`
-	UnitConfirmed           bool              `json:"unit_confirmed"`
-	ConfiguredUnitConfirmed bool              `json:"configured_unit_confirmed"`
-	ConfigVersion           int64             `json:"config_version"`
-	SyncEnabled             bool              `json:"sync_enabled"`
-	NextSyncAtMS            int64             `json:"next_sync_at_ms"`
-	SyncState               string            `json:"sync_state"`
-	Snapshot                *storage.Snapshot `json:"snapshot"`
-	LastRun                 *storage.SyncRun  `json:"last_run"`
-	Stale                   bool              `json:"stale"`
-	CreatedAtMS             int64             `json:"created_at_ms"`
-	Daily                   DailyView         `json:"daily"`
-	Funding                 FundingView       `json:"funding"`
+	ID                                 string            `json:"id"`
+	ServerID                           string            `json:"server_id"`
+	ServerName                         string            `json:"server_name"`
+	BrokerName                         string            `json:"broker_name"`
+	EndpointID                         string            `json:"endpoint_id"`
+	EndpointApproved                   bool              `json:"endpoint_approved"`
+	Login                              uint32            `json:"login"`
+	Label                              string            `json:"label"`
+	ConfirmedCurrency                  *string           `json:"confirmed_currency"`
+	UnitConfirmed                      bool              `json:"unit_confirmed"`
+	ConfiguredUnitConfirmed            bool              `json:"configured_unit_confirmed"`
+	ConfigVersion                      int64             `json:"config_version"`
+	SyncEnabled                        bool              `json:"sync_enabled"`
+	NextSyncAtMS                       int64             `json:"next_sync_at_ms"`
+	SyncState                          string            `json:"sync_state"`
+	Snapshot                           *storage.Snapshot `json:"snapshot"`
+	LastRun                            *storage.SyncRun  `json:"last_run"`
+	Stale                              bool              `json:"stale"`
+	MarketRest                         bool              `json:"market_rest"`
+	EffectiveCollectionIntervalSeconds int               `json:"effective_collection_interval_seconds"`
+	CreatedAtMS                        int64             `json:"created_at_ms"`
+	Daily                              DailyView         `json:"daily"`
+	Funding                            FundingView       `json:"funding"`
 }
 
 type AccountDetail struct {
@@ -162,12 +165,14 @@ func (s *Service) Servers(ctx context.Context) ([]ServerView, error) {
 	return views, err
 }
 
-func readView(tx *gorm.DB, account storage.Account, now int64, staleAfter time.Duration) (AccountView, error) {
+func readView(tx *gorm.DB, account storage.Account, now int64, settings storage.CollectionSettings) (AccountView, error) {
+	staleAfter := snapshotStaleAfter(settings)
 	view := AccountView{ID: account.ID, ServerID: account.ServerID, EndpointID: account.PinnedEndpointID,
 		Login: account.Login, Label: account.Label, ConfirmedCurrency: account.Currency, UnitConfirmed: account.UnitVerifiedAtMS != nil,
 		ConfiguredUnitConfirmed: account.UnitVerifiedAtMS != nil,
 		ConfigVersion:           account.ConfigVersion, SyncEnabled: account.SyncEnabled, NextSyncAtMS: account.NextSyncAtMS,
 		CreatedAtMS: account.CreatedAtMS, SyncState: "idle"}
+	view.EffectiveCollectionIntervalSeconds = settings.SnapshotIntervalSeconds
 	var server storage.Server
 	if err := tx.First(&server, "id = ?", account.ServerID).Error; err != nil {
 		return view, err
@@ -184,6 +189,16 @@ func readView(tx *gorm.DB, account storage.Account, now int64, staleAfter time.D
 			return view, err
 		}
 		view.Snapshot = &snapshot
+		if restSnapshotTemplateActive(account, snapshot, settings, time.UnixMilli(now)) {
+			view.MarketRest = marketrest.Reduced(time.UnixMilli(now))
+			if view.MarketRest {
+				view.EffectiveCollectionIntervalSeconds = max(settings.SnapshotIntervalSeconds, 300)
+				staleAfter = max(staleAfter, marketrest.Interval+marketrest.Grace)
+			} else {
+				view.EffectiveCollectionIntervalSeconds = min(settings.SnapshotIntervalSeconds, 60)
+				staleAfter = max(3*time.Minute, 3*time.Duration(view.EffectiveCollectionIntervalSeconds)*time.Second)
+			}
+		}
 		view.Stale = now-snapshot.ObservedToMS > staleAfter.Milliseconds()
 		if account.Currency == nil || *account.Currency != snapshot.NativeCurrency || account.UnitRevision != snapshot.UnitRevision {
 			view.UnitConfirmed = false
@@ -230,7 +245,7 @@ func (s *Service) list(ctx context.Context) ([]AccountView, storage.CollectionSe
 		}
 		now := s.Now().UnixMilli()
 		for _, account := range list {
-			view, err := readView(tx, account, now, snapshotStaleAfter(settings))
+			view, err := readView(tx, account, now, settings)
 			if err != nil {
 				return err
 			}
@@ -258,7 +273,7 @@ func (s *Service) Detail(ctx context.Context, id, order string) (AccountDetail, 
 		if err != nil {
 			return err
 		}
-		detail.Account, err = readView(tx, account, s.Now().UnixMilli(), snapshotStaleAfter(settings))
+		detail.Account, err = readView(tx, account, s.Now().UnixMilli(), settings)
 		if detail.Account.Daily.TimeZone != "" {
 			detail.ServerTimeStatus = "verified"
 		}

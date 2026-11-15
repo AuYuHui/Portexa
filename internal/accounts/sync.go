@@ -166,7 +166,12 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 		if err != nil {
 			return err
 		}
-		snapshot.CollectionIntervalSeconds = &settings.SnapshotIntervalSeconds
+		interval, blockedUntil, err := restSchedule(tx, current, &snapshot, positions, settings)
+		if err != nil {
+			return err
+		}
+		seconds := int(interval / time.Second)
+		snapshot.CollectionIntervalSeconds = &seconds
 		if err := tx.Create(&snapshot).Error; err != nil {
 			return err
 		}
@@ -187,9 +192,18 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 		if next != nil {
 			nextAt = *next
 		} else {
-			nextAt = NextSnapshotAt(current.ID, time.UnixMilli(snapshot.ObservedToMS), time.Duration(settings.SnapshotIntervalSeconds)*time.Second).UnixMilli()
+			nextAt = restNextSnapshot(current.ID, time.UnixMilli(snapshot.ObservedToMS), interval, snapshot.RestVerified)
 		}
 		updates := map[string]any{"current_snapshot_id": snapshot.ID, "next_sync_at_ms": nextAt, "failure_count": 0}
+		if blockedUntil > 0 {
+			updates["rest_blocked_until_ms"] = blockedUntil
+			if current.DailyFailureCount == 0 && !current.DailySyncPaused {
+				updates["next_daily_sync_at_ms"] = min(current.NextDailySyncAtMS, snapshot.ObservedToMS+1000)
+			}
+			if !current.HistorySyncPaused {
+				updates["next_history_sync_at_ms"] = min(current.NextHistorySyncAtMS, snapshot.ObservedToMS+1000)
+			}
+		}
 		if current.IncludedAtMS == nil && snapshot.USDScale != nil {
 			updates["included_at_ms"] = snapshot.ObservedToMS
 			updates["initial_statistical_equity"] = snapshot.Equity.Sub(snapshot.Credit)

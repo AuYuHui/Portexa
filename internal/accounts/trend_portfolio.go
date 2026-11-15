@@ -3,15 +3,18 @@ package accounts
 import (
 	"context"
 	"sort"
+	"time"
 
 	"github.com/shopspring/decimal"
+	"portexa/internal/marketrest"
 	"portexa/internal/storage"
 )
 
 type portfolioSlot struct {
-	point                   TrendPoint
-	balance, equity, credit decimal.Decimal
-	floating                decimal.Decimal
+	alignedFromMS, alignedToMS int64
+	point                      TrendPoint
+	balance, equity, credit    decimal.Decimal
+	floating                   decimal.Decimal
 }
 
 // Portfolio points are complete valuations of their historical membership,
@@ -64,7 +67,7 @@ func (s *Service) PortfolioTrend(ctx context.Context, input TrendRequest) (Trend
 		for _, change := range changes {
 			boundaries = append(boundaries, change.EffectiveAtMS)
 		}
-		if err := s.addPortfolioAccount(ctx, account, input, slots, changes); err != nil {
+		if err := s.addPortfolioAccount(ctx, account, input, slots, changes, &view); err != nil {
 			return view, err
 		}
 		for _, event := range []struct {
@@ -89,10 +92,13 @@ func (s *Service) PortfolioTrend(ctx context.Context, input TrendRequest) (Trend
 			boundaryIndex++
 		}
 		valid := p.ExpectedAccounts > 0 && p.ExpectedAccounts == p.IncludedAccounts
-		if valid && p.ObservedToMS-p.ObservedFromMS > trendMaxAgeMS {
+		if valid && slot.alignedToMS-slot.alignedFromMS > trendMaxAgeMS {
 			p.Reason, valid = "sampling_skew", false
 		}
 		if valid {
+			if p.RestCarried {
+				view.RestCarriedPoints++
+			}
 			p.Balance, p.Equity, p.Credit, p.FloatingNetProfit = &slot.balance, &slot.equity, &slot.credit, &slot.floating
 			view.LastObservedToMS = max(view.LastObservedToMS, p.ObservedToMS)
 		} else if p.ExpectedAccounts == 0 {
@@ -106,7 +112,7 @@ func (s *Service) PortfolioTrend(ctx context.Context, input TrendRequest) (Trend
 		previousValid = valid
 	}
 	reducer.finish(&view)
-	view.Stale = view.LastObservedToMS == 0 || min(view.ToMS, view.AsOfMS)-view.LastObservedToMS > trendMaxAgeMS
+	view.Stale = view.Stale || view.LastObservedToMS == 0
 	if err := s.trendFundEvents(ctx, accounts, input, &view); err != nil {
 		return view, err
 	}
@@ -114,10 +120,12 @@ func (s *Service) PortfolioTrend(ctx context.Context, input TrendRequest) (Trend
 	return view, nil
 }
 
-func (s *Service) addPortfolioAccount(ctx context.Context, account storage.Account, input TrendRequest, slots []portfolioSlot, changes []storage.AccountUnitChange) error {
+func (s *Service) addPortfolioAccount(ctx context.Context, account storage.Account, input TrendRequest, slots []portfolioSlot, changes []storage.AccountUnitChange, view *TrendSeries) error {
 	index, changeIndex := 0, -1
 	var last *storage.Snapshot
-	fill := func(until int64) {
+	var tail *storage.Snapshot
+	var source *analyticsSource
+	fill := func(until int64, bridge bool) {
 		for index < len(slots) && slots[index].point.TimeMS < until {
 			slot := &slots[index]
 			p := &slot.point
@@ -129,7 +137,7 @@ func (s *Service) addPortfolioAccount(ctx context.Context, account storage.Accou
 				continue
 			}
 			p.ExpectedAccounts++
-			if last == nil || p.TimeMS-last.ObservedToMS > trendMaxAgeMS || last.ObservedToMS-last.ObservedFromMS > trendMaxAgeMS {
+			if last == nil || (!bridge && p.TimeMS-last.ObservedToMS > trendMaxAgeMS) || last.ObservedToMS-last.ObservedFromMS > trendMaxAgeMS {
 				p.Reason = "missing_samples"
 				continue
 			}
@@ -146,6 +154,15 @@ func (s *Service) addPortfolioAccount(ctx context.Context, account storage.Accou
 			}
 			p.ObservedToMS = max(p.ObservedToMS, last.ObservedToMS)
 			p.IncludedAccounts++
+			alignedFrom, alignedTo := last.ObservedFromMS, last.ObservedToMS
+			if p.TimeMS-last.ObservedToMS > trendMaxAgeMS {
+				p.RestCarried = true
+				alignedFrom, alignedTo = p.TimeMS, p.TimeMS
+			}
+			if slot.alignedFromMS == 0 || alignedFrom < slot.alignedFromMS {
+				slot.alignedFromMS = alignedFrom
+			}
+			slot.alignedToMS = max(slot.alignedToMS, alignedTo)
 			scale := *last.USDScale
 			slot.balance = slot.balance.Add(last.Balance.Mul(scale))
 			slot.equity = slot.equity.Add(last.Equity.Mul(scale))
@@ -153,14 +170,42 @@ func (s *Service) addPortfolioAccount(ctx context.Context, account storage.Accou
 			slot.floating = slot.floating.Add(last.FloatingNetProfit.Mul(scale))
 		}
 	}
-	err := s.visitPortfolioSnapshots(ctx, account.ID, max(0, input.FromMS-trendMaxAgeMS), input.ToMS, func(snapshot storage.Snapshot) error {
-		fill(snapshot.ObservedToMS)
+	padding := (marketrest.Interval + marketrest.Grace).Milliseconds()
+	err := s.visitPortfolioSnapshots(ctx, account.ID, max(0, input.FromMS-padding), min(input.ToMS+padding, s.Now().UnixMilli()+1), func(snapshot storage.Snapshot) error {
+		bridge := false
+		if last != nil && restPairPossible(*last, snapshot) {
+			var err error
+			if source == nil {
+				source, err = s.analyticsSource(ctx, account, input.FromMS, input.ToMS, "USD")
+				if err != nil {
+					return err
+				}
+			}
+			bridge, err = s.restBridge(ctx, source, *last, snapshot, "USD")
+			if err != nil {
+				return err
+			}
+		}
+		fill(snapshot.ObservedToMS, bridge)
 		last = &snapshot
+		if snapshot.ObservedToMS <= min(input.ToMS, s.Now().UnixMilli()) {
+			tail = &snapshot
+		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	fill(input.ToMS)
+	fill(input.ToMS, false)
+	at := min(input.ToMS, s.Now().UnixMilli())
+	if analyticsMember(account, at-1) {
+		limit := trendMaxAgeMS
+		if tail != nil && tail.RestVerified {
+			if _, _, closed := marketrest.Window(time.UnixMilli(at)); closed {
+				limit = (marketrest.Interval + marketrest.Grace).Milliseconds()
+			}
+		}
+		view.Stale = view.Stale || tail == nil || at-tail.ObservedToMS > limit
+	}
 	return ctx.Err()
 }

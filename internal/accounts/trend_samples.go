@@ -11,7 +11,7 @@ import (
 	"portexa/internal/storage"
 )
 
-const trendColumns = "id,observed_from_ms,observed_to_ms,native_currency,usd_scale,unit_revision,balance,credit,equity,floating_net_profit,collection_interval_seconds"
+const trendColumns = "id,observed_from_ms,observed_to_ms,native_currency,usd_scale,unit_revision,balance,credit,equity,floating_net_profit,collection_interval_seconds,rest_policy_revision,rest_verified,state_fingerprint"
 
 // Read immutable samples in bounded pages, releasing the SQLite cursor before
 // reduction or HTTP output. The (time,id) cursor also preserves equal-time rows.
@@ -56,7 +56,7 @@ func readTrendBatch(rows *sql.Rows, accountID string) ([]storage.Snapshot, error
 		var cadence sql.NullInt64
 		sample.AccountID = accountID
 		if err := rows.Scan(&sample.ID, &sample.ObservedFromMS, &sample.ObservedToMS, &sample.NativeCurrency, &scale,
-			&sample.UnitRevision, &sample.Balance, &sample.Credit, &sample.Equity, &sample.FloatingNetProfit, &cadence); err != nil {
+			&sample.UnitRevision, &sample.Balance, &sample.Credit, &sample.Equity, &sample.FloatingNetProfit, &cadence, &sample.RestPolicyRevision, &sample.RestVerified, &sample.StateFingerprint); err != nil {
 			return nil, errors.Join(err, rows.Close())
 		}
 		if scale.Valid {

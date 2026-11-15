@@ -10,12 +10,22 @@ import (
 )
 
 type CollectionInput struct {
-	SnapshotIntervalSeconds int `json:"snapshot_interval_seconds"`
+	SnapshotIntervalSeconds      int       `json:"snapshot_interval_seconds"`
+	MarketRestTemplate           *string   `json:"market_rest_template"`
+	MarketRestExcludedAccountIDs *[]string `json:"market_rest_excluded_account_ids"`
 }
 
 func readCollectionSettings(tx *gorm.DB) (storage.CollectionSettings, error) {
 	var settings storage.CollectionSettings
-	err := tx.First(&settings, "id = 1").Error
+	if err := tx.First(&settings, "id = 1").Error; err != nil {
+		return settings, err
+	}
+	policy, err := readRestPolicy(tx, settings.MarketRestPolicyRevision)
+	if err != nil {
+		return settings, err
+	}
+	settings.MarketRestTemplate = policy.Template
+	settings.MarketRestExcludedAccountIDs, err = restExclusions(policy)
 	return settings, err
 }
 
@@ -33,10 +43,17 @@ func (s *Service) UpdateCollectionSettings(ctx context.Context, input Collection
 	err := s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
 		var err error
 		settings, err = readCollectionSettings(tx)
-		if err != nil || settings.SnapshotIntervalSeconds == input.SnapshotIntervalSeconds {
+		if err != nil {
 			return err
 		}
 		now := s.Now()
+		restChanged, err := updateRestPolicy(tx, &settings, input, now.UnixMilli())
+		if err != nil {
+			return err
+		}
+		if !restChanged && settings.SnapshotIntervalSeconds == input.SnapshotIntervalSeconds {
+			return nil
+		}
 		settings.SnapshotIntervalSeconds, settings.UpdatedAtMS = input.SnapshotIntervalSeconds, now.UnixMilli()
 		if err := tx.Save(&settings).Error; err != nil {
 			return err
@@ -49,7 +66,20 @@ func (s *Service) UpdateCollectionSettings(ctx context.Context, input Collection
 		}
 		interval := time.Duration(settings.SnapshotIntervalSeconds) * time.Second
 		for _, account := range list {
-			if err := tx.Model(&account).Update("next_sync_at_ms", NextSnapshotAt(account.ID, now, interval).UnixMilli()).Error; err != nil {
+			next := NextSnapshotAt(account.ID, now, interval).UnixMilli()
+			if restChanged {
+				next = min(account.NextSyncAtMS, now.Add(DailyAdmissionLead+2*time.Second).UnixMilli())
+			}
+			updates := map[string]any{"next_sync_at_ms": next}
+			if restChanged {
+				if account.DailyFailureCount == 0 && !account.DailySyncPaused {
+					updates["next_daily_sync_at_ms"] = min(account.NextDailySyncAtMS, next)
+				}
+				if !account.HistorySyncPaused {
+					updates["next_history_sync_at_ms"] = min(account.NextHistorySyncAtMS, next)
+				}
+			}
+			if err := tx.Model(&account).Updates(updates).Error; err != nil {
 				return err
 			}
 		}

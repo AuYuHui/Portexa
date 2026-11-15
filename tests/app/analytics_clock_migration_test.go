@@ -19,6 +19,7 @@ func TestAnalyticsClockMigrationPreservesEvidenceAndFencesChanges(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	stripMarketRestSchema(t, db)
 	for _, name := range []string{"analytics_clock_insert", "analytics_clock_accept", "analytics_clock_delete", "analytics_clock_account", "analytics_clock_endpoint"} {
 		if _, err := db.Exec("DROP TRIGGER " + name); err != nil {
 			t.Fatal(err)

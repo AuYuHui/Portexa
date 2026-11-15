@@ -13,6 +13,7 @@ import (
 // Used only when constructing an older synthetic fixture from a current backup.
 func stripAnalyticsSchema(t *testing.T, db *sql.DB) {
 	t.Helper()
+	stripMarketRestSchema(t, db)
 	rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'analytics_%'")
 	if err != nil {
 		t.Fatal(err)
