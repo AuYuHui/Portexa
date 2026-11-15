@@ -33,6 +33,8 @@ export interface PerformanceQuality {
   observed_to_ms: number;
   first_sample_id: string;
   last_sample_id: string;
+  boundary_offset_ms: number;
+  later_boundary: boolean;
 }
 export interface PerformancePoint {
   time_ms: number;
@@ -54,6 +56,8 @@ export interface PerformanceDay {
   other_income: PerformanceMetric;
   costs: PerformanceMetric;
   trades: number | null;
+  boundary_offset_ms: number;
+  later_boundary: boolean;
 }
 export interface PerformanceResult {
   account_id: string;

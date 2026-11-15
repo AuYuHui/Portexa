@@ -4,7 +4,7 @@ package analytics
 
 import "github.com/shopspring/decimal"
 
-const Version = "analytics-v3-md24-daily-evidence"
+const Version = "analytics-v4-md24-boundary-valuations"
 const Minute int64 = 60_000
 const MaxAge int64 = 90_000
 const MaxRange int64 = 90 * 24 * 60 * Minute
@@ -25,6 +25,14 @@ type Sample struct {
 	Expected       int
 	Included       int
 	UnknownCadence bool
+	Windows        []ValuationWindow
+}
+
+// ValuationWindow preserves each account's collection interval when valuations
+// are combined. Another member's trades cannot invalidate this account's state.
+type ValuationWindow struct {
+	AccountID    string
+	FromMS, ToMS int64
 }
 
 type Event struct {
@@ -113,6 +121,8 @@ type Quality struct {
 	ObservedToMS            int64            `json:"observed_to_ms"`
 	FirstSampleID           string           `json:"first_sample_id"`
 	LastSampleID            string           `json:"last_sample_id"`
+	BoundaryOffsetMS        int64            `json:"boundary_offset_ms"`
+	LaterBoundary           bool             `json:"later_boundary"`
 }
 
 type Point struct {
@@ -126,16 +136,18 @@ type Point struct {
 }
 
 type Day struct {
-	Date           string `json:"date"`
-	FromMS         int64  `json:"from_ms"`
-	ToMS           int64  `json:"to_ms"`
-	Partial        bool   `json:"partial"`
-	NetProfit      Metric `json:"net_profit"`
-	Realized       Metric `json:"realized"`
-	FloatingChange Metric `json:"floating_change"`
-	OtherIncome    Metric `json:"other_income"`
-	Costs          Metric `json:"costs"`
-	Trades         *int   `json:"trades"`
+	Date             string `json:"date"`
+	FromMS           int64  `json:"from_ms"`
+	ToMS             int64  `json:"to_ms"`
+	Partial          bool   `json:"partial"`
+	NetProfit        Metric `json:"net_profit"`
+	Realized         Metric `json:"realized"`
+	FloatingChange   Metric `json:"floating_change"`
+	OtherIncome      Metric `json:"other_income"`
+	Costs            Metric `json:"costs"`
+	Trades           *int   `json:"trades"`
+	BoundaryOffsetMS int64  `json:"boundary_offset_ms"`
+	LaterBoundary    bool   `json:"later_boundary"`
 }
 
 type Month struct {

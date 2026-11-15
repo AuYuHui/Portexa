@@ -19,6 +19,9 @@ func seedAnalytics(ctx context.Context, s *accounts.Service) error {
 	now := time.Now()
 	end := now.Truncate(time.Minute).Add(-time.Minute)
 	from := end.Add(-31 * 24 * time.Hour)
+	beijing := time.FixedZone("Beijing", 8*3600)
+	localEnd := end.In(beijing)
+	boundary := time.Date(localEnd.Year(), localEnd.Month(), 2, 0, 0, 0, 0, beijing).UTC()
 	var list []storage.Account
 	if err := s.Store.Read.Order("login").Find(&list).Error; err != nil {
 		return err
@@ -66,6 +69,9 @@ func seedAnalytics(ctx context.Context, s *accounts.Service) error {
 			ConfigVersion: account.ConfigVersion, UnitRevision: account.UnitRevision, NativeCurrency: *account.Currency, State: "succeeded", StartedAtMS: now.UnixMilli(), FinishedAtMS: new(now.UnixMilli())}
 		orders := []storage.HistoryOrder{}
 		for at, n := from.Add(30*time.Second), 0; at.Before(end); at, n = at.Add(6*time.Hour), n+1 {
+			if index == 0 && at.After(boundary.Add(-90*time.Second)) && at.Before(boundary.Add(90*time.Second)) {
+				continue
+			}
 			cents := int64(2400 + (n%9)*300)
 			if n%7 == 3 {
 				cents = -int64(4300 + (n%5)*700)
@@ -85,10 +91,18 @@ func seedAnalytics(ctx context.Context, s *accounts.Service) error {
 				Profit: profit, Commission: fee, NetProfit: net, VolumeHundredths: 10, Comment: "Synthetic closed trade"})
 		}
 		if index == 0 {
+			// The first full calendar day needs a clean later valuation after
+			// a trade just before midnight; its earlier snapshot predates it.
+			at := boundary.Add(-2 * time.Second)
+			hash := sha256.Sum256([]byte("synthetic-midnight-trade"))
+			orders = append(orders, storage.HistoryOrder{AccountID: account.ID, Ticket: 798998, Revision: 1,
+				SourceRunID: run.ID, SourceHash: hash[:], UnitRevision: account.UnitRevision, NativeCurrency: *account.Currency,
+				Command: 0, OpenTimeWall: uint32(at.Add(-time.Hour).Unix()), CloseTimeWall: uint32(at.Unix()), EventTimeWall: uint32(at.Unix()),
+				Profit: decimal.NewFromInt(7), NetProfit: decimal.NewFromInt(7), Symbol: "EURUSD", Comment: "Synthetic midnight close"})
 			// An older published trade predates the verified calendar. A 90-day
 			// request must flag it without hiding healthy recent calendar days.
 			old := uint32(from.Add(-2 * time.Hour).Unix())
-			hash := sha256.Sum256([]byte("synthetic-unresolved-calendar-trade"))
+			hash = sha256.Sum256([]byte("synthetic-unresolved-calendar-trade"))
 			orders = append(orders, storage.HistoryOrder{AccountID: account.ID, Ticket: 798999, Revision: 1,
 				SourceRunID: run.ID, SourceHash: hash[:], UnitRevision: account.UnitRevision, NativeCurrency: *account.Currency,
 				Command: 0, OpenTimeWall: old - 60, CloseTimeWall: old, EventTimeWall: old, Symbol: "EURUSD", Comment: "Synthetic older clock uncertainty"})
@@ -131,7 +145,8 @@ func seedAnalytics(ctx context.Context, s *accounts.Service) error {
 			for len(samples) < 500 && !start.After(end) {
 				at := start
 				start = start.Add(time.Minute)
-				for nextOrder < len(orders) && int64(orders[nextOrder].EventTimeWall)*1000 < at.UnixMilli() {
+				stamp := at.Add(time.Duration(-5+index) * time.Second)
+				for nextOrder < len(orders) && int64(orders[nextOrder].EventTimeWall)*1000 < stamp.UnixMilli() {
 					runningBalance = runningBalance.Add(orders[nextOrder].NetProfit)
 					nextOrder++
 				}
@@ -145,7 +160,6 @@ func seedAnalytics(ctx context.Context, s *accounts.Service) error {
 					floating = 0
 				}
 				floatingAmount := decimal.NewFromFloat(floating).Round(2).Mul(scale)
-				stamp := at.Add(time.Duration(-5+index) * time.Second)
 				cycle := 60
 				run := storage.SyncRun{ID: storage.NewID(), AccountID: account.ID, ServerID: account.ServerID, EndpointID: account.PinnedEndpointID,
 					CredentialVersion: account.CredentialVersion, ConfigVersion: account.ConfigVersion, Kind: "snapshot", State: "succeeded", Attempt: 1}

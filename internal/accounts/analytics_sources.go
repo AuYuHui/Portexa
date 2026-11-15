@@ -9,7 +9,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 	"portexa/internal/analytics"
 	"portexa/internal/storage"
@@ -90,7 +89,7 @@ func (s *Service) analyticsSource(ctx context.Context, account storage.Account, 
 	if latest.RowsAffected > 0 {
 		source.cutoff = min(source.cutoff, (last.ObservedToMS+analytics.Minute-1)/analytics.Minute*analytics.Minute)
 	}
-	if err := s.analyticsEvents(ctx, source, from-analytics.MaxAge-1000, to+1, unit); err != nil {
+	if err := s.analyticsEvents(ctx, source, from-analytics.MaxAge-1000, to+analytics.MaxAge+1, unit); err != nil {
 		return nil, err
 	}
 	return source, nil
@@ -261,30 +260,7 @@ func (s *Service) analyticsSamples(ctx context.Context, source *analyticsSource,
 	fill := func(until int64) {
 		for index < count && from+int64(index)*analytics.Minute < until {
 			at := from + int64(index)*analytics.Minute
-			p := analytics.Sample{TimeMS: at, Reason: "missing_samples", Expected: 1, Tolerance: analytics.Tolerance}
-			if previous != nil {
-				p.ID, p.ObservedFromMS, p.ObservedToMS = previous.ID, previous.ObservedFromMS, previous.ObservedToMS
-				if at-previous.ObservedToMS <= analytics.MaxAge && previous.ObservedToMS-previous.ObservedFromMS <= analytics.MaxAge {
-					p.Reason = ""
-					p.UnknownCadence = previous.CollectionIntervalSeconds == nil
-					if previous.UnitRevision != source.account.UnitRevision || source.account.Currency == nil || previous.NativeCurrency != *source.account.Currency {
-						p.Reason = "unit_changed"
-					}
-					scale := decimal.NewFromInt(1)
-					if unit == "USD" {
-						if previous.USDScale == nil {
-							p.Reason = "unit_unconfirmed"
-						} else {
-							scale = *previous.USDScale
-						}
-					}
-					p.Balance, p.Credit, p.Equity, p.Floating = previous.Balance.Mul(scale), previous.Credit.Mul(scale), previous.Equity.Mul(scale), previous.FloatingNetProfit.Mul(scale)
-					p.Tolerance = analytics.Tolerance.Mul(scale)
-					if p.Reason == "" {
-						p.Included = 1
-					}
-				}
-			}
+			p := source.valuation(previous, at, unit)
 			input.Samples[index] = p
 			if index < len(input.Coverage) {
 				input.Coverage[index] = source.covered(at, at+analytics.Minute)
@@ -292,8 +268,21 @@ func (s *Service) analyticsSamples(ctx context.Context, source *analyticsSource,
 			index++
 		}
 	}
-	err := s.visitTrendSnapshots(ctx, source.account.ID, max(0, from-analytics.MaxAge), to+1, func(row storage.Snapshot) error {
+	err := s.visitTrendSnapshots(ctx, source.account.ID, max(0, from-analytics.MaxAge), min(to+analytics.MaxAge+1, s.Now().UnixMilli()+1), func(row storage.Snapshot) error {
 		fill(row.ObservedToMS)
+		// Retain the original earlier valuation whenever it is unambiguous.
+		// Otherwise try the first later snapshot whose ledger state belongs
+		// to this same boundary, with independently complete bridge evidence.
+		first := max(0, int((row.ObservedToMS-analytics.MaxAge-from+analytics.Minute-1)/analytics.Minute))
+		for i := first; i < index; i++ {
+			if analytics.SampleReason(input.Samples[i], input.Events) != "boundary_event" {
+				continue
+			}
+			candidate := source.valuation(&row, input.Samples[i].TimeMS, unit)
+			if source.laterValuationUsable(candidate) {
+				input.Samples[i] = candidate
+			}
+		}
 		input.RawSamples++
 		fmt.Fprintf(source.hash, "sample:%s:%d:%d:%s:%s:%s:%s:%d|", row.ID, row.ObservedFromMS, row.ObservedToMS,
 			row.Balance, row.Credit, row.Equity, row.FloatingNetProfit, row.UnitRevision)

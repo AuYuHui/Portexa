@@ -46,7 +46,7 @@ const { data, error, isPending, refetch } = useQuery({
   },
 });
 const breakdown = computed(() => [
-  { label: t("analytics.netProfit"), metric: props.day.net_profit },
+  { label: t("analytics.sampledNetProfit"), metric: props.day.net_profit },
   { label: t("analytics.realized"), metric: props.day.realized },
   { label: t("analytics.floatingChange"), metric: props.day.floating_change },
   { label: t("analytics.otherIncome"), metric: props.day.other_income },
@@ -66,6 +66,10 @@ const breakdown = computed(() => [
         <dd class="num">{{ signedMoney(item.metric.value) }} {{ currency }}</dd>
       </div>
     </dl>
+    <p v-if="day.net_profit.value !== null" class="muted small" data-sampled-valuation>
+      {{ t("analytics.boundaryEstimate", { seconds: Math.ceil(day.boundary_offset_ms / 1000) }) }}
+      <span v-if="day.later_boundary">{{ t("analytics.laterBoundary") }}</span>
+    </p>
     <p v-if="day.net_profit.reasons.length" class="notice notice-warning">
       {{ performanceReasons(day.net_profit.reasons) }}
     </p>

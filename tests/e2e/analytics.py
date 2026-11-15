@@ -57,6 +57,9 @@ def check_locale(browser, origin, locale, artifacts):
     # Pick a fully covered day in the calendar's currently displayed month.
     month = result["days"][-1]["date"][:7]
     selected = next(day for day in result["days"] if day["date"].startswith(month) and not day["partial"])
+    assert selected["later_boundary"], selected
+    assert 0 < selected["boundary_offset_ms"] <= 90_000, selected
+    assert selected["net_profit"]["value"] is not None, selected
     with page.expect_response("**/api/analytics/activity?*") as activity:
         page.locator(f'[data-calendar-date="{selected["date"]}"]').click()
     activity_body = activity.value.json()
@@ -65,6 +68,8 @@ def check_locale(browser, origin, locale, artifacts):
     dialog = page.get_by_role("dialog")
     expect(dialog).to_be_visible()
     expect(dialog).to_contain_text("Trades and fund entries" if english else "交易与资金流水")
+    expect(dialog.locator(".performance-breakdown > div").first.locator("dd")).not_to_contain_text("—")
+    expect(dialog.locator("[data-sampled-valuation]")).to_contain_text("later snapshot" if english else "日界后")
     dialog.screenshot(path=str(artifacts / f"day-{locale}.png"))
     dialog.get_by_role("button", name="Close" if english else "关闭", exact=True).click()
 

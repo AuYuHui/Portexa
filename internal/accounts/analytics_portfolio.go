@@ -48,6 +48,7 @@ func (s *Service) addAnalyticsPortfolio(ctx context.Context, p *analyticsPortfol
 			continue
 		}
 		slot.Included++
+		slot.Windows = append(slot.Windows, sample.Windows...)
 		slot.UnknownCadence = slot.UnknownCadence || sample.UnknownCadence
 		if slot.ObservedFromMS == 0 || sample.ObservedFromMS < slot.ObservedFromMS {
 			slot.ObservedFromMS = sample.ObservedFromMS
@@ -215,7 +216,7 @@ func (s *Service) finishAnalyticsPortfolio(ctx context.Context, p *analyticsPort
 				until = max(until, input.ToMS)
 			}
 			input.ScopedReasons = append(input.ScopedReasons, analytics.ScopedReason{FromMS: event.TimeMS, ToMS: until, Reason: "transfer_unresolved", Capital: true})
-			if len(view.Transfers) < 100 {
+			if event.TimeMS < input.ToMS && len(view.Transfers) < 100 {
 				view.Transfers = append(view.Transfers, event)
 			}
 		}

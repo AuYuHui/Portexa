@@ -70,9 +70,10 @@ func reconcile(a, b Sample, sum totals) (decimal.Decimal, decimal.Decimal, bool)
 	return balance, credit, balance.Abs().LessThanOrEqual(epsilon) && credit.Abs().LessThanOrEqual(epsilon)
 }
 
-// Sample validity includes the complete uncertainty window, up to its minute
-// label. A second-resolution event at a boundary cannot be assigned by guess.
-func sampleReason(sample Sample, events []Event) string {
+// SampleReason checks each contributing account from its collection window to
+// the minute label, including second-resolution timestamp uncertainty. A later
+// valuation is usable only when no intervening ledger event changes its state.
+func SampleReason(sample Sample, events []Event) string {
 	if sample.Reason != "" {
 		return sample.Reason
 	}
@@ -82,8 +83,17 @@ func sampleReason(sample Sample, events []Event) string {
 	if sample.Equity.Sub(sample.Credit).Sub(sample.Balance).Sub(sample.Floating).Abs().GreaterThan(sample.Tolerance) {
 		return "structural_mismatch"
 	}
-	if len(eventsBetween(events, sample.ObservedFromMS-999, sample.TimeMS+1)) > 0 {
-		return "boundary_event"
+	windows := sample.Windows
+	if len(windows) == 0 {
+		windows = []ValuationWindow{{FromMS: sample.ObservedFromMS, ToMS: sample.ObservedToMS}}
+	}
+	for _, window := range windows {
+		from, to := min(window.FromMS-999, sample.TimeMS), max(window.ToMS+1, sample.TimeMS+1)
+		for _, event := range eventsBetween(events, from, to) {
+			if window.AccountID == "" || event.AccountID == window.AccountID {
+				return "boundary_event"
+			}
+		}
 	}
 	return ""
 }
@@ -139,7 +149,7 @@ func Calculate(ctx context.Context, input Input, details bool) (Result, error) {
 	}
 	reasons := make([]string, len(input.Samples))
 	for i, sample := range input.Samples {
-		reasons[i] = sampleReason(sample, input.Events)
+		reasons[i] = SampleReason(sample, input.Events)
 		if reasons[i] == "" {
 			q.ValidPoints++
 			if sample.UnknownCadence {
@@ -156,6 +166,10 @@ func Calculate(ctx context.Context, input Input, details bool) (Result, error) {
 	} else {
 		a, b := input.Samples[0], input.Samples[len(input.Samples)-1]
 		q.FirstSampleID, q.LastSampleID = a.ID, b.ID
+		for _, sample := range []Sample{a, b} {
+			q.BoundaryOffsetMS = max(q.BoundaryOffsetMS, sample.TimeMS-sample.ObservedFromMS, sample.ObservedToMS-sample.TimeMS)
+			q.LaterBoundary = q.LaterBoundary || sample.ObservedToMS > sample.TimeMS
+		}
 		if reasons[0] != "" {
 			profitReasons = append(profitReasons, "missing_start", reasons[0])
 		}
