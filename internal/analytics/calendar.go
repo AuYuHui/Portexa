@@ -34,16 +34,30 @@ func monthly(days []Day) []Month {
 	return months
 }
 
-func calendar(ctx context.Context, input Input) ([]Day, error) {
+// CalendarDays supplies the same Beijing boundaries to source evidence and
+// financial calculations. Metrics are populated only by calendar.
+func CalendarDays(fromMS, toMS int64) []Day {
 	days := []Day{}
-	if input.ToMS <= input.FromMS {
-		return days, nil
+	if toMS <= fromMS {
+		return days
 	}
-	start := time.UnixMilli(input.FromMS).In(beijing)
+	start := time.UnixMilli(fromMS).In(beijing)
 	date := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, beijing)
-	for date.UnixMilli() < input.ToMS {
+	for date.UnixMilli() < toMS {
 		end := date.AddDate(0, 0, 1)
-		from, to := max(date.UnixMilli(), input.FromMS), min(end.UnixMilli(), input.ToMS)
+		from, to := max(date.UnixMilli(), fromMS), min(end.UnixMilli(), toMS)
+		days = append(days, Day{Date: date.Format("2006-01-02"), FromMS: from, ToMS: to,
+			Partial: from != date.UnixMilli() || to != end.UnixMilli()})
+		date = end
+	}
+	return days
+}
+
+func calendar(ctx context.Context, input Input) ([]Day, error) {
+	days := CalendarDays(input.FromMS, input.ToMS)
+	for i := range days {
+		day := &days[i]
+		from, to := day.FromMS, day.ToMS
 		a := sort.Search(len(input.Samples), func(i int) bool { return input.Samples[i].TimeMS >= from })
 		b := sort.Search(len(input.Samples), func(i int) bool { return input.Samples[i].TimeMS > to })
 		part := input
@@ -52,9 +66,14 @@ func calendar(ctx context.Context, input Input) ([]Day, error) {
 		if b-a > 1 {
 			part.Coverage = input.Coverage[a : b-1]
 		}
-		part.Events = eventsBetween(input.Events, from, to)
+		// Calculate filters ledger totals by [from,to) itself. Retain events
+		// around both endpoints so slicing cannot erase valuation ambiguity.
+		events := eventsBetween(input.Events, from, to)
+		if input.UnresolvedTimesByDay != nil {
+			part.UnresolvedTimes = input.UnresolvedTimesByDay[day.Date]
+		}
 		part.Unclassified = 0
-		for _, event := range part.Events {
+		for _, event := range events {
 			if event.Kind == "unclassified" || event.Kind == "adjustment" {
 				part.Unclassified++
 			}
@@ -66,14 +85,13 @@ func calendar(ctx context.Context, input Input) ([]Day, error) {
 		}
 		var trades *int
 		if result.Metrics.Realized.Value != nil {
-			value := totalEvents(part.Events).trades
+			value := totalEvents(events).trades
 			trades = &value
 		}
-		days = append(days, Day{Date: date.Format("2006-01-02"), FromMS: from, ToMS: to,
-			Partial: from != date.UnixMilli() || to != end.UnixMilli(), NetProfit: result.Metrics.NetProfit,
+		*day = Day{Date: day.Date, FromMS: from, ToMS: to,
+			Partial: day.Partial, NetProfit: result.Metrics.NetProfit,
 			Realized: result.Metrics.Realized, FloatingChange: result.Metrics.FloatingChange,
-			OtherIncome: result.Metrics.OtherIncome, Costs: result.Metrics.Costs, Trades: trades})
-		date = end
+			OtherIncome: result.Metrics.OtherIncome, Costs: result.Metrics.Costs, Trades: trades}
 	}
 	return days, nil
 }

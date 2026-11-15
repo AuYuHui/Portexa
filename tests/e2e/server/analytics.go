@@ -61,7 +61,7 @@ func seedAnalytics(ctx context.Context, s *accounts.Service) error {
 		}
 		base := decimal.NewFromInt([]int64{12000, 8000, 0, 6000}[index])
 		coverage := storage.HistoryCoverage{ID: storage.NewID(), AccountID: account.ID, UnitRevision: account.UnitRevision, TimeRulesetID: *server.ActiveTimeRulesetID,
-			StartWall: uint32(from.Add(-time.Hour).Unix()), EndWall: uint32(now.Add(24 * time.Hour).Unix()), State: "complete", CheckedAtMS: new(now.UnixMilli())}
+			StartWall: uint32(from.Add(-24 * time.Hour).Unix()), EndWall: uint32(now.Add(24 * time.Hour).Unix()), State: "complete", CheckedAtMS: new(now.UnixMilli())}
 		run := storage.HistoryRun{ID: storage.NewID(), AccountID: account.ID, ServerID: account.ServerID, EndpointID: account.PinnedEndpointID, CoverageID: coverage.ID,
 			ConfigVersion: account.ConfigVersion, UnitRevision: account.UnitRevision, NativeCurrency: *account.Currency, State: "succeeded", StartedAtMS: now.UnixMilli(), FinishedAtMS: new(now.UnixMilli())}
 		orders := []storage.HistoryOrder{}
@@ -85,6 +85,13 @@ func seedAnalytics(ctx context.Context, s *accounts.Service) error {
 				Profit: profit, Commission: fee, NetProfit: net, VolumeHundredths: 10, Comment: "Synthetic closed trade"})
 		}
 		if index == 0 {
+			// An older published trade predates the verified calendar. A 90-day
+			// request must flag it without hiding healthy recent calendar days.
+			old := uint32(from.Add(-2 * time.Hour).Unix())
+			hash := sha256.Sum256([]byte("synthetic-unresolved-calendar-trade"))
+			orders = append(orders, storage.HistoryOrder{AccountID: account.ID, Ticket: 798999, Revision: 1,
+				SourceRunID: run.ID, SourceHash: hash[:], UnitRevision: account.UnitRevision, NativeCurrency: *account.Currency,
+				Command: 0, OpenTimeWall: old - 60, CloseTimeWall: old, EventTimeWall: old, Symbol: "EURUSD", Comment: "Synthetic older clock uncertainty"})
 			for j, event := range []struct {
 				at            time.Time
 				amount        int64

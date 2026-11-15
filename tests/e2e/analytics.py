@@ -68,6 +68,27 @@ def check_locale(browser, origin, locale, artifacts):
     dialog.screenshot(path=str(artifacts / f"day-{locale}.png"))
     dialog.get_by_role("button", name="Close" if english else "关闭", exact=True).click()
 
+    # An unresolved older event blocks the broad KPI, not an independently
+    # covered day's totals or its modal. Keep the visible path in the check.
+    with page.expect_response(analysis_response) as response:
+        page.get_by_role("button", name="90D", exact=True).click()
+    broad = response.value.json()["result"]
+    assert broad["quality"]["unresolved_times"] > 0
+    assert broad["metrics"]["realized"]["value"] is None
+    healthy = next(day for day in broad["days"] if day["date"] == selected["date"])
+    assert healthy["realized"]["value"] == selected["realized"]["value"]
+    assert healthy["net_profit"]["value"] == selected["net_profit"]["value"]
+    # The same day's activity may be cached when reopening the modal.
+    page.locator(f'[data-calendar-date="{selected["date"]}"]').click()
+    expect(dialog).to_be_visible()
+    expect(dialog.locator(".performance-breakdown > div").nth(1).locator("dd")).not_to_contain_text("—")
+    dialog.screenshot(path=str(artifacts / f"daily-scope-{locale}.png"))
+    dialog.get_by_role("button", name="Close" if english else "关闭", exact=True).click()
+    # Returning to a fresh cached range need not make another HTTP request.
+    page.get_by_role("button", name="30D", exact=True).click()
+    expect(page.get_by_role("button", name="30D", exact=True)).to_have_attribute("aria-pressed", "true")
+    expect(page.locator(".performance-plot canvas")).to_be_visible()
+
     page.get_by_role("button", name="Cumulative net profit" if english else "累计净收益", exact=True).click()
     box = page.locator(".performance-plot").bounding_box()
     page.mouse.click(box["x"] + box["width"] * 0.65, box["y"] + 100)

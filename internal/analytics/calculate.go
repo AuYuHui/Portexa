@@ -96,6 +96,16 @@ func Calculate(ctx context.Context, input Input, details bool) (Result, error) {
 	q := Quality{Reasons: []string{}, ExpectedPoints: len(input.Samples), RawSamples: input.RawSamples,
 		Unclassified: input.Unclassified, UnresolvedTimes: input.UnresolvedTimes, Reconciliation: "unavailable"}
 	ledgerReasons := append([]string{}, input.LedgerReasons...)
+	capitalReasons := append([]string{}, input.CapitalReasons...)
+	for _, issue := range input.ScopedReasons {
+		if issue.FromMS < input.ToMS && issue.ToMS > input.FromMS {
+			if issue.Capital {
+				capitalReasons = append(capitalReasons, issue.Reason)
+			} else {
+				ledgerReasons = append(ledgerReasons, issue.Reason)
+			}
+		}
+	}
 	historyComplete := len(input.Coverage) == len(input.Samples)-1 && len(input.Samples) >= 2
 	for _, covered := range input.Coverage {
 		if !covered {
@@ -112,7 +122,7 @@ func Calculate(ctx context.Context, input Input, details bool) (Result, error) {
 	sum := totalEvents(eventsBetween(input.Events, input.FromMS, input.ToMS))
 	tradeReasons := unique(ledgerReasons)
 	profitReasons := append([]string{}, tradeReasons...)
-	profitReasons = append(profitReasons, input.CapitalReasons...)
+	profitReasons = append(profitReasons, capitalReasons...)
 	if sum.unknown || input.Unclassified > 0 {
 		profitReasons = append(profitReasons, "unclassified_funds")
 	}
@@ -191,7 +201,7 @@ func Calculate(ctx context.Context, input Input, details bool) (Result, error) {
 			p.StatisticalEquity = ptr(equity(sample))
 		}
 		valid := i > 0 && reasons[i] == "" && reasons[i-1] == "" && i-1 < len(input.Coverage) && input.Coverage[i-1]
-		if valid && len(tradeReasons) == 0 && len(input.CapitalReasons) == 0 {
+		if valid && len(tradeReasons) == 0 && len(capitalReasons) == 0 {
 			a := input.Samples[i-1]
 			events := eventsBetween(input.Events, a.TimeMS, sample.TimeMS)
 			period := totalEvents(events)

@@ -16,7 +16,8 @@ type analyticsPortfolio struct{ input analytics.Input }
 func newAnalyticsPortfolio(from, to int64) *analyticsPortfolio {
 	count := int((to-from)/analytics.Minute) + 1
 	p := &analyticsPortfolio{input: analytics.Input{FromMS: from, ToMS: to, Currency: "USD", Label: "portfolio",
-		Samples: make([]analytics.Sample, count), Coverage: make([]bool, count-1), Events: []analytics.Event{}, LedgerReasons: []string{}}}
+		Samples: make([]analytics.Sample, count), Coverage: make([]bool, count-1), Events: []analytics.Event{}, LedgerReasons: []string{},
+		UnresolvedTimesByDay: map[string]int{}}}
 	for i := range p.input.Samples {
 		p.input.Samples[i].TimeMS = from + int64(i)*analytics.Minute
 	}
@@ -68,7 +69,17 @@ func (s *Service) addAnalyticsPortfolio(ctx context.Context, p *analyticsPortfol
 		return nil
 	}
 	input.LedgerReasons = append(input.LedgerReasons, source.input.LedgerReasons...)
+	for _, issue := range source.input.ScopedReasons {
+		if analyticsMember(a, issue.FromMS) {
+			input.ScopedReasons = append(input.ScopedReasons, issue)
+		}
+	}
 	input.UnresolvedTimes += source.input.UnresolvedTimes
+	for _, day := range analytics.CalendarDays(input.FromMS, input.ToMS) {
+		if *a.IncludedAtMS < day.ToMS && (a.RemovedAtMS == nil || *a.RemovedAtMS > day.FromMS) {
+			input.UnresolvedTimesByDay[day.Date] += source.input.UnresolvedTimesByDay[day.Date]
+		}
+	}
 	for _, event := range source.input.Events {
 		if !analyticsMember(a, event.TimeMS) {
 			continue
@@ -85,7 +96,7 @@ func (s *Service) addAnalyticsPortfolio(ctx context.Context, p *analyticsPortfol
 			return found.Error
 		}
 		if found.RowsAffected == 0 || first.USDScale == nil || first.UnitRevision != a.UnitRevision {
-			input.CapitalReasons = append(input.CapitalReasons, "membership_unresolved")
+			input.ScopedReasons = append(input.ScopedReasons, analytics.ScopedReason{FromMS: *a.IncludedAtMS, ToMS: *a.IncludedAtMS + 1, Reason: "membership_unresolved", Capital: true})
 		} else {
 			balance, credit := first.Balance.Mul(*first.USDScale), first.Credit.Mul(*first.USDScale)
 			input.Events = append(input.Events, analytics.Event{TimeMS: *a.IncludedAtMS, AccountID: a.ID, Kind: "membership_in",
@@ -94,7 +105,7 @@ func (s *Service) addAnalyticsPortfolio(ctx context.Context, p *analyticsPortfol
 		}
 	}
 	if a.RemovedAtMS != nil && *a.RemovedAtMS >= input.FromMS && *a.RemovedAtMS < input.ToMS {
-		input.CapitalReasons = append(input.CapitalReasons, "membership_unresolved")
+		input.ScopedReasons = append(input.ScopedReasons, analytics.ScopedReason{FromMS: *a.RemovedAtMS, ToMS: *a.RemovedAtMS + 1, Reason: "membership_unresolved", Capital: true})
 	}
 	return nil
 }
@@ -199,7 +210,11 @@ func (s *Service) finishAnalyticsPortfolio(ctx context.Context, p *analyticsPort
 			if matched[transferKey(event)] {
 				continue
 			}
-			input.CapitalReasons = append(input.CapitalReasons, "transfer_unresolved")
+			until := event.TimeMS + 1
+			if event.Kind == "transfer_out" {
+				until = max(until, input.ToMS)
+			}
+			input.ScopedReasons = append(input.ScopedReasons, analytics.ScopedReason{FromMS: event.TimeMS, ToMS: until, Reason: "transfer_unresolved", Capital: true})
 			if len(view.Transfers) < 100 {
 				view.Transfers = append(view.Transfers, event)
 			}

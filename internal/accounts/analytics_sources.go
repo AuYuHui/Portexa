@@ -90,7 +90,7 @@ func (s *Service) analyticsSource(ctx context.Context, account storage.Account, 
 	if latest.RowsAffected > 0 {
 		source.cutoff = min(source.cutoff, (last.ObservedToMS+analytics.Minute-1)/analytics.Minute*analytics.Minute)
 	}
-	if err := s.analyticsEvents(ctx, source, from-analytics.MaxAge-1000, to, unit); err != nil {
+	if err := s.analyticsEvents(ctx, source, from-analytics.MaxAge-1000, to+1, unit); err != nil {
 		return nil, err
 	}
 	return source, nil
@@ -201,7 +201,7 @@ func (s *Service) analyticsEvents(ctx context.Context, source *analyticsSource, 
 				continue
 			}
 			if order.UnitRevision != source.account.UnitRevision || source.account.Currency == nil || order.NativeCurrency != *source.account.Currency {
-				source.input.LedgerReasons = append(source.input.LedgerReasons, "unit_changed")
+				source.input.ScopedReasons = append(source.input.ScopedReasons, analytics.ScopedReason{FromMS: instant, ToMS: instant + 1, Reason: "unit_changed"})
 				continue
 			}
 			amount := order.NetProfit
@@ -315,6 +315,23 @@ func (s *Service) analyticsSamples(ctx context.Context, source *analyticsSource,
 	for _, wall := range source.unresolvedWalls {
 		if wallCouldAffect(wall, ranges) {
 			input.UnresolvedTimes++
+		}
+	}
+	input.UnresolvedTimesByDay = map[string]int{}
+	for _, day := range analytics.CalendarDays(from, to) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		start := day.FromMS
+		index := int((start - from) / analytics.Minute)
+		if index < len(input.Samples) && input.Samples[index].Reason == "" {
+			start = min(start, input.Samples[index].ObservedFromMS-999)
+		}
+		windows := eventWallRanges(source.entries, start, day.ToMS+1)
+		for _, wall := range source.unresolvedWalls {
+			if wallCouldAffect(wall, windows) {
+				input.UnresolvedTimesByDay[day.Date]++
+			}
 		}
 	}
 	input.Fingerprint = hex.EncodeToString(source.hash.Sum(nil))
