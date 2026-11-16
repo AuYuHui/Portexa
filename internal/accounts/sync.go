@@ -229,8 +229,10 @@ type Failure struct {
 	Canceled  bool
 }
 
-func (s *Service) Fail(ctx context.Context, job Job, failure Failure, next int64) error {
-	return s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
+// Fail reports whether the retry was persisted for an enabled, unchanged account.
+func (s *Service) Fail(ctx context.Context, job Job, failure Failure, next int64) (bool, error) {
+	retryScheduled := false
+	err := s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
 		var current storage.Account
 		if err := tx.First(&current, "id = ?", job.Account.ID).Error; err != nil {
 			return err
@@ -255,8 +257,13 @@ func (s *Service) Fail(ctx context.Context, job Job, failure Failure, next int64
 		if state == "failed" {
 			updates["failure_count"] = current.FailureCount + 1
 		}
-		return tx.Model(&current).Updates(updates).Error
+		if err := tx.Model(&current).Updates(updates).Error; err != nil {
+			return err
+		}
+		retryScheduled = current.SyncEnabled && !failure.Permanent && !failure.Canceled
+		return nil
 	})
+	return retryScheduled && err == nil, err
 }
 
 func IsBrokenGate(err error) bool {
@@ -272,4 +279,16 @@ func RetryDelay(failures int64) time.Duration {
 	default:
 		return 5 * time.Minute
 	}
+}
+
+// SnapshotRetryDelay gives transient snapshot failures one quick retry. History
+// keeps its independent budget; repeated failures fall back to bounded backoff.
+func SnapshotRetryDelay(failure Failure, failures int64) time.Duration {
+	if !failure.Permanent && !failure.Canceled && (failure.Code == string(mt4.Timeout) || failure.Code == string(mt4.ConnectionFailed)) {
+		if failures == 0 {
+			return 3 * time.Second
+		}
+		return RetryDelay(failures - 1)
+	}
+	return RetryDelay(failures)
 }

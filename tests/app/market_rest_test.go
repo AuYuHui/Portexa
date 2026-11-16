@@ -139,7 +139,7 @@ func TestMarketRestSchedulingAndAutomaticExit(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err = f.Accounts.Fail(t.Context(), job, accounts.Failure{Code: "synthetic_failure"}, now.UnixMilli()); err != nil {
+				if _, err = f.Accounts.Fail(t.Context(), job, accounts.Failure{Code: "synthetic_failure"}, now.UnixMilli()); err != nil {
 					t.Fatal(err)
 				}
 			}

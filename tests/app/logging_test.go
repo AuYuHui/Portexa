@@ -121,11 +121,18 @@ func TestSyncLogsContainOutcomeWithoutConnectionOrAccountData(t *testing.T) {
 			if success {
 				want = "sync_completed"
 			}
-			if len(records) != 2 || records[0]["msg"] != "sync_started" || records[1]["msg"] != want || records[1]["account_id"] != account.ID || records[1]["run_id"] == "" {
+			count := 2
+			if !success {
+				count++
+			}
+			if len(records) != count || records[0]["msg"] != "sync_started" || records[1]["msg"] != want || records[1]["account_id"] != account.ID || records[1]["run_id"] == "" {
 				t.Fatal("missing sync outcome", records)
 			}
 			if !success && (records[1]["code"] != "snapshot_invalid" || records[1]["level"] != "WARN") {
 				t.Fatal("missing safe failure classification")
+			}
+			if !success && (records[2]["msg"] != "sync_retry_scheduled" || records[2]["retry_delay_ms"] != float64(60000)) {
+				t.Fatal("missing persisted retry schedule", records)
 			}
 		})
 	}

@@ -180,7 +180,8 @@ func (e *Engine) runOne(ctx context.Context, id string) {
 	}
 	from := time.Now()
 	logger := e.logger.With("account_id", id, "run_id", job.Run.ID)
-	logger.Info("sync_started")
+	logger.Info("sync_started", "attempt", job.Run.Attempt, "due_at_ms", job.Run.DueAtMS,
+		"schedule_delay_ms", max(int64(0), *job.Run.StartedAtMS-job.Run.DueAtMS))
 	result, err := e.fetch(ctx, job.Config, mt4.Options{})
 	job.Config.Password = ""
 	finished := time.Now()
@@ -206,14 +207,21 @@ func (e *Engine) runOne(ctx context.Context, id string) {
 			level = slog.LevelInfo
 		}
 		logger.Log(ctx, level, "sync_failed", "code", failure.Code, "operation", failure.Operation,
-			"permanent", failure.Permanent, "canceled", failure.Canceled, "duration_ms", time.Since(from).Milliseconds())
+			"permanent", failure.Permanent, "canceled", failure.Canceled, "attempt", job.Run.Attempt,
+			"duration_ms", time.Since(from).Milliseconds())
 		endCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		if err := e.accounts.Fail(endCtx, job, failure, finished.Add(accounts.RetryDelay(job.Account.FailureCount)).UnixMilli()); err != nil {
+		delay := accounts.SnapshotRetryDelay(failure, job.Account.FailureCount)
+		next := finished.Add(delay).UnixMilli()
+		if scheduled, err := e.accounts.Fail(endCtx, job, failure, next); err != nil {
 			e.stopForStorageFailure()
+		} else if scheduled {
+			logger.Info("sync_retry_scheduled", "code", failure.Code, "operation", failure.Operation,
+				"failure_count", job.Account.FailureCount+1, "retry_delay_ms", delay.Milliseconds(), "next_retry_at_ms", next)
 		}
 	} else {
-		logger.Info("sync_completed", "duration_ms", time.Since(from).Milliseconds())
+		logger.Info("sync_completed", "duration_ms", time.Since(from).Milliseconds(),
+			"recovered", job.Account.FailureCount > 0, "previous_failure_count", job.Account.FailureCount)
 	}
 }
 
