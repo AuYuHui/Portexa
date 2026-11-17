@@ -70,6 +70,23 @@ func historicalTimeEntries(ctx context.Context, tx *gorm.DB, server storage.Serv
 		}
 	}
 	sort.Slice(bounded, func(i, j int) bool { return bounded[i].FromUTCMS < bounded[j].FromUTCMS })
+	// Each ledger row probes several instants around its wall time. Resolve the
+	// immutable zone data once per query, while still evaluating DST per instant.
+	locations := map[string]*time.Location{}
+	for i := range bounded {
+		entry := &bounded[i]
+		if entry.Kind != "iana" && entry.Kind != "broker_us_dst" || entry.Zone == "Local" {
+			continue
+		}
+		if zone, found := locations[entry.Zone]; found {
+			entry.location = zone
+			continue
+		}
+		zone, err := time.LoadLocation(entry.Zone)
+		if err == nil {
+			locations[entry.Zone], entry.location = zone, zone
+		}
+	}
 	evidence, err := json.Marshal(bounded)
 	return bounded, string(evidence), err
 }

@@ -64,13 +64,13 @@ func serverLocation(entry timeRuleEntry, at time.Time) (*time.Location, string, 
 		return time.FixedZone(label, entry.OffsetMinutes*60), label, nil
 	}
 	if entry.Kind == "iana" && entry.Zone != "Local" {
-		zone, err := time.LoadLocation(entry.Zone)
+		zone, err := entry.loadLocation()
 		if err == nil {
 			return zone, entry.Zone, nil
 		}
 	}
 	if entry.Kind == "broker_us_dst" && entry.PolicyID == dprimeTimePolicy && entry.Zone == "America/New_York" {
-		newYork, err := time.LoadLocation(entry.Zone)
+		newYork, err := entry.loadLocation()
 		if err != nil {
 			return nil, "", err
 		}
@@ -82,6 +82,13 @@ func serverLocation(entry timeRuleEntry, at time.Time) (*time.Location, string, 
 		return time.FixedZone(label, hours*3600), label, nil
 	}
 	return nil, "", ErrServerTime
+}
+
+func (entry timeRuleEntry) loadLocation() (*time.Location, error) {
+	if entry.location != nil {
+		return entry.location, nil
+	}
+	return time.LoadLocation(entry.Zone)
 }
 
 func ensureAutomaticTime(tx *gorm.DB, server *storage.Server, now time.Time) error {

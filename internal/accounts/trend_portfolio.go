@@ -125,6 +125,7 @@ func (s *Service) addPortfolioAccount(ctx context.Context, account storage.Accou
 	var last *storage.Snapshot
 	var tail *storage.Snapshot
 	var source *analyticsSource
+	var sourceUntil int64
 	fill := func(until int64, bridge bool) {
 		for index < len(slots) && slots[index].point.TimeMS < until {
 			slot := &slots[index]
@@ -175,8 +176,15 @@ func (s *Service) addPortfolioAccount(ctx context.Context, account storage.Accou
 		bridge := false
 		if last != nil && restPairPossible(*last, snapshot) {
 			var err error
-			if source == nil {
-				source, err = s.analyticsSource(ctx, account, input.FromMS, input.ToMS, "USD")
+			if source == nil || snapshot.ObservedToMS >= sourceUntil {
+				_, end, _, boundsErr := snapshotRestBounds(s.Store.Read.WithContext(ctx), *last, time.UnixMilli(last.ObservedToMS))
+				if boundsErr != nil {
+					return boundsErr
+				}
+				// Rest proofs only need the bracketing snapshots' window. Loading
+				// the full chart range needlessly decodes every weekday trade.
+				sourceUntil = min(end.UnixMilli(), input.ToMS+padding)
+				source, err = s.analyticsSource(ctx, account, last.ObservedFromMS-999, sourceUntil, "USD")
 				if err != nil {
 					return err
 				}

@@ -33,6 +33,8 @@ type timeRuleEntry struct {
 	SourceRef     string `json:"source_ref"`
 	PolicyID      string `json:"policy_id,omitempty"`
 	OffsetMinutes int    `json:"offset_minutes,omitempty"`
+	// Resolved only for this historical query; never serialized or persisted.
+	location *time.Location
 }
 
 type ServerTimeInput struct {
