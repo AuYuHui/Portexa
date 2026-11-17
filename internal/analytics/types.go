@@ -4,7 +4,7 @@ package analytics
 
 import "github.com/shopspring/decimal"
 
-const Version = "analytics-v6-md24-rest-learning"
+const Version = "analytics-v7-clock-active24"
 const Minute int64 = 60_000
 const MaxAge int64 = 90_000
 const MaxRange int64 = 90 * 24 * 60 * Minute

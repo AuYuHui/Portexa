@@ -275,8 +275,11 @@ func TestTradeClockRenewalKeepsRulesetAndRejectsDSTStraddlingWindow(t *testing.T
 	clockSnapshot(t, f, account, now, nil)
 	publishClock(t, f, account, now, closedClock(trade, now, 120))
 	after := clockView(t, f)
+	// Fresh evidence advances the observation, while the known DST boundary
+	// still caps the expiry shared by every pre-transition observation.
 	if after.TimeRulesetID != before.TimeRulesetID || after.AutomaticTimeZone.EvidenceCount != 4 ||
-		*after.AutomaticTimeZone.ExpiresAtMS <= *before.AutomaticTimeZone.ExpiresAtMS {
+		*after.AutomaticTimeZone.ObservedAtMS <= *before.AutomaticTimeZone.ObservedAtMS ||
+		*after.AutomaticTimeZone.ExpiresAtMS < *before.AutomaticTimeZone.ExpiresAtMS {
 		t.Fatal("fresh matching event did not renew without ruleset churn", after)
 	}
 	// Closes just before a known switch must not be interpreted as evidence of

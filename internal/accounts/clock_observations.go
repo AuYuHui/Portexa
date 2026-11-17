@@ -91,13 +91,17 @@ func refreshClockCalibration(tx *gorm.DB, server *storage.Server, now time.Time)
 		Joins("JOIN accounts AS a ON a.id = o.account_id AND a.server_id = o.server_id AND a.config_version = o.config_version AND a.pinned_endpoint_id = o.endpoint_id").
 		Joins("JOIN server_endpoints AS e ON e.id = o.endpoint_id AND e.state = 'reviewed'").
 		Where("o.server_id = ? AND o.state = 'accepted' AND a.removed_at_ms IS NULL AND o.window_to_ms > ? AND o.window_to_ms <= ?",
-			server.ID, now.Add(-clockEvidenceTTL).UnixMilli(), now.UnixMilli()).
+			server.ID, now.Add(-clockEvidenceLookback).UnixMilli(), now.UnixMilli()).
 		Order("o.window_to_ms DESC, o.id DESC").Limit(2048).Find(&observations).Error; err != nil {
 		return err
 	}
 	state := storage.ClockCalibration{ServerID: server.ID, Status: "learning"}
 	tickets, windows := map[int32]bool{}, map[string]bool{}
 	for _, observation := range observations {
+		expires := clockEvidenceExpiry(*server, observation)
+		if expires <= now.UnixMilli() {
+			continue
+		}
 		// Published DST policy expires earlier observations when its offset
 		// changes. A measured current offset is not an annual DST rule.
 		if !sameOfficialClockPeriod(*server, time.UnixMilli(observation.WindowFromMS), time.UnixMilli(observation.WindowToMS)) ||
@@ -108,7 +112,6 @@ func refreshClockCalibration(tx *gorm.DB, server *storage.Server, now time.Time)
 			offset := *observation.OffsetMinutes
 			state.OffsetMinutes = &offset
 			stamp := observation.WindowToMS
-			expires := stamp + clockEvidenceTTL.Milliseconds()
 			state.ObservedAtMS, state.ExpiresAtMS = &stamp, &expires
 		} else if *state.OffsetMinutes != *observation.OffsetMinutes {
 			break // Only the most recent consistent sequence counts.
@@ -163,7 +166,7 @@ func sameOfficialClockPeriod(server storage.Server, observed, now time.Time) boo
 	return a == b
 }
 
-// RefreshServerTimes also expires measurements while there are no trades.
+// RefreshServerTimes ages measurements outside eligible weekend rest windows.
 func (s *Service) RefreshServerTimes(ctx context.Context) error {
 	var servers []storage.Server
 	if err := s.Store.Read.WithContext(ctx).Table("servers AS s").Select("s.*").

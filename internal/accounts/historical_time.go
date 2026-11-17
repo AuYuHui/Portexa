@@ -32,7 +32,7 @@ func historicalTimeEntries(ctx context.Context, tx *gorm.DB, server storage.Serv
 			Joins("JOIN accounts AS a ON a.id=o.account_id AND a.server_id=o.server_id AND a.config_version=o.config_version AND a.pinned_endpoint_id=o.endpoint_id").
 			Joins("JOIN server_endpoints AS e ON e.id=o.endpoint_id AND e.state='reviewed'").
 			Where("o.server_id=? AND o.state='accepted' AND a.removed_at_ms IS NULL AND o.window_to_ms>? AND o.checked_at_ms<?",
-				server.ID, from-clockEvidenceTTL.Milliseconds(), to).
+				server.ID, from-clockEvidenceLookback.Milliseconds(), to+clockEvidenceLookback.Milliseconds()).
 			Order("o.checked_at_ms,o.window_to_ms,o.id").Limit(50_001).Find(&observations).Error; err != nil {
 			return nil, "", err
 		}
@@ -104,21 +104,7 @@ func measuredTimeWindows(ctx context.Context, server storage.Server, observation
 			!sameOfficialClockPeriod(server, time.UnixMilli(o.WindowFromMS), time.UnixMilli(o.WindowToMS)) {
 			continue
 		}
-		until := o.WindowToMS + clockEvidenceTTL.Milliseconds()
-		// A known DST transition terminates the measurement even without a
-		// subsequent trade. Each evidence lifetime is at most 24 hours.
-		if !sameOfficialClockPeriod(server, time.UnixMilli(o.WindowToMS), time.UnixMilli(until-1)) {
-			lo, hi := o.WindowToMS, until
-			for lo+1 < hi {
-				mid := lo + (hi-lo)/2
-				if sameOfficialClockPeriod(server, time.UnixMilli(o.WindowToMS), time.UnixMilli(mid)) {
-					lo = mid
-				} else {
-					hi = mid
-				}
-			}
-			until = hi
-		}
+		until := clockEvidenceExpiry(server, o)
 		if *o.CheckedAtMS < until {
 			events = append(events, clockEvidenceEvent{at: *o.CheckedAtMS, index: i}, clockEvidenceEvent{at: until, index: i, remove: true})
 		}
@@ -164,7 +150,23 @@ func measuredTimeWindows(ctx context.Context, server storage.Server, observation
 				}
 			} else {
 				if (len(active) > 0 || opened) && offset != *o.OffsetMinutes {
-					closeWindow(min(at, o.WindowFromMS))
+					boundary := min(at, o.WindowFromMS)
+					cut := clockConflictBoundary(boundary, observations, active)
+					if cut < boundary {
+						// The quorum may have just expired while an individual
+						// carried observation is still active. Retract that closed
+						// window too, rather than retaining stale rest continuity.
+						for len(result) > 0 && *result[len(result)-1].UntilUTCMS > cut {
+							last := &result[len(result)-1]
+							if last.FromUTCMS >= cut {
+								result = result[:len(result)-1]
+								continue
+							}
+							last.UntilUTCMS = &cut
+							break
+						}
+					}
+					closeWindow(cut)
 					active, tickets, windows = map[int]bool{}, map[int32]int{}, map[string]int{}
 				}
 				offset = *o.OffsetMinutes
