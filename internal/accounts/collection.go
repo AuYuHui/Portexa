@@ -105,7 +105,7 @@ func NextSnapshotAt(id string, finished time.Time, interval time.Duration) time.
 	phase := int64(h.Sum32()) % cycle
 	next := ((finished.UnixMilli()-phase)/cycle+1)*cycle + phase
 	earliest := finished.Add(DailyAdmissionLead + 2*time.Second).UnixMilli()
-	return time.UnixMilli(max(next, earliest))
+	return nextDailyBoundarySnapshot(finished, time.UnixMilli(max(next, earliest)))
 }
 
 func snapshotStaleAfter(settings storage.CollectionSettings) time.Duration {

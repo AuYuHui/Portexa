@@ -1,5 +1,20 @@
 import { t } from "../../i18n";
 import { fundCategories } from "../../format";
+import type { PerformanceDay } from "../../types/analytics";
+
+export function calendarDayReason(day: PerformanceDay): string {
+  if (day.net_profit.value !== null) return "";
+  const reasons = day.net_profit.reasons;
+  if (reasons.includes("no_members")) return "";
+  if (!day.partial && reasons.includes("boundary_event")) {
+    const start = reasons.includes("missing_start");
+    const end = reasons.includes("missing_end");
+    if (start && end) return t("analytics.dayBothBoundary");
+    if (start) return t("analytics.dayStartBoundary");
+    if (end) return t("analytics.dayEndBoundary");
+  }
+  return performanceReasons(reasons);
+}
 
 export function performanceReason(reason: string): string {
   const keys: Record<string, string> = {

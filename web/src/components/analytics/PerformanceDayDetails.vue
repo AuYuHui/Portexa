@@ -7,7 +7,7 @@ import { api } from "../../api";
 import { signedMoney } from "../../format";
 import { localizeMessage } from "../../i18n";
 import { trendDate } from "../charts/trendFormat";
-import { performanceEvent, performanceReasons } from "./performanceFormat";
+import { calendarDayReason, performanceEvent, performanceReasons } from "./performanceFormat";
 import type {
   PerformanceActivity,
   PerformanceDay,
@@ -71,7 +71,7 @@ const breakdown = computed(() => [
       <span v-if="day.later_boundary">{{ t("analytics.laterBoundary") }}</span>
     </p>
     <p v-if="day.net_profit.reasons.length" class="notice notice-warning">
-      {{ performanceReasons(day.net_profit.reasons) }}
+      {{ calendarDayReason(day) || performanceReasons(day.net_profit.reasons) }}
     </p>
     <p v-if="day.rest_carried_points" class="muted small" data-rest-evidence>
       {{ t("collectionSettings.restValuations", { count: day.rest_carried_points }) }}

@@ -464,6 +464,17 @@
   font-size: 9px;
   opacity: 0.7;
 }
+.performance-day-reason,
+.performance-day-realized {
+  font-size: 10px;
+  line-height: 1.5;
+  color: #475569;
+  overflow-wrap: anywhere;
+}
+.performance-day-status,
+.performance-day-mobile-realized {
+  display: none;
+}
 .performance-day-partial {
   font-size: 12px;
 }
@@ -771,6 +782,20 @@
   }
   .performance-calendar-day small {
     display: none;
+  }
+  .performance-day-reason,
+  .performance-day-realized {
+    display: none;
+  }
+  .performance-day-status,
+  .performance-day-mobile-realized {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 8px;
+    line-height: 1.4;
+    color: #475569;
+    overflow-wrap: anywhere;
   }
   .performance-day-number {
     font-size: 9px;

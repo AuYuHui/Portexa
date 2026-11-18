@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { ChevronLeft, ChevronRight } from "@lucide/vue";
 import { signedMoney, positive } from "../../format";
+import { calendarDayReason } from "./performanceFormat";
 import type { PerformanceDay, PerformanceResult } from "../../types/analytics";
 const props = defineProps<{
   days: PerformanceDay[];
@@ -59,6 +60,17 @@ function tone(day?: PerformanceDay) {
   if (value == null) return "is-missing";
   if (/^-?0(?:\.0+)?$/.test(value)) return "is-flat";
   return value.startsWith("-") ? "is-negative" : "is-positive";
+}
+function realizedLabel(day: PerformanceDay) {
+  return t("analytics.calendarRealized", {
+    value: signedMoney(day.realized.value),
+    currency: props.currency,
+  });
+}
+function dayLabel(day: PerformanceDay) {
+  const label = `${day.date} ${signedMoney(day.net_profit.value)} ${props.currency}`;
+  if (day.net_profit.value !== null) return label;
+  return [label, calendarDayReason(day), day.realized.value !== null ? realizedLabel(day) : ""].filter(Boolean).join(" · ");
 }
 </script>
 
@@ -126,9 +138,10 @@ function tone(day?: PerformanceDay) {
           :disabled="!cell.day"
           :aria-label="
             cell.day
-              ? `${cell.key} ${signedMoney(cell.day.net_profit.value)} ${currency}`
+              ? dayLabel(cell.day)
               : cell.key
           "
+          :title="cell.day ? calendarDayReason(cell.day) || undefined : undefined"
           :data-calendar-date="cell.key"
           @click="cell.day && emit('select', cell.day)"
         >
@@ -144,6 +157,12 @@ function tone(day?: PerformanceDay) {
           <strong class="num">{{
             cell.day ? signedMoney(cell.day.net_profit.value) : "—"
           }}</strong>
+          <template v-if="cell.day && calendarDayReason(cell.day)">
+            <span class="performance-day-reason" data-calendar-reason>{{ calendarDayReason(cell.day) }}</span>
+            <span class="performance-day-status">{{ t("analytics.calendarUnavailable") }}</span>
+            <span v-if="cell.day.realized.value !== null" class="performance-day-realized num" data-calendar-realized>{{ realizedLabel(cell.day) }}</span>
+            <span v-if="cell.day.realized.value !== null" class="performance-day-mobile-realized"><span>{{ t("analytics.calendarRealizedShort") }}</span><span class="num">{{ signedMoney(cell.day.realized.value) }}</span></span>
+          </template>
           <small v-if="cell.day">{{
             cell.day.trades === null
               ? t("analytics.tradesUnknown")

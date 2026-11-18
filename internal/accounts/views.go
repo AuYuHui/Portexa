@@ -207,6 +207,7 @@ func readView(tx *gorm.DB, account storage.Account, now int64, settings storage.
 				staleAfter = max(3*time.Minute, 3*time.Duration(view.EffectiveCollectionIntervalSeconds)*time.Second)
 			}
 		}
+		view.EffectiveCollectionIntervalSeconds = int(dailyBoundaryInterval(time.UnixMilli(now), time.Duration(view.EffectiveCollectionIntervalSeconds)*time.Second) / time.Second)
 		view.Stale = now-snapshot.ObservedToMS > staleAfter.Milliseconds()
 		if account.Currency == nil || *account.Currency != snapshot.NativeCurrency || account.UnitRevision != snapshot.UnitRevision {
 			view.UnitConfirmed = false

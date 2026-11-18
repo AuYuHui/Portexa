@@ -11,7 +11,7 @@ import (
 )
 
 func TestAnalyticsBoundarySelectsReconciledLaterValuation(t *testing.T) {
-	for _, scenario := range []string{"clean", "later_trade", "collection_trade", "no_later_sample", "incomplete_bridge", "old_later_sample", "balance_mismatch"} {
+	for _, scenario := range []string{"clean", "dense_before_boundary", "later_trade", "collection_trade", "no_later_sample", "incomplete_bridge", "old_later_sample", "balance_mismatch"} {
 		t.Run(scenario, func(t *testing.T) {
 			f, a, now, start := analyticsFixture(t)
 			end := start.Add(3 * time.Minute)
@@ -27,7 +27,11 @@ func TestAnalyticsBoundarySelectsReconciledLaterValuation(t *testing.T) {
 			if scenario == "balance_mismatch" {
 				laterBalance++
 			}
-			if scenario == "later_trade" || scenario == "collection_trade" {
+			if scenario == "dense_before_boundary" {
+				*now = end.Add(-100 * time.Millisecond)
+				analyticsSnapshot(t, f, a, *now, laterBalance, -1)
+			}
+			if scenario == "later_trade" || scenario == "collection_trade" || scenario == "dense_before_boundary" {
 				at := end.Add(10 * time.Second)
 				if scenario == "collection_trade" {
 					at = end.Add(28 * time.Second)
@@ -54,7 +58,7 @@ func TestAnalyticsBoundarySelectsReconciledLaterValuation(t *testing.T) {
 					t.Fatal(err)
 				}
 				assertMetric(t, view.Result.Metrics.Realized, "7")
-				if scenario == "clean" {
+				if scenario == "clean" || scenario == "dense_before_boundary" {
 					assertMetric(t, view.Result.Metrics.NetProfit, "9")
 					assertMetric(t, view.Result.Metrics.FloatingChange, "2")
 					assertMetric(t, view.Result.Days[0].NetProfit, "9")

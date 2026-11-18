@@ -38,11 +38,15 @@ func TestMarketRestDayBoundaryAndOpeningRestoreNormalCadence(t *testing.T) {
 			}
 			*now = target
 			point := restSnapshot(t, f, a, *now, "XAUUSD.c", 10)
-			if *point.CollectionIntervalSeconds != 60 {
+			want := 60
+			if label == "midnight" {
+				want = 30
+			}
+			if *point.CollectionIntervalSeconds != want {
 				t.Fatal("guard did not restore regular sampling")
 			}
 			view, err := f.Accounts.Detail(t.Context(), a.ID, "")
-			if err != nil || view.Account.EffectiveCollectionIntervalSeconds != 60 || view.Account.MarketRest {
+			if err != nil || view.Account.EffectiveCollectionIntervalSeconds != want || view.Account.MarketRest {
 				t.Fatal("guard reporting differs from actual cadence", view.Account.EffectiveCollectionIntervalSeconds, view.Account.MarketRest, err)
 			}
 		})

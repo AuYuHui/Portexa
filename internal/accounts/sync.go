@@ -170,6 +170,7 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 		if err != nil {
 			return err
 		}
+		interval = dailyBoundaryInterval(time.UnixMilli(snapshot.ObservedToMS), interval)
 		seconds := int(interval / time.Second)
 		snapshot.CollectionIntervalSeconds = &seconds
 		if err := tx.Create(&snapshot).Error; err != nil {
