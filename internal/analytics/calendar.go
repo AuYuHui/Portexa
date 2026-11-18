@@ -13,25 +13,40 @@ func monthly(days []Day) []Month {
 	months := []Month{}
 	for start := 0; start < len(days); {
 		month := days[start].Date[:7]
-		end, sum := start, decimal.Zero
-		reasons := []string{}
+		end := start
 		for end < len(days) && days[end].Date[:7] == month {
-			if days[end].NetProfit.Value == nil {
-				reasons = append(reasons, days[end].NetProfit.Reasons...)
-			} else {
-				sum = sum.Add(*days[end].NetProfit.Value)
-			}
 			end++
 		}
 		date, _ := time.ParseInLocation("2006-01", month, beijing)
-		value := known(sum)
-		if len(reasons) > 0 {
-			value = unavailable(reasons...)
-		}
-		months = append(months, Month{Month: month, NetProfit: value, Partial: days[start].FromMS != date.UnixMilli() || days[end-1].ToMS != date.AddDate(0, 1, 0).UnixMilli()})
+		part := days[start:end]
+		months = append(months, Month{Month: month,
+			NetProfit:      sumDailyMetrics(part, func(day Day) Metric { return day.NetProfit }),
+			Realized:       sumDailyMetrics(part, func(day Day) Metric { return day.Realized }),
+			FloatingChange: sumDailyMetrics(part, func(day Day) Metric { return day.FloatingChange }),
+			Partial:        days[start].FromMS != date.UnixMilli() || days[end-1].ToMS != date.AddDate(0, 1, 0).UnixMilli()})
 		start = end
 	}
 	return months
+}
+
+// Each monthly total depends only on its own daily evidence. Missing midnight
+// valuations must not suppress a complete realized trading ledger.
+func sumDailyMetrics(days []Day, selectMetric func(Day) Metric) Metric {
+	sum, missing := decimal.Zero, false
+	reasons := []string{}
+	for _, day := range days {
+		metric := selectMetric(day)
+		if metric.Value == nil {
+			missing = true
+			reasons = append(reasons, metric.Reasons...)
+		} else {
+			sum = sum.Add(*metric.Value)
+		}
+	}
+	if missing {
+		return unavailable(reasons...)
+	}
+	return known(sum)
 }
 
 // CalendarDays supplies the same Beijing boundaries to source evidence and

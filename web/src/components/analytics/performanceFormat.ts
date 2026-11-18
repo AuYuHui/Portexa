@@ -2,6 +2,11 @@ import { t } from "../../i18n";
 import { fundCategories } from "../../format";
 import type { PerformanceDay } from "../../types/analytics";
 
+export function calendarRealizedReason(day: PerformanceDay): string {
+  if (day.realized.value !== null || day.realized.reasons.includes("no_members")) return "";
+  return performanceReasons(day.realized.reasons);
+}
+
 export function calendarDayReason(day: PerformanceDay): string {
   if (day.net_profit.value !== null) return "";
   const reasons = day.net_profit.reasons;

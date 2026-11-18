@@ -4,7 +4,7 @@ package analytics
 
 import "github.com/shopspring/decimal"
 
-const Version = "analytics-v7-clock-active24"
+const Version = "analytics-v8-realized-calendar"
 const Minute int64 = 60_000
 const MaxAge int64 = 90_000
 const MaxRange int64 = 90 * 24 * 60 * Minute
@@ -155,9 +155,11 @@ type Day struct {
 }
 
 type Month struct {
-	Month     string `json:"month"`
-	NetProfit Metric `json:"net_profit"`
-	Partial   bool   `json:"partial"`
+	Month          string `json:"month"`
+	NetProfit      Metric `json:"net_profit"`
+	Realized       Metric `json:"realized"`
+	FloatingChange Metric `json:"floating_change"`
+	Partial        bool   `json:"partial"`
 }
 
 type Drawdown struct {

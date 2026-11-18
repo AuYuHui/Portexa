@@ -72,7 +72,13 @@ export interface PerformanceResult {
   drawdown: { peak_ms: number; trough_ms: number; recovered_ms: number | null };
   points: PerformancePoint[];
   days: PerformanceDay[];
-  months: { month: string; net_profit: PerformanceMetric; partial: boolean }[];
+  months: {
+    month: string;
+    net_profit: PerformanceMetric;
+    realized: PerformanceMetric;
+    floating_change: PerformanceMetric;
+    partial: boolean;
+  }[];
   evidence_id: string;
   downsampled: boolean;
 }

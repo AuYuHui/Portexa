@@ -46,11 +46,11 @@ const { data, error, isPending, refetch } = useQuery({
   },
 });
 const breakdown = computed(() => [
-  { label: t("analytics.sampledNetProfit"), metric: props.day.net_profit },
-  { label: t("analytics.realized"), metric: props.day.realized },
-  { label: t("analytics.floatingChange"), metric: props.day.floating_change },
-  { label: t("analytics.otherIncome"), metric: props.day.other_income },
-  { label: t("analytics.costs"), metric: props.day.costs },
+  { key: "realized", label: t("analytics.realized"), metric: props.day.realized },
+  { key: "floating", label: t("analytics.floatingChange"), metric: props.day.floating_change },
+  { key: "other", label: t("analytics.otherIncome"), metric: props.day.other_income },
+  { key: "costs", label: t("analytics.costs"), metric: props.day.costs },
+  { key: "net", label: t("analytics.sampledNetProfit"), metric: props.day.net_profit },
 ]);
 </script>
 
@@ -60,10 +60,12 @@ const breakdown = computed(() => [
       {{ trendDate(day.from_ms) }} — {{ trendDate(day.to_ms) }} ·
       {{ t("trend.beijing") }}
     </p>
+    <p class="muted small">{{ t("analytics.realizedFormula") }}</p>
     <dl class="performance-breakdown">
-      <div v-for="item in breakdown" :key="item.label">
+      <div v-for="item in breakdown" :key="item.key" :data-day-metric="item.key">
         <dt>{{ item.label }}</dt>
         <dd class="num">{{ signedMoney(item.metric.value) }} {{ currency }}</dd>
+        <p v-if="item.metric.value === null && item.key !== 'net'" class="performance-breakdown-reason">{{ performanceReasons(item.metric.reasons) }}</p>
       </div>
     </dl>
     <p v-if="day.net_profit.value !== null" class="muted small" data-sampled-valuation>

@@ -10,6 +10,7 @@ from playwright.sync_api import expect, sync_playwright
 
 from dashboard import PASSWORD, no_page_overflow
 from trends import synthetic_server
+from realized_calendar import check_realized_calendar
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -46,6 +47,7 @@ def check_locale(browser, origin, locale, artifacts):
     for month in result["months"]:
         values = [Decimal(day["net_profit"]["value"]) for day in result["days"] if day["date"].startswith(month["month"])]
         assert sum(values) == Decimal(month["net_profit"]["value"])
+        assert sum(Decimal(day["realized"]["value"]) for day in result["days"] if day["date"].startswith(month["month"])) == Decimal(month["realized"]["value"])
     expect(page.locator(".performance-plot canvas")).to_be_visible()
     expect(page.locator(".performance-kpis article")).to_have_count(4)
     expect(page.locator("[data-analysis-coverage]")).to_contain_text("not calculation progress" if english else "不是计算进度")
@@ -86,7 +88,7 @@ def check_locale(browser, origin, locale, artifacts):
     # The same day's activity may be cached when reopening the modal.
     page.locator(f'[data-calendar-date="{selected["date"]}"]').click()
     expect(dialog).to_be_visible()
-    expect(dialog.locator(".performance-breakdown > div").nth(1).locator("dd")).not_to_contain_text("—")
+    expect(dialog.locator('[data-day-metric="realized"] dd')).not_to_contain_text("—")
     dialog.screenshot(path=str(artifacts / f"daily-scope-{locale}.png"))
     dialog.get_by_role("button", name="Close" if english else "关闭", exact=True).click()
     # Returning to a fresh cached range need not make another HTTP request.
@@ -169,6 +171,7 @@ def check_locale(browser, origin, locale, artifacts):
     page.unroute("**/api/analytics?*", fail_analysis)
     page.get_by_role("button", name="Retry" if english else "重试", exact=True).click()
     expect(page.get_by_role("alert")).to_have_count(0)
+    check_realized_calendar(page, body, english, artifacts)
     assert not errors, errors
     context.close()
 
@@ -189,7 +192,7 @@ def main():
                 check_locale(browser, origin, locale, args.artifacts)
         finally:
             browser.close()
-    print("PASS: reconciled KPI/bridge/months, curves, calendar activity, USD/USC, URL state, nulls, recovery, bilingual desktop/390/320; synthetic data only")
+    print("PASS: reconciled KPI/bridge/months, realized calendar with missing midnight valuations, separate floating P/L, curves, activity, USD/USC, URL state, nulls, recovery, bilingual desktop/390/320; synthetic data only")
 
 
 if __name__ == "__main__":
