@@ -75,6 +75,8 @@ The native protocol sends password-derived material over TCP before cryptographi
 
 ### Connect an MT5 account
 
+MT5 collection requires a challenge worker and its matching terminal image. On Linux x86_64, use the [worker build and offline check](docs/product-start.md#mt5-采集运行依赖) with the supported ARM64 image you obtain separately.
+
 Open **Connections & settings → Register server**, select **MT5**, and search by broker or server name. Verify the candidate IP and port and confirm the connection risk. If the directory has no usable address, enter a verified IP and port under **Manual entry (advanced)**. Connect with the MT5 login and read-only investor password of **1–32 UTF-16 code units**. [Connection guide](docs/product-start.md#第一次账户接入)
 
 Open **Server time** on the server card and confirm the broker’s time zone to enable deal history, daily statistics, cash flows, and performance analysis. The first confirmation can include a verified historical effective date. MT5 equity is estimated from balance, credit, and net floating profit or loss. [MT5 statistics](docs/account-statistics.md#mt5-成交与资金口径)

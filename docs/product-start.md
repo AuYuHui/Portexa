@@ -41,6 +41,39 @@ HTTPS 来源必须精确匹配，不含尾斜线或路径。反向代理转发�
 
 登录 Cookie 为 HttpOnly、Secure、SameSite=Strict，空闲30分钟、绝对8小时过期。后台轮询不续期，用户实际操作按分钟节流续期。改密撤销所有会话，失败登录按来源和全局限流。接口错误和服务日志不输出密码、密文或 SQL 参数。
 
+## MT5 采集运行依赖
+
+标准构建可直接部署看板和 MT4 采集。MT5 采集另外需要挑战计算程序及配套终端镜像。仓库提供 Linux x86_64 构建工具，镜像由部署者准备。
+
+### 在 Linux x86_64 构建
+
+1. 在 Apple 芯片 Mac 上，从 [App Store 的 MetaTrader 5 页面](https://apps.apple.com/us/app/metatrader-5/id413251709)取得受支持的 iPhone / iPad 版。当前支持 **5.0.6300（5251）**，以 SHA-256 `02b9f6103789bc652eb179264e99d8697b2a33d97ed6f06dabef3e83fc28a161` 为准。镜像是应用包内的 `Wrapper/MetaTrader5Terminal.app/MetaTrader5Terminal` 可执行文件。
+2. 将镜像复制到 Linux x86_64 的私有目录，例如 `/opt/portexa/mt5/terminal-image`。构建需要 Python 3、能解析 ARM64 Mach-O 的 `llvm-objdump`、C 编译器及静态 C 库，已用 LLVM 20 和 GCC 14 验证。
+3. 从仓库根目录构建。工具先核验镜像，再生成程序并执行离线自检。默认产物为 `.local/mt5-worker/compute`。系统使用版本化工具名时，可传入 `--objdump llvm-objdump-20`。
+
+```sh
+python3 scripts/mt5-worker/build.py --image /opt/portexa/mt5/terminal-image
+```
+
+### 配置服务并确认采集
+
+将程序和镜像放在前端静态目录之外，给服务账户计算程序的执行权限和镜像的读取权限。在配置服务前，用服务账户检查安装后的实际路径。`--check` 只需要 Python 3，不使用编译器或网络。
+
+```sh
+python3 scripts/mt5-worker/build.py --check \
+  --image /opt/portexa/mt5/terminal-image --output /opt/portexa/mt5/compute
+```
+
+如果使用 systemd，运行 `sudo systemctl edit portexa.service`，将下列绝对路径替换为实际部署路径：
+
+```ini
+[Service]
+Environment="MT5_COMPUTE_WORKER=/opt/portexa/mt5/compute"
+Environment="MT5_TERMINAL_IMAGE=/opt/portexa/mt5/terminal-image"
+```
+
+保存后运行 `sudo systemctl restart portexa.service`，到 MT5 账户详情确认已生成完整快照。升级服务程序或静态目录时，保留配套文件和服务环境配置。HTTPS 健康检查成功只表示 Web 服务在线。如果 MT5 尚无完整快照且显示“响应无法完整解析”，先用服务账户复查上述离线自检，再检查券商连接和响应。
+
 ## 第一次账户接入
 
 1. 在“接入与设置 → 登记服务器”选择 MT4 或 MT5，搜索经纪商或准确的服务器名称。展开“查看接入地址与来源”可核对 IP、端口与来源，或切换同一服务器的其他候选地址。
