@@ -595,6 +595,7 @@
     "theConfigurationHasChangedRefreshAndRetry": "配置已变化，请刷新后重试",
     "credentialKeyUnavailableConnectionsHaveStoppedCheckThe": "凭据密钥不可用，已停止接入；请检查独立密钥文件",
     "thisServerOrAccountAlreadyExists": "该服务器或账户已存在",
+    "officialBrokerUsDst": "按官方交易规则，冬令时 UTC+2、夏令时 UTC+3，随美国夏令时自动切换。",
     "dPrimeSOfficialRulesUseUtcIn": "按 D Prime 官方规则，冬令时 UTC+2、夏令时 UTC+3，随美国夏令时自动切换。新平仓事件会继续校准当前时差。",
     "enterAValidEntryRevisionAndClassificationReason": "请填写有效的流水版本和分类依据（最多500字符）",
     "creditAndTradeRecordsCannotBeClassifiedAs": "信用金与交易记录不能分类为出入金",

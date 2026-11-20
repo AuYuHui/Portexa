@@ -40,10 +40,16 @@ type AutomaticTimeZone struct {
 
 // Broker policy is a business calendar, not an inferred protocol timestamp.
 // D Prime and EC Markets published platform clock follows US DST: UTC+2 / UTC+3.
+func isDooTechnologyMT5(server storage.Server) bool {
+	name := strings.TrimSpace(server.ServerName)
+	return server.Protocol == "mt5" && strings.EqualFold(strings.TrimSpace(server.BrokerName), "Doo Technology Singapore Pte. Ltd.") &&
+		(strings.EqualFold(name, "DooTechnology-Demo") || strings.EqualFold(name, "DooTechnology-Live"))
+}
+
 func automaticTimeRule(server storage.Server, now time.Time) (timeRuleEntry, bool) {
 	broker := strings.TrimSpace(server.BrokerName)
 	srv := strings.TrimSpace(server.ServerName)
-	if dprimeBroker.MatchString(broker) && dprimeServer.MatchString(srv) {
+	if (dprimeBroker.MatchString(broker) && dprimeServer.MatchString(srv)) || isDooTechnologyMT5(server) {
 		return timeRuleEntry{FromUTCMS: now.UnixMilli(), Kind: "broker_us_dst", Zone: "America/New_York",
 			PolicyID: dprimeTimePolicy, SourceRef: dprimeTimeSource}, true
 	}

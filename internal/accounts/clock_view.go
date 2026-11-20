@@ -9,6 +9,14 @@ import (
 
 func automaticClockView(tx *gorm.DB, server storage.Server, now time.Time) (AutomaticTimeZone, error) {
 	view := automaticTimeZone(server, now)
+	if server.Protocol == "mt5" {
+		view.RequiredEvents = 0
+		if view.Available {
+			view.Description = "按官方交易规则，冬令时 UTC+2、夏令时 UTC+3，随美国夏令时自动切换。"
+			view.Status = "official"
+		}
+		return view, nil
+	}
 	view.RequiredEvents = ClockRequiredEvents
 	if view.Source == "" {
 		view.Source, view.Status = "learning", "learning"

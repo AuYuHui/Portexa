@@ -195,7 +195,7 @@ export interface Server {
     description: string;
     source_url: string;
     source?: "official" | "events" | "learning";
-    status?: "learning" | "calibrated" | "conflict";
+    status?: "learning" | "calibrated" | "conflict" | "official";
     evidence_count?: number;
     event_window_count?: number;
     required_events?: number;

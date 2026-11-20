@@ -61,6 +61,46 @@ func TestAutomaticTimeMatchesBothBrokerAndServer(t *testing.T) {
 	}
 }
 
+func TestDooTechnologyMT5OfficialCalendar(t *testing.T) {
+	const broker = "Doo Technology Singapore Pte. Ltd."
+	for _, tc := range []struct {
+		protocol, broker, name string
+		known                  bool
+	}{
+		{"mt5", broker, "DooTechnology-Demo", true},
+		{"mt5", broker, "DooTechnology-Live", true},
+		{"mt4", broker, "DooTechnology-Demo", false},
+		{"mt5", "Synthetic Markets", "DooTechnology-Demo", false},
+		{"mt5", broker, "Synthetic-Demo", false},
+	} {
+		t.Run(tc.protocol+"/"+tc.broker+"/"+tc.name, func(t *testing.T) {
+			f := testutil.New(t, false)
+			f.Accounts.Now = func() time.Time { return time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC) }
+			ctx := context.Background()
+			server, _, err := f.Accounts.CreateServer(ctx, accounts.ServerInput{
+				BrokerName: tc.broker, ServerName: tc.name, Protocol: tc.protocol, IPAddress: "203.0.113.9", Port: 443,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			views, err := f.Accounts.Servers(ctx)
+			if err != nil || len(views) != 1 || views[0].TimeZoneVerified != tc.known {
+				t.Fatal("unexpected calendar selection", views, err)
+			}
+			if tc.known {
+				if view := views[0]; view.TimeZone != "UTC+2" || view.TimeMode != "automatic" || view.AutomaticTimeZone.RequiredEvents != 0 {
+					t.Fatal("unexpected official MT5 calendar", view)
+				}
+				var from int64
+				err := f.Store.Read.Raw("SELECT json_extract(rules_json, '$[0].from_utc_ms') FROM server_time_rule_sets WHERE id=?", *server.ActiveTimeRulesetID).Scan(&from).Error
+				if err != nil || from != time.Date(2024, 11, 4, 0, 0, 0, 0, time.UTC).UnixMilli() {
+					t.Fatal("incorrect historical effective date", from, err)
+				}
+			}
+		})
+	}
+}
+
 func TestAutomaticServerCalendarFollowsUSRatherThanEuropeDST(t *testing.T) {
 	for _, test := range []struct {
 		stamp, zone, nextDay string

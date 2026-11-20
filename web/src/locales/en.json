@@ -595,6 +595,7 @@
     "theConfigurationHasChangedRefreshAndRetry": "The configuration has changed. Refresh and retry.",
     "credentialKeyUnavailableConnectionsHaveStoppedCheckThe": "Credential key unavailable. Connections have stopped; check the separate key file.",
     "thisServerOrAccountAlreadyExists": "This server or account already exists.",
+    "officialBrokerUsDst": "The broker uses UTC+2 in winter and UTC+3 in summer, following US daylight saving time.",
     "dPrimeSOfficialRulesUseUtcIn": "D Prime's official rules use UTC+2 in winter and UTC+3 in summer, following US daylight saving time. Newly closed trades continue to calibrate the current offset.",
     "enterAValidEntryRevisionAndClassificationReason": "Enter a valid entry revision and classification reason (up to 500 characters).",
     "creditAndTradeRecordsCannotBeClassifiedAs": "Credit and trade records cannot be classified as deposits or withdrawals.",

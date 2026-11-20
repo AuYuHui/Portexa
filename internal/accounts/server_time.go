@@ -124,6 +124,14 @@ func appendTimeRule(tx *gorm.DB, server *storage.Server, entry timeRuleEntry, ev
 	if err := tx.Model(&serverTimeRule{}).Where("server_id = ?", server.ID).Select("COALESCE(MAX(revision), 0)").Scan(&revision).Error; err != nil {
 		return err
 	}
+	// The November 2024 platform notice documents the US transition. Only the
+	// initial official rule can interpret earlier deals without revising a prior calendar.
+	if revision == 0 && isDooTechnologyMT5(*server) && entry.PolicyID == dprimeTimePolicy {
+		documentedFrom := time.Date(2024, 11, 4, 0, 0, 0, 0, time.UTC).UnixMilli()
+		if documentedFrom < entry.FromUTCMS {
+			entry.FromUTCMS = documentedFrom
+		}
+	}
 	body, err := json.Marshal([]timeRuleEntry{entry})
 	if err != nil {
 		return err

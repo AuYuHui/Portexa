@@ -43,7 +43,7 @@ async function save(mode: "automatic" | "manual") {
   <div class="form-stack">
     <p class="muted small">{{ server.broker_name }} / {{ server.server_name }}</p>
     <p v-if="server.time_mode === 'manual'" class="muted small">{{ t('serverTimeForm.currentManualZone', { zone: server.time_zone }) }}</p>
-    <p v-if="isMT5" class="muted small">{{ t("mt5.timeRequired") }}</p>
+    <p v-if="isMT5 && !automatic?.available && !server.time_zone_verified" class="muted small">{{ t("mt5.timeRequired") }}</p>
     <div v-else-if="automatic?.available" class="server-time-result">
       <span class="icon-box subtle"><Clock :size="20" /></span>
       <div>
@@ -63,7 +63,7 @@ async function save(mode: "automatic" | "manual") {
         >{{ t('serverTimeForm.officialTimeDocumentation') }}</a>
       </div>
     </div>
-    <div v-else class="server-time-result">
+    <div v-else-if="!isMT5" class="server-time-result">
       <span class="icon-box subtle"><Clock :size="20" /></span>
       <div>
         <strong>{{ t('serverTimeForm.calibratingTradeTimeAutomatically') }}</strong>
@@ -72,7 +72,7 @@ async function save(mode: "automatic" | "manual") {
         <p class="muted small">{{ t('serverTimeForm.roundProgress', { count: Math.min(automatic?.event_window_count || 0, 2) }) }}</p>
       </div>
     </div>
-    <details class="server-time-advanced" :open="isMT5">
+    <details class="server-time-advanced" :open="isMT5 && !automatic?.available">
       <summary>{{ t('serverTimeForm.advancedManualCorrection') }}</summary>
       <form class="form-stack" @submit.prevent="save('manual')">
         <label class="field">
@@ -104,7 +104,7 @@ async function save(mode: "automatic" | "manual") {
     <div class="dialog-actions">
       <button type="button" class="btn" :disabled="busy" @click="emit('cancel')">{{ t('modal.close') }}</button>
       <button
-        v-if="!isMT5 && automatic && server.time_mode === 'manual'"
+        v-if="automatic && (!isMT5 || automatic.available) && server.time_mode === 'manual'"
         type="button" class="btn btn-primary" :disabled="busy"
         @click="save('automatic')"
       >
