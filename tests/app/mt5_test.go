@@ -114,6 +114,13 @@ func TestMT5SnapshotsDealsFundingAndAnalytics(t *testing.T) {
 		report.BalanceChange.String() != "40" || report.CreditChange.String() != "4" {
 		t.Fatalf("unexpected daily report: %+v", report)
 	}
+	extremes := report.ClosedTradeExtremes
+	if extremes == nil || extremes.Profit == nil || extremes.Loss == nil ||
+		extremes.Profit.Ticket != 8_000_001_002 || extremes.Profit.NetProfit.String() != "9" ||
+		extremes.Loss.Ticket != 8_000_001_003 || extremes.Loss.NetProfit.String() != "-4.5" ||
+		extremes.Loss.CloseWallMS != day.UnixMilli()+333 || extremes.Loss.Symbol != "TESTUSD" {
+		t.Fatalf("unexpected MT5 closed trade extremes: %+v", extremes)
+	}
 	funding := view.Account.Funding
 	if funding.Deposits.String() != "50" || funding.Withdrawals.String() != "20" || funding.UnclassifiedCount != 1 {
 		t.Fatalf("deal types or unknown balance adjustment misclassified: %+v", funding)

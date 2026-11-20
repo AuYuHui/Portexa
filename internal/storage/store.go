@@ -67,13 +67,16 @@ var mt5CollectionSchema string
 //go:embed migrations/018_position_excursions.sql
 var positionExcursionsSchema string
 
+//go:embed migrations/019_daily_closed_trade_extremes.sql
+var dailyClosedTradeExtremesSchema string
+
 var ErrNotFound = gorm.ErrRecordNotFound
 var ErrConflict = errors.New("state conflict")
 var ErrDenied = errors.New("operation denied")
 var ErrClosed = errors.New("store closed")
 
 const ApplicationID = 0x50545841
-const SchemaVersion = 18
+const SchemaVersion = 19
 
 type Priority int
 
@@ -352,6 +355,11 @@ func migrate(db *sql.DB) (result error) {
 	}
 	if version < 18 {
 		if _, err = tx.Exec(positionExcursionsSchema); err != nil {
+			return err
+		}
+	}
+	if version < 19 {
+		if _, err = tx.Exec(dailyClosedTradeExtremesSchema); err != nil {
 			return err
 		}
 	}

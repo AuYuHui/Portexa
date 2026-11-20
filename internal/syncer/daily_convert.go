@@ -47,7 +47,9 @@ func ConvertDaily(job accounts.DailyJob, result mt4.Result, finished int64) (sto
 		}
 		net := decimal.NewFromFloat(trade.Profit).Add(decimal.NewFromFloat(trade.Commission)).
 			Add(decimal.NewFromFloat(trade.Swap)).Add(decimal.NewFromFloat(trade.Taxes))
-		totals.add(trade.Command, net, trade.Command <= 1)
+		totals.add(trade.Command, net, storage.DailyClosedTrade{
+			Ticket: int64(trade.Ticket), Symbol: strings.ToValidUTF8(trade.Symbol, "�"), CloseWallMS: int64(trade.CloseTime) * 1000,
+		})
 	}
 	return totals.report(report, currency, finished), nil
 }
@@ -56,22 +58,32 @@ type dailyTotals struct {
 	profit, adjustment, credit decimal.Decimal
 	grossProfit, grossLoss     decimal.Decimal
 	wins, losses, breakeven    int
+	extremes                   storage.DailyClosedTradeExtremes
 }
 
-func (t *dailyTotals) add(command int32, net decimal.Decimal, closed bool) {
+func (t *dailyTotals) add(command int32, net decimal.Decimal, close storage.DailyClosedTrade) {
 	switch command {
 	case 0, 1:
 		t.profit = t.profit.Add(net)
-		if !closed {
+		if close.Ticket == 0 {
 			return
 		}
+		close.NetProfit = net
 		switch net.Sign() {
 		case 1:
 			t.wins++
 			t.grossProfit = t.grossProfit.Add(net)
+			if current := t.extremes.Profit; current == nil || net.GreaterThan(current.NetProfit) ||
+				net.Equal(current.NetProfit) && earlierClose(close, *current) {
+				t.extremes.Profit = &close
+			}
 		case -1:
 			t.losses++
 			t.grossLoss = t.grossLoss.Add(net.Abs())
+			if current := t.extremes.Loss; current == nil || net.LessThan(current.NetProfit) ||
+				net.Equal(current.NetProfit) && earlierClose(close, *current) {
+				t.extremes.Loss = &close
+			}
 		default:
 			t.breakeven++
 		}
@@ -82,6 +94,10 @@ func (t *dailyTotals) add(command int32, net decimal.Decimal, closed bool) {
 	}
 }
 
+func earlierClose(a, b storage.DailyClosedTrade) bool {
+	return a.CloseWallMS < b.CloseWallMS || a.CloseWallMS == b.CloseWallMS && a.Ticket < b.Ticket
+}
+
 func (t dailyTotals) report(report storage.DailyReport, currency string, finished int64) storage.DailyReport {
 	change := t.profit.Add(t.adjustment)
 	report.State, report.FinishedAtMS, report.NativeCurrency = "succeeded", &finished, currency
@@ -89,6 +105,7 @@ func (t dailyTotals) report(report storage.DailyReport, currency string, finishe
 	report.ClosedTrades = t.wins + t.losses + t.breakeven
 	report.WinningTrades, report.LosingTrades, report.BreakevenTrades = &t.wins, &t.losses, &t.breakeven
 	report.GrossProfit, report.GrossLoss = &t.grossProfit, &t.grossLoss
+	report.ClosedTradeExtremes = &t.extremes
 	return report
 }
 

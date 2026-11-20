@@ -14,6 +14,7 @@ import {
   positive,
   dailyLabel,
   failureLabel,
+  wallTime,
 } from "../format";
 
 const { t } = useI18n();
@@ -182,8 +183,8 @@ async function refresh() {
         </div>
         <div
           v-for="metric in [
-            { label: t('dailySummary.maxFloatingLoss'), point: account.daily.report?.position_excursions?.loss, color: 'negative' },
-            { label: t('dailySummary.maxFloatingProfit'), point: account.daily.report?.position_excursions?.profit, color: 'positive' },
+            { label: t('dailySummary.maxClosedLoss'), point: account.daily.report?.closed_trade_extremes?.loss, color: 'negative' },
+            { label: t('dailySummary.maxClosedProfit'), point: account.daily.report?.closed_trade_extremes?.profit, color: 'positive' },
           ]"
           :key="metric.label"
         >
@@ -191,17 +192,18 @@ async function refresh() {
             {{ metric.label }}
             <span>{{ account.daily.report?.native_currency || account.snapshot?.native_currency || t('account.nativeCurrency') }}</span>
           </div>
-          <div class="metric-value num" :class="metric.point ? metric.color : ''">{{ money(metric.point?.amount) }}</div>
+          <div class="metric-value num" :class="metric.point ? metric.color : ''">{{ money(metric.point?.net_profit) }}</div>
           <p v-if="metric.point" class="metric-note">
-            {{ metric.point.symbol }} · #{{ metric.point.ticket }} · {{ date(metric.point.at_ms) }}
+            <template v-if="metric.point.symbol">{{ metric.point.symbol }} · </template>
+            #{{ metric.point.ticket }} · {{ wallTime(Math.floor(metric.point.close_wall_ms / 1000), metric.point.close_wall_ms % 1000) }}
           </p>
         </div>
       </div>
-      <p v-if="account.daily.report" class="daily-note muted small">
+      <p v-if="account.daily.report && account.daily.report.closed_trades > 0" class="daily-note muted small">
         {{
-          account.daily.report.position_excursions && account.daily.report.position_excursions.closed > 0
-            ? t('dailySummary.floatingCoverage', account.daily.report.position_excursions)
-            : t('dailySummary.floatingUnavailable')
+          account.daily.report.closed_trade_extremes
+            ? t('dailySummary.closedExtremesBasis')
+            : t('dailySummary.closedExtremesNeedRefresh')
         }}
       </p>
       <p

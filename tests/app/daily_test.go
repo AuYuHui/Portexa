@@ -58,8 +58,8 @@ func TestDailyProfitUsesCloseDateFeesAndNativeCurrency(t *testing.T) {
 	}
 	result := dailyResult(job)
 	result.History = []mt4.Trade{
-		{Ticket: 1, Command: 0, OpenTime: job.Day.Start - 100, CloseTime: job.Day.Start, Profit: 100.15, Commission: -0.12, Swap: -0.03, Taxes: -0.01},
-		{Ticket: 2, Command: 1, CloseTime: job.Day.End - 1, Profit: -40.01, Commission: -0.11, Swap: -0.12, Taxes: -0.01},
+		{Ticket: 1, Symbol: "SYNTHBUY", Command: 0, OpenTime: job.Day.Start - 100, CloseTime: job.Day.Start, Profit: 100.15, Commission: -0.12, Swap: -0.03, Taxes: -0.01},
+		{Ticket: 2, Symbol: "SYNTHSELL", Command: 1, CloseTime: job.Day.End - 1, Profit: -40.01, Commission: -0.11, Swap: -0.12, Taxes: -0.01},
 		{Ticket: 3, Command: 0, CloseTime: job.Day.Start - 1, Profit: 999},
 		{Ticket: 4, Command: 1, CloseTime: job.Day.End, Profit: 999},
 		{Ticket: 5, Command: 2, CloseTime: job.Day.Start + 1, Profit: 333},
@@ -81,6 +81,13 @@ func TestDailyProfitUsesCloseDateFeesAndNativeCurrency(t *testing.T) {
 	detail, err := f.Accounts.Detail(ctx, a.ID, "")
 	if err != nil || detail.Account.Daily.Report == nil || detail.Account.Daily.Report.NetProfit.String() != "59.74" {
 		t.Fatal("published report unavailable", err)
+	}
+	extremes := detail.Account.Daily.Report.ClosedTradeExtremes
+	if extremes == nil || extremes.Profit == nil || extremes.Loss == nil ||
+		extremes.Profit.Ticket != 1 || extremes.Profit.Symbol != "SYNTHBUY" || extremes.Profit.NetProfit.String() != "99.99" ||
+		extremes.Profit.CloseWallMS != int64(job.Day.Start)*1000 ||
+		extremes.Loss.Ticket != 2 || extremes.Loss.Symbol != "SYNTHSELL" || extremes.Loss.NetProfit.String() != "-40.25" {
+		t.Fatalf("unexpected MT4 closed trade extremes: %+v", extremes)
 	}
 	if detail.Account.Snapshot.Equity.String() != "1062.13" || len(detail.Positions) != 1 {
 		t.Fatal("history replaced the live snapshot or positions")

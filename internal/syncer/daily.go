@@ -97,7 +97,11 @@ func (e *Engine) runDaily(ctx context.Context, id string) {
 		} else {
 			var totals dailyTotals
 			for _, order := range orders {
-				totals.add(order.Command, order.NetProfit, order.ClosingTrade())
+				var close storage.DailyClosedTrade
+				if order.ClosingTrade() {
+					close = storage.DailyClosedTrade{Ticket: order.Ticket, Symbol: order.Symbol, CloseWallMS: *order.MT5WallTimeMS}
+				}
+				totals.add(order.Command, order.NetProfit, close)
 			}
 			report = totals.report(job.Run, job.NativeCurrency, finished.UnixMilli())
 		}

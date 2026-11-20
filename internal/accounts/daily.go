@@ -172,6 +172,11 @@ func (s *Service) PublishDaily(ctx context.Context, job DailyJob, report storage
 		if result.RowsAffected != 1 {
 			return storage.ErrConflict
 		}
+		if report.ClosedTradeExtremes != nil {
+			if err := tx.Create(&storage.DailyClosedTradeExtremesRecord{ReportID: report.ID, Summary: *report.ClosedTradeExtremes}).Error; err != nil {
+				return err
+			}
+		}
 		if job.PositionExits != nil {
 			summary, err := summarizePositionExcursions(tx, job, current, report.NativeCurrency)
 			if err != nil {
@@ -255,6 +260,12 @@ func readDailyView(tx *gorm.DB, account storage.Account, server storage.Server, 
 		return view, err
 	}
 	if err == nil {
+		var extremes storage.DailyClosedTradeExtremesRecord
+		if err := tx.First(&extremes, "report_id = ?", report.ID).Error; err == nil {
+			report.ClosedTradeExtremes = &extremes.Summary
+		} else if !errors.Is(err, storage.ErrNotFound) {
+			return view, err
+		}
 		var excursions storage.DailyPositionExcursionRecord
 		if err := tx.First(&excursions, "report_id = ?", report.ID).Error; err == nil {
 			report.PositionExcursions = &excursions.Summary
