@@ -20,7 +20,8 @@ func (e *Engine) readMT5Deals(ctx context.Context, cfg *mt5.Config, window mt5.H
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if currency == "" || strings.ToUpper(strings.TrimSpace(result.Account.Currency)) != currency {
+	accCurrency := strings.ToUpper(strings.TrimSpace(result.Account.Currency))
+	if currency == "" || (accCurrency != currency && !(currency == "USC" && accCurrency == "USD")) {
 		return nil, ErrIncomplete
 	}
 	if limit > 0 && len(result.Deals) > limit {

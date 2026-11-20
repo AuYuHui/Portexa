@@ -1,12 +1,14 @@
 package mt5
 
 type Account struct {
-	Server   string
-	Currency string
-	Balance  float64
-	Credit   float64
-	Leverage uint32
-	Investor bool
+	Server          string
+	Currency        string
+	Balance         float64
+	Credit          float64
+	Leverage        uint32
+	Investor        bool
+	Margin          float64
+	MarginAvailable bool
 }
 
 func (a Account) IsInvestor() bool {

@@ -112,12 +112,13 @@ func Fetch(ctx context.Context, cfg Config) (Result, error) {
 
 	res := Result{
 		Account: Account{
-			Server:   cfg.Server,
-			Currency: syncRes.Account.Currency,
-			Balance:  syncRes.Account.Balance,
-			Credit:   syncRes.Account.Credit,
-			Leverage: syncRes.Account.Leverage,
-			Investor: syncRes.Account.IsInvestor,
+			Server:          cfg.Server,
+			Currency:        syncRes.Account.Currency,
+			Balance:         syncRes.Account.Balance,
+			Credit:          syncRes.Account.Credit,
+			Leverage:        syncRes.Account.Leverage,
+			Investor:        syncRes.Account.IsInvestor,
+			MarginAvailable: true,
 		},
 	}
 
