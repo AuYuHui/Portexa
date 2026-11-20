@@ -4,7 +4,7 @@
 
 Portexa is a self-hosted, read-only dashboard for MetaTrader accounts. It connects to MT4 and MT5 trading servers over native TCP. View balances, positions, pending orders, history, daily statistics, cash flows, and performance analysis across accounts.
 
-[English](README.md) · [简体中文](README.zh-CN.md)
+[English](README.md) · [简体中文](README.zh-CN.md) · [LINUX DO Community](https://linux.do/)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 

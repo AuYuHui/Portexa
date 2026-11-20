@@ -4,7 +4,7 @@
 
 Portexa 是可私有部署的多账户只读看板，通过原生 TCP 连接 MT4 和 MT5 交易服务器。两个平台均可查看资金、持仓、挂单、历史流水、当日交易统计和收益分析。主工程使用 Go、GORM、SQLite 和 Vue。
 
-[English](README.md) · [简体中文](README.zh-CN.md)
+[English](README.md) · [简体中文](README.zh-CN.md) · [LINUX DO 社区](https://linux.do/)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
