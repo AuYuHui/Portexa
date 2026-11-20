@@ -103,10 +103,13 @@
   width: 100%;
   max-width: 360px;
 }
-.login-language {
+.login-actions {
   position: absolute;
   top: 20px;
   right: 28px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .login-form h2 {
   font-size: 24px;

@@ -30,7 +30,10 @@ def synthetic_server():
     origin = f"http://127.0.0.1:{port}"
     with tempfile.TemporaryFile() as log:
         process = subprocess.Popen(
-            [str(SERVER), "-automatic-time", "-listen", f"127.0.0.1:{port}", "-web", str(WEB)],
+            [
+                str(SERVER), "-automatic-time", "-asset-trends",
+                "-listen", f"127.0.0.1:{port}", "-web", str(WEB),
+            ],
             cwd=ROOT,
             stdout=log,
             stderr=subprocess.STDOUT,
@@ -62,6 +65,7 @@ def synthetic_server():
 def capture(page, name):
     page.wait_for_load_state("networkidle")
     page.evaluate("document.fonts.ready")
+    expect(page.locator(".trend-panel canvas")).to_be_visible()
     page.mouse.move(0, 0)
     no_page_overflow(page)
     page.screenshot(path=str(ARTIFACTS / name), full_page=True, animations="disabled")

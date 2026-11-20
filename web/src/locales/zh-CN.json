@@ -477,6 +477,7 @@
     "currentManualZone": "当前使用手动校正：{zone}"
   },
   "app": {
+    "githubRepository": "GitHub 仓库（在新标签页打开）",
     "unableToConnectCheckThatTheServiceIs": "无法连接服务，请确认服务可用后重试。",
     "retryConnection": "重试连接",
     "connectingToPortexa": "正在连接 Portexa",

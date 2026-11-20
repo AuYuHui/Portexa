@@ -16,6 +16,7 @@ import {
 import { useSession } from "./session";
 import Login from "./pages/Login.vue";
 import LanguageSwitch from "./components/LanguageSwitch.vue";
+import RepositoryLink from "./components/RepositoryLink.vue";
 
 const { t } = useI18n();
 
@@ -102,6 +103,7 @@ onUnmounted(() => {
           }}</strong></span
         >
         <div class="topbar-actions">
+          <RepositoryLink />
           <LanguageSwitch />
           <span class="private-badge"><span class="status-dot" />{{ t('app.privateWorkspace') }}</span>
         </div>

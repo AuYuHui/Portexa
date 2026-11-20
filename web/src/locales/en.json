@@ -477,6 +477,7 @@
     "currentManualZone": "Currently using manual correction: {zone}"
   },
   "app": {
+    "githubRepository": "GitHub repository (opens in a new tab)",
     "unableToConnectCheckThatTheServiceIs": "Unable to connect. Check that the service is available and retry.",
     "retryConnection": "Retry connection",
     "connectingToPortexa": "Connecting to Portexa",

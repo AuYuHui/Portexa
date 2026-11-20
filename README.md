@@ -29,13 +29,13 @@ These desktop screenshots show the real UI running against an isolated synthetic
 
 ### Account overview
 
-Compare the latest known equity subtotal, native-currency amounts, and account collection states. The sample includes USD, USC, and EUR accounts, plus paused, stale, and missing snapshots.
+Compare the latest known equity subtotal, portfolio asset history, native-currency amounts, and account collection states. The sample includes USD, USC, and EUR accounts, plus paused, stale, and missing snapshots.
 
 ![Portexa account overview in English, showing synthetic account balances and collection states](docs/screenshots/overview-en.png)
 
 ### Account details
 
-Inspect daily results, margin, cash-flow classification, positions, and recent snapshots. In this synthetic USC example, daily net profit is **9.50 USC**, two closed trades give a **50.00%** win rate, and recognized deposits/withdrawals total **1,100.00 / 20.00 USC**.
+Inspect account asset history, daily results, margin, cash-flow classification, positions, and recent snapshots. In this synthetic USC example, daily net profit is **9.50 USC**, two closed trades give a **50.00%** win rate, and recognized deposits/withdrawals total **1,100.00 / 20.00 USC**.
 
 <details>
 <summary>View the full account details screenshot</summary>

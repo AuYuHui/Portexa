@@ -11,6 +11,7 @@ import {
 } from "@lucide/vue";
 import { useSession } from "../session";
 import LanguageSwitch from "../components/LanguageSwitch.vue";
+import RepositoryLink from "../components/RepositoryLink.vue";
 
 const { t } = useI18n();
 const session = useSession();
@@ -53,7 +54,10 @@ async function submit() {
       </div>
     </section>
     <section class="login-form-wrap">
-      <LanguageSwitch class="login-language" />
+      <div class="login-actions">
+        <RepositoryLink />
+        <LanguageSwitch />
+      </div>
       <form class="login-form" @submit.prevent="submit">
         <span class="icon-box"><KeyRound :size="24" /></span>
         <h2>{{ t('login.enterYourWorkspace') }}</h2>
