@@ -67,3 +67,35 @@ func TestProviderRejectsRedirectsAndExcessiveBodies(t *testing.T) {
 		}
 	}
 }
+
+func TestMT5DirectorySendsOnlySearchTextAndReturnsNames(t *testing.T) {
+	query := "Synthetic & Server"
+	calls := 0
+	client := &http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
+		calls++
+		values := r.URL.Query()
+		if r.Method != http.MethodGet || r.URL.Scheme+"://"+r.URL.Host+r.URL.Path != discovery.MT5SourceURL ||
+			len(values) != 1 || values.Get("company") != query ||
+			r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" {
+			t.Fatal("unexpected MT5 directory request", r.Method, r.URL)
+		}
+		body := `[{"companyName":"Synthetic Company","results":[{"name":"Synthetic Demo"},{"name":"Synthetic & Server","access":["203.0.113.9:2085"]},{"name":"SYNTHETIC & SERVER"}]}]`
+		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+	})}
+	catalog := discovery.New(discovery.Options{
+		Fetch:    func(context.Context, string) ([]byte, error) { return []byte(`{"result":[]}`), nil },
+		FetchMT5: discovery.MT5HTTPFetcher(client),
+	})
+	if results, err := catalog.Search(t.Context(), query); err != nil || len(results) != 0 {
+		t.Fatalf("MT4 results: %+v (%v)", results, err)
+	}
+	for range 2 {
+		results, err := catalog.SearchMT5(t.Context(), query)
+		if err != nil || len(results) != 2 || results[0].ServerName != query || results[0].BrokerName != "Synthetic Company" {
+			t.Fatalf("MT5 results: %+v (%v)", results, err)
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("MT5 directory was called %d times", calls)
+	}
+}

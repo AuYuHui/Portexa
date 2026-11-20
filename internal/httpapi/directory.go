@@ -3,13 +3,28 @@ package httpapi
 import "net/http"
 
 func (s *Server) searchDirectory(w http.ResponseWriter, r *http.Request) {
-	for key := range r.URL.Query() {
-		if key != "q" {
+	values := r.URL.Query()
+	for key := range values {
+		if key != "q" && key != "platform" {
 			writeJSON(w, 400, map[string]string{"error": "只支持经纪商或服务器名称搜索"})
 			return
 		}
 	}
-	list, err := s.config.Directory.Search(r.Context(), r.URL.Query().Get("q"))
+	switch values.Get("platform") {
+	case "mt5":
+		list, err := s.config.Directory.SearchMT5(r.Context(), values.Get("q"))
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, 200, list)
+		return
+	case "", "mt4":
+	default:
+		writeJSON(w, 400, map[string]string{"error": "请选择 MT4 或 MT5"})
+		return
+	}
+	list, err := s.config.Directory.Search(r.Context(), values.Get("q"))
 	if err != nil {
 		fail(w, err)
 		return

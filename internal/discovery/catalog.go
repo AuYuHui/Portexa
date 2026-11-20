@@ -38,30 +38,41 @@ type Candidate struct {
 
 type Options struct {
 	Fetch       Fetcher
+	FetchMT5    Fetcher
 	AllowTarget func(string) bool
 	Resolve     func(context.Context, string) ([]netip.Addr, error)
 	Now         func() time.Time
 }
 
 type entry struct {
-	candidates []Candidate
-	expires    int64
-	bytes      int
-	created    int64
+	candidates  []Candidate
+	serverNames []ServerName
+	expires     int64
+	bytes       int
+	created     int64
 }
+type cacheKey struct {
+	query string
+	mt5   bool
+}
+
 type Catalog struct {
-	fetch   Fetcher
-	allow   func(string) bool
-	resolve func(context.Context, string) ([]netip.Addr, error)
-	now     func() time.Time
-	mu      sync.Mutex
-	cache   map[string]entry
-	slots   chan struct{}
+	fetch    Fetcher
+	fetchMT5 Fetcher
+	allow    func(string) bool
+	resolve  func(context.Context, string) ([]netip.Addr, error)
+	now      func() time.Time
+	mu       sync.Mutex
+	cache    map[cacheKey]entry
+	slots    chan struct{}
 }
 
 func New(options Options) *Catalog {
 	if options.Fetch == nil {
 		options.Fetch = HTTPFetcher(nil)
+	}
+	if options.FetchMT5 == nil {
+		options.FetchMT5 = MT5HTTPFetcher(nil)
 	}
 	if options.Now == nil {
 		options.Now = time.Now
@@ -71,7 +82,7 @@ func New(options Options) *Catalog {
 			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 		}
 	}
-	return &Catalog{fetch: options.Fetch, allow: options.AllowTarget, resolve: options.Resolve, now: options.Now, cache: map[string]entry{}, slots: make(chan struct{}, 2)}
+	return &Catalog{fetch: options.Fetch, fetchMT5: options.FetchMT5, allow: options.AllowTarget, resolve: options.Resolve, now: options.Now, cache: map[cacheKey]entry{}, slots: make(chan struct{}, 2)}
 }
 
 func validText(text string, max int) bool {
@@ -87,41 +98,69 @@ func validText(text string, max int) bool {
 }
 
 func (c *Catalog) Search(ctx context.Context, query string) ([]Candidate, error) {
+	result, err := c.search(ctx, query, false)
+	if err != nil {
+		return nil, err
+	}
+	return copyList(result.candidates), nil
+}
+
+func (c *Catalog) SearchMT5(ctx context.Context, query string) ([]ServerName, error) {
+	result, err := c.search(ctx, query, true)
+	if err != nil {
+		return nil, err
+	}
+	return append([]ServerName{}, result.serverNames...), nil
+}
+
+func (c *Catalog) search(ctx context.Context, query string, mt5 bool) (entry, error) {
 	query = strings.TrimSpace(query)
 	if utf8.RuneCountInString(query) < 2 || utf8.RuneCountInString(query) > 80 || !validText(query, 320) {
-		return nil, ErrQuery
+		return entry{}, ErrQuery
 	}
-	key := strings.ToLower(query)
+	key := cacheKey{query: strings.ToLower(query), mt5: mt5}
 	c.mu.Lock()
 	c.expireLocked()
 	if cached, ok := c.cache[key]; ok {
-		list := copyList(cached.candidates)
 		c.mu.Unlock()
-		return list, nil
+		return cached, nil
 	}
 	c.mu.Unlock()
 	select {
 	case c.slots <- struct{}{}:
 		defer func() { <-c.slots }()
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return entry{}, ctx.Err()
 	default:
-		return nil, ErrBusy
+		return entry{}, ErrBusy
 	}
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
-	body, err := c.fetch(ctx, query)
+	fetch := c.fetch
+	if mt5 {
+		fetch = c.fetchMT5
+	}
+	body, err := fetch(ctx, query)
 	if err != nil {
-		return nil, err
+		return entry{}, err
 	}
 	if len(body) > MaxBody {
-		return nil, ErrUnavailable
+		return entry{}, ErrUnavailable
 	}
 	now := c.now()
-	list, err := c.parse(ctx, body, now)
-	if err != nil {
-		return nil, err
+	result := entry{expires: now.Add(15 * time.Minute).UnixMilli(), bytes: len(body), created: now.UnixNano()}
+	if mt5 {
+		result.serverNames, err = parseMT5Names(body, query)
+	} else {
+		result.candidates, err = c.parse(ctx, body, now)
 	}
+	if err != nil {
+		return entry{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return entry{}, err
+	}
+	list := result.candidates
 	sort.SliceStable(list, func(i, j int) bool {
 		iExact, jExact := strings.EqualFold(list[i].ServerName, query), strings.EqualFold(list[j].ServerName, query)
 		if iExact != jExact {
@@ -135,9 +174,10 @@ func (c *Catalog) Search(ctx context.Context, query string) ([]Candidate, error)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.expireLocked()
-	c.cache[key] = entry{candidates: list, expires: now.Add(15 * time.Minute).UnixMilli(), bytes: len(body), created: now.UnixNano()}
+	c.cache[key] = result
 	for len(c.cache) > 32 || c.cacheBytes() > 8<<20 {
-		oldest, at := "", int64(1<<63-1)
+		var oldest cacheKey
+		at := int64(1<<63 - 1)
 		for name, value := range c.cache {
 			if value.created < at {
 				oldest, at = name, value.created
@@ -145,7 +185,7 @@ func (c *Catalog) Search(ctx context.Context, query string) ([]Candidate, error)
 		}
 		delete(c.cache, oldest)
 	}
-	return copyList(list), nil
+	return result, nil
 }
 
 func (c *Catalog) Candidate(id string) (Candidate, error) {

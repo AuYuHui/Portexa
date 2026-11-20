@@ -1,4 +1,4 @@
-// Package discovery retrieves MT4 connection candidates without account credentials.
+// Package discovery retrieves MT4 connection candidates and MT5 server names without account credentials.
 // It never authenticates to trading servers or changes the frozen protocol SDK.
 package discovery
 
@@ -30,11 +30,7 @@ var directorySalt = [...]byte{61, 123, 21, 22, 214, 234, 187, 52, 217, 214, 99, 
 type Fetcher func(context.Context, string) ([]byte, error)
 
 func HTTPFetcher(client *http.Client) Fetcher {
-	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Second}
-	}
-	bounded := *client
-	bounded.CheckRedirect = func(*http.Request, []*http.Request) error { return ErrUnavailable }
+	bounded := directoryClient(client)
 	return func(ctx context.Context, query string) ([]byte, error) {
 		// The upstream signature uses decoded values in this exact order. Encode
 		// the wire form separately so spaces, '&' and Unicode remain one value.
@@ -51,21 +47,38 @@ func HTTPFetcher(client *http.Client) Fetcher {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("User-Agent", "MetaTrader 4 Terminal/4.1492 (Windows NT 10.0.22621; x64)")
-		response, err := bounded.Do(req)
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-			return nil, ErrUnavailable
-		}
-		defer response.Body.Close()
-		if response.StatusCode != http.StatusOK {
-			return nil, ErrUnavailable
-		}
-		body, err := io.ReadAll(io.LimitReader(response.Body, MaxBody+1))
-		if err != nil || len(body) > MaxBody {
-			return nil, ErrUnavailable
-		}
-		return body, nil
+		return readDirectory(bounded, req)
 	}
+}
+
+func directoryClient(client *http.Client) *http.Client {
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+	bounded := *client
+	bounded.Jar = nil
+	bounded.CheckRedirect = func(*http.Request, []*http.Request) error { return ErrUnavailable }
+	return &bounded
+}
+
+func readDirectory(client *http.Client, req *http.Request) ([]byte, error) {
+	response, err := client.Do(req)
+	if err != nil {
+		if err := req.Context().Err(); err != nil {
+			return nil, err
+		}
+		return nil, ErrUnavailable
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil, ErrUnavailable
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, MaxBody+1))
+	if err := req.Context().Err(); err != nil {
+		return nil, err
+	}
+	if err != nil || len(body) > MaxBody {
+		return nil, ErrUnavailable
+	}
+	return body, nil
 }
