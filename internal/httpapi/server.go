@@ -136,6 +136,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/accounts", s.protected(s.createAccount))
 	s.mux.HandleFunc("GET /api/accounts/{id}", s.protected(s.detail))
 	s.mux.HandleFunc("PATCH /api/accounts/{id}", s.protected(s.patchAccount))
+	s.mux.HandleFunc("DELETE /api/accounts/{id}", s.protected(s.deleteAccount))
 	s.mux.HandleFunc("POST /api/accounts/{id}/sync", s.protected(s.syncAccount))
 	s.mux.HandleFunc("POST /api/accounts/{id}/daily/sync", s.protected(s.syncDaily))
 	s.mux.HandleFunc("POST /api/accounts/{id}/history/sync", s.protected(s.syncHistory))

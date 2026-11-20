@@ -157,10 +157,10 @@ func (s *Service) newEndpoint(ctx context.Context, serverID string, input Endpoi
 		if err := tx.Model(&storage.Endpoint{}).Where("server_id = ? AND state != 'retired'", serverID).Update("state", "retired").Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&storage.Account{}).Where("server_id = ?", serverID).Pluck("id", &paused).Error; err != nil {
+		if err := tx.Model(&storage.Account{}).Where("server_id = ? AND removed_at_ms IS NULL", serverID).Pluck("id", &paused).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&storage.Account{}).Where("server_id = ?", serverID).Updates(map[string]any{"sync_enabled": false, "config_version": gorm.Expr("config_version + 1")}).Error; err != nil {
+		if err := tx.Model(&storage.Account{}).Where("server_id = ? AND removed_at_ms IS NULL", serverID).Updates(map[string]any{"sync_enabled": false, "config_version": gorm.Expr("config_version + 1")}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&endpoint).Error; err != nil {
@@ -294,7 +294,7 @@ func (s *Service) CreateAccount(ctx context.Context, input AccountInput) (storag
 func (s *Service) UpdateAccount(ctx context.Context, id string, patch AccountPatch) error {
 	return s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
 		var account storage.Account
-		if err := tx.First(&account, "id = ?", id).Error; err != nil {
+		if err := tx.First(&account, "id = ? AND removed_at_ms IS NULL", id).Error; err != nil {
 			return err
 		}
 		if patch.ConfigVersion != nil && account.ConfigVersion != *patch.ConfigVersion {

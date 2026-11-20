@@ -58,13 +58,16 @@ var marketRestSchema string
 //go:embed migrations/012_rest_learning.sql
 var restLearningSchema string
 
+//go:embed migrations/016_account_deletion.sql
+var accountDeletionSchema string
+
 var ErrNotFound = gorm.ErrRecordNotFound
 var ErrConflict = errors.New("state conflict")
 var ErrDenied = errors.New("operation denied")
 var ErrClosed = errors.New("store closed")
 
 const ApplicationID = 0x50545841
-const SchemaVersion = 15
+const SchemaVersion = 16
 
 type Priority int
 
@@ -313,7 +316,7 @@ func migrate(db *sql.DB) (result error) {
 		}
 	}
 	if version < 13 {
-		if err = migrateMT5(tx); err != nil {
+		if err = rebuildTables(tx, mt5Schema, "accounts", "servers"); err != nil {
 			return err
 		}
 	}
@@ -324,6 +327,15 @@ func migrate(db *sql.DB) (result error) {
 	}
 	if version < 15 {
 		if _, err = tx.Exec(mt5NativeOnlySchema); err != nil {
+			return err
+		}
+	}
+	if version < 16 {
+		if err = rebuildTables(tx, accountDeletionSchema, "accounts"); err != nil {
+			return err
+		}
+		if _, err = tx.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS accounts_active_login
+			ON accounts(server_id, login) WHERE removed_at_ms IS NULL`); err != nil {
 			return err
 		}
 	}

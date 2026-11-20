@@ -2,7 +2,7 @@
 import { localizeMessage } from "../i18n";
 import { useI18n } from "vue-i18n";
 import { computed, ref, watch } from "vue";
-import { RouterLink, useRoute } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useQuery } from "@tanstack/vue-query";
 import {
   ArrowLeft,
@@ -12,9 +12,10 @@ import {
   Play,
   Info,
   AlertTriangle,
+  Trash2,
 } from "@lucide/vue";
 import { api } from "../api";
-import { refreshAccounts } from "../state";
+import { queryClient, refreshAccounts } from "../state";
 import {
   money,
   signedMoney,
@@ -35,6 +36,7 @@ import EquityTrend from "../components/charts/EquityTrend.vue";
 
 const { t } = useI18n();
 const route = useRoute();
+const router = useRouter();
 const id = computed(() => String(route.params.id));
 const sort = ref("ticket");
 const { data, error, isPending } = useQuery({
@@ -48,11 +50,18 @@ const { data: snapshots, error: snapshotsError } = useQuery({
   refetchInterval: 10_000,
 });
 const tab = ref("positions");
-watch(id, () => { tab.value = "positions"; });
 const open = ref(false);
 const busy = ref(false);
+const deleteOpen = ref(false);
+const deleting = ref(false);
+const deleteError = ref("");
 const actionError = ref("");
 const message = ref<string | (() => string)>("");
+watch(id, () => {
+  tab.value = "positions";
+  deleteOpen.value = false;
+  deleteError.value = "";
+});
 const current = computed(() => data.value?.account.snapshot);
 const positions = computed(
   () =>
@@ -91,6 +100,33 @@ async function toggleSync() {
     busy.value = false;
   }
 }
+function showDeleteConfirmation() {
+  deleteError.value = "";
+  deleteOpen.value = true;
+}
+async function deleteAccount() {
+  if (deleting.value) return;
+  const accountID = id.value;
+  deleting.value = true;
+  deleteError.value = "";
+  try {
+    await api(`/accounts/${accountID}`, "DELETE");
+    deleteOpen.value = false;
+    if (id.value === accountID) await router.replace("/");
+    queryClient.removeQueries({
+      predicate: (query) => query.queryKey[1] === accountID &&
+        ["account", "snapshots", "funds", "deals", "equity-history"].includes(String(query.queryKey[0])),
+    });
+    await Promise.all([
+      refreshAccounts(),
+      queryClient.invalidateQueries({ queryKey: ["collection-settings"] }),
+    ]);
+  } catch (e) {
+    deleteError.value = (e as Error).message;
+  } finally {
+    deleting.value = false;
+  }
+}
 </script>
 <template>
   <div class="page-content">
@@ -113,6 +149,9 @@ async function toggleSync() {
           </p>
         </div>
         <div class="page-actions">
+          <button class="btn" :disabled="busy || deleting" @click="showDeleteConfirmation">
+            <Trash2 :size="16" />{{ t('account.deleteAccount') }}
+          </button>
           <button class="btn" :disabled="busy" @click="open = true">
             <Settings2 :size="16" />{{ t('account.accountSettings') }}</button
           ><button class="btn" :disabled="busy" @click="toggleSync">
@@ -345,6 +384,24 @@ async function toggleSync() {
           @saved="open = false"
           @cancel="open = false"
         />
+      </Modal>
+      <Modal
+        :open="deleteOpen"
+        :title="t('account.deleteAccount')"
+        :description="t('account.deleteDescription', { label: data.account.label, login: data.account.login })"
+        @update:open="value => { if (!deleting) deleteOpen = value; }"
+      >
+        <p v-if="deleteError" role="alert" class="notice notice-error">
+          {{ localizeMessage(deleteError) }}
+        </p>
+        <div class="dialog-actions">
+          <button class="btn" :disabled="deleting" @click="deleteOpen = false">
+            {{ t('accountForm.cancel') }}
+          </button>
+          <button class="btn btn-danger" :disabled="deleting" @click="deleteAccount">
+            {{ deleting ? t('account.deleting') : t('account.confirmDelete') }}
+          </button>
+        </div>
       </Modal>
     </template>
   </div>

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"errors"
+	"strings"
 )
 
 //go:embed migrations/013_mt5.sql
@@ -15,12 +16,16 @@ var mt5HistorySchema string
 //go:embed migrations/015_mt5_native_only.sql
 var mt5NativeOnlySchema string
 
-func migrateMT5(tx *sql.Tx) error {
-	// Preserve indexes and triggers on the two tables being rebuilt, including
-	// application invariants added in earlier migrations.
+func rebuildTables(tx *sql.Tx, schema string, tables ...string) error {
+	// Preserve explicit indexes and triggers added in earlier migrations.
+	params := make([]any, len(tables))
+	for i, name := range tables {
+		params[i] = name
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(tables)), ",")
 	rows, err := tx.Query(`SELECT sql FROM sqlite_schema
-		WHERE tbl_name IN ('accounts', 'servers') AND type IN ('index', 'trigger') AND sql IS NOT NULL
-		ORDER BY rowid`)
+		WHERE tbl_name IN (`+placeholders+`) AND type IN ('index', 'trigger') AND sql IS NOT NULL
+		ORDER BY rowid`, params...)
 	if err != nil {
 		return err
 	}
@@ -36,7 +41,7 @@ func migrateMT5(tx *sql.Tx) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(mt5Schema); err != nil {
+	if _, err := tx.Exec(schema); err != nil {
 		return err
 	}
 	for _, statement := range objects {
@@ -54,7 +59,7 @@ func checkForeignKeys(tx *sql.Tx) error {
 	}
 	defer check.Close()
 	if check.Next() {
-		return errors.New("MT5 database migration violated a foreign key")
+		return errors.New("database migration violated a foreign key")
 	}
 	return check.Err()
 }

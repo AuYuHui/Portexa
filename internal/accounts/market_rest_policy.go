@@ -53,7 +53,7 @@ func updateRestPolicy(tx *gorm.DB, settings *storage.CollectionSettings, input C
 		}
 		if len(ids) > 0 {
 			var count int64
-			if err := tx.Model(&storage.Account{}).Where("id IN ?", ids).Count(&count).Error; err != nil {
+			if err := tx.Model(&storage.Account{}).Where("id IN ? AND removed_at_ms IS NULL", ids).Count(&count).Error; err != nil {
 				return false, err
 			}
 			if count != int64(len(ids)) {

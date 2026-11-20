@@ -313,7 +313,7 @@ func (s *Service) Snapshots(ctx context.Context, id string, before int64, limit 
 		return nil, &InputError{"查询条数需要在1至200之间"}
 	}
 	var account storage.Account
-	if err := s.Store.Read.WithContext(ctx).First(&account, "id = ?", id).Error; err != nil {
+	if err := s.Store.Read.WithContext(ctx).Select("id").First(&account, "id = ? AND removed_at_ms IS NULL", id).Error; err != nil {
 		return nil, err
 	}
 	query := s.Store.Read.WithContext(ctx).Where("account_id = ?", id)

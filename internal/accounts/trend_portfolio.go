@@ -34,7 +34,8 @@ func (s *Service) PortfolioTrend(ctx context.Context, input TrendRequest) (Trend
 	}
 	var accounts []storage.Account
 	if err = s.Store.Read.WithContext(ctx).Select("id,server_id,currency,usd_scale,unit_revision,unit_verified_at_ms,included_at_ms,removed_at_ms,created_at_ms").
-		Where("created_at_ms<?", input.ToMS).Order("id").Find(&accounts).Error; err != nil {
+		Where("created_at_ms<? AND (removed_at_ms IS NULL OR removed_at_ms>=?)", input.ToMS, input.FromMS).
+		Order("id").Find(&accounts).Error; err != nil {
 		return view, err
 	}
 	start := (input.FromMS + trendAlignmentMS - 1) / trendAlignmentMS * trendAlignmentMS

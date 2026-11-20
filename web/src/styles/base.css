@@ -187,6 +187,16 @@ small {
   border-color: var(--color-brand-700);
   color: #ffffff;
 }
+.btn-danger {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  color: #ffffff;
+}
+.btn-danger:hover:not(:disabled) {
+  background: #991b1b;
+  border-color: #991b1b;
+  color: #ffffff;
+}
 .btn-small {
   padding: 5px 10px;
   font-size: 12px;

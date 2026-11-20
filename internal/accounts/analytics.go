@@ -91,7 +91,8 @@ func (s *Service) Analytics(ctx context.Context, requested AnalyticsRequest) (An
 		if readOrders > 200_000 {
 			return view, &InputError{"分析区间交易过多，请缩短时间范围"}
 		}
-		if input.AccountID != "" || account.USDScale != nil && account.IncludedAtMS != nil {
+		if input.AccountID != "" || account.USDScale != nil && account.IncludedAtMS != nil &&
+			(account.RemovedAtMS == nil || *account.RemovedAtMS >= input.ToMS) {
 			if source.cutoff >= input.FromMS+analytics.Minute {
 				cutoff = min(cutoff, source.cutoff)
 			}

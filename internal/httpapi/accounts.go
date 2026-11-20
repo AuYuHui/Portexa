@@ -142,6 +142,16 @@ func (s *Server) patchAccount(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, view.Account)
 }
 
+func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := s.accounts.DeleteAccount(r.Context(), id); err != nil {
+		fail(w, err)
+		return
+	}
+	s.scheduler.Cancel(id)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) syncAccount(w http.ResponseWriter, r *http.Request) {
 	if err := s.accounts.RequestSync(r.Context(), r.PathValue("id")); err != nil {
 		fail(w, err)
