@@ -40,7 +40,6 @@ type Endpoint struct {
 	ServerID         string  `gorm:"column:server_id" json:"server_id"`
 	Revision         int64   `gorm:"column:revision" json:"revision"`
 	IPAddress        string  `gorm:"column:ip_address" json:"ip_address"`
-	WebHostname      string  `gorm:"column:web_hostname" json:"web_hostname,omitempty"`
 	Port             int     `gorm:"column:port" json:"port"`
 	State            string  `gorm:"column:state" json:"state"`
 	EvidenceRef      *string `gorm:"column:evidence_ref" json:"evidence_ref"`

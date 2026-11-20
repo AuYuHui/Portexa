@@ -20,8 +20,6 @@ func stripMT5Schema(t *testing.T, db *sql.DB) {
 		"ALTER TABLE history_order_revisions DROP COLUMN exact_lots",
 		"ALTER TABLE history_order_revisions DROP COLUMN fee",
 		"ALTER TABLE positions DROP COLUMN trigger_price",
-		"DROP TRIGGER endpoint_web_hostname_is_immutable",
-		"ALTER TABLE server_endpoints DROP COLUMN web_hostname",
 		"ALTER TABLE positions DROP COLUMN exact_lots",
 	} {
 		if _, err := db.Exec(statement); err != nil {

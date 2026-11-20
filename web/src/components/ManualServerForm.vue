@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { localizeMessage } from "../i18n";
 import { useI18n } from "vue-i18n";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { LoaderCircle } from "@lucide/vue";
 import { api } from "../api";
 import { refreshAccounts } from "../state";
@@ -13,12 +13,20 @@ const emit = defineEmits<{ cancel: []; saved: [] }>();
 const broker = ref(props.mt5Selection?.broker_name ?? "");
 const name = ref(props.mt5Selection?.server_name ?? "");
 const address = ref("");
-const port = ref(443);
 const protocol = ref<Server["protocol"]>(props.mt5Selection ? "mt5" : "mt4");
-const webHostname = ref(props.server?.endpoints.find((endpoint) => endpoint.state !== "retired")?.web_hostname || "");
+const port = ref(protocol.value === "mt5" ? 2085 : 443);
 const isMT5 = computed(() => (props.server?.protocol ?? protocol.value) === "mt5");
 const busy = ref(false);
 const error = ref("");
+
+watch(protocol, (p) => {
+  if (p === "mt5" && port.value === 443) {
+    port.value = 2085;
+  } else if (p === "mt4" && port.value === 2085) {
+    port.value = 443;
+  }
+});
+
 async function submit() {
   busy.value = true;
   error.value = "";
@@ -27,12 +35,10 @@ async function submit() {
       await api(`/servers/${props.server.id}/endpoints`, "POST", {
         ip_address: address.value,
         port: port.value,
-        ...(isMT5.value ? { web_hostname: webHostname.value.trim() } : {}),
       });
     } else {
       await api("/servers", "POST", {
         protocol: protocol.value,
-        ...(isMT5.value ? { web_hostname: webHostname.value.trim() } : {}),
         broker_name: broker.value,
         server_name: name.value,
         ip_address: address.value,
@@ -77,11 +83,6 @@ async function submit() {
       {{ t('manualServerForm.aNewRevisionRetiresThePreviousAddressAnd') }}
     </p>
     <p v-if="isMT5 && mt5Selection" class="muted small">{{ t('directoryPicker.mt5SelectionHelp') }}</p>
-    <label v-if="isMT5" class="field">
-      {{ t('mt5.terminalHostname') }}
-      <input v-model="webHostname" required maxlength="128" placeholder="mt5.broker.example" />
-      <small>{{ t('mt5.terminalHostnameHelp') }}</small>
-    </label>
     <div class="form-grid">
       <label class="field"
         >{{ t('manualServerForm.fixedIpAddress') }}<input

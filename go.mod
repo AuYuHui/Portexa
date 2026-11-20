@@ -19,7 +19,6 @@ require (
 	github.com/anchore/go-lzo v0.1.2-0.20261030041440-c6cb39a30b97 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect

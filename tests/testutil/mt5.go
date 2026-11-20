@@ -9,7 +9,7 @@ import (
 func MT5Snapshot() mt5.Result {
 	const partialOrderTicket = 8_000_000_002
 	return mt5.Result{
-		Account: mt5.Account{Balance: 2000, Credit: 50, Currency: "USD", Margin: 20, Leverage: 200},
+		Account: mt5.Account{Balance: 2000, Credit: 50, Currency: "USD", Leverage: 200},
 		Positions: []mt5.Position{{ID: partialOrderTicket, Symbol: "TESTUSD", Side: 1, Digits: 5,
 			OpenTime: 1_780_000_000, VolumeUnits: 123456, OpenPrice: 1.23456, CurrentPrice: 1.23457,
 			Profit: 5, Commission: -0.1, Swap: -0.2}},

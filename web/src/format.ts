@@ -152,8 +152,6 @@ export function failureLabel(code: string | null | undefined) {
         history_window_too_large: t('format.largeHistoryWindowSplittingCollection'),
         configuration_changed: t('format.configurationChangedPreviousJobCanceled'),
         invalid_config: t('format.unsupportedConfigurationPleaseCheckIt'),
-        mt5_server_mismatch: t('mt5.serverMismatch'),
-        mt5_tls_verification_failed: t('mt5.tlsVerificationFailed'),
         read_only_required: t('format.investorPasswordRequired'),
         invalid_response: t('format.responseCouldNotBeFullyParsed'),
         credential_unavailable: t('format.credentialKeyUnavailableOrMismatchedCollectionPaused'),

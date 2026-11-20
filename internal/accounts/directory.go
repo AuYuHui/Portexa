@@ -26,7 +26,11 @@ func (s *Service) CreateDiscovered(ctx context.Context, candidate discovery.Cand
 	if err != nil {
 		return storage.Server{}, storage.Endpoint{}, err
 	}
-	return s.createServer(ctx, ServerInput{BrokerName: candidate.BrokerName, ServerName: candidate.ServerName, IPAddress: access.IPAddress, Port: access.Port}, approval)
+	protocol := candidate.Protocol
+	if protocol == "" {
+		protocol = "mt4"
+	}
+	return s.createServer(ctx, ServerInput{Protocol: protocol, BrokerName: candidate.BrokerName, ServerName: candidate.ServerName, IPAddress: access.IPAddress, Port: access.Port}, approval)
 }
 
 func (s *Service) NewDiscoveredEndpoint(ctx context.Context, serverID string, candidate discovery.Candidate, index int, acceptRisk bool) (storage.Endpoint, []string, error) {
@@ -48,10 +52,11 @@ func (s *Service) approveCandidate(candidate discovery.Candidate, index int, acc
 		return nil, discovery.Access{}, &InputError{"请选择目录返回的有效接入点"}
 	}
 	digest := sha256.Sum256(candidate.EvidenceBody)
-	if candidate.SourceURL != discovery.SourceURL || hex.EncodeToString(digest[:]) != hex.EncodeToString(candidate.EvidenceSHA256) {
+	validSource := candidate.SourceURL == discovery.SourceURL || candidate.SourceURL == discovery.MT5SourceURL
+	if !validSource || hex.EncodeToString(digest[:]) != hex.EncodeToString(candidate.EvidenceSHA256) {
 		return nil, discovery.Access{}, &InputError{"目录来源证据无效，请重新搜索"}
 	}
-	return &endpointApproval{ref: discovery.SourceURL + "#sha256=" + hex.EncodeToString(digest[:]), digest: digest[:], source: candidate}, candidate.Endpoints[index], nil
+	return &endpointApproval{ref: candidate.SourceURL + "#sha256=" + hex.EncodeToString(digest[:]), digest: digest[:], source: candidate}, candidate.Endpoints[index], nil
 }
 
 func (a *endpointApproval) apply(tx *gorm.DB, endpoint *storage.Endpoint, now int64) error {

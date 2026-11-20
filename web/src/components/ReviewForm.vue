@@ -57,7 +57,6 @@ async function submit() {
     <div class="endpoint-summary num">
       {{ t('accountForm.revision') }} {{ endpoint.revision }}
       <strong>{{ endpoint.ip_address }}:{{ endpoint.port }}</strong>
-      <span v-if="endpoint.web_hostname">{{ endpoint.web_hostname }}</span>
     </div>
     <label class="field"
       >{{ t('reviewForm.independentVerificationEvidence') }}<input
@@ -88,12 +87,12 @@ async function submit() {
     <div class="notice notice-warning risk-notice">
       <AlertTriangle :size="20" />
       <p>
-        {{ endpoint.web_hostname ? t('mt5.reviewTls') : t('reviewForm.thePinnedSdkSendsPasswordDerivedMaterialBefore') }}
+        {{ t('reviewForm.thePinnedSdkSendsPasswordDerivedMaterialBefore') }}
       </p>
     </div>
     <label class="checkbox-row"
       ><input v-model="risk" required type="checkbox" /><span
-        >{{ endpoint.web_hostname ? t('mt5.reviewConfirmation') : t('reviewForm.iHaveIndependentlyVerifiedThisIpPortAnd') }}<small
+        >{{ t('reviewForm.iHaveIndependentlyVerifiedThisIpPortAnd') }}<small
           >{{ t('reviewForm.validOnlyForTheCurrentRevisionAddressOr') }}</small
         ></span
       ></label

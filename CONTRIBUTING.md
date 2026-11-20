@@ -12,13 +12,12 @@ Use macOS or Linux with Go 1.26+, Node.js 22.12+, npm, and Python 3. Start with 
 make check
 ```
 
-The check includes all Go modules with `GOWORK=off`, Python capture-tool tests, `go vet`, frontend type checks, translation checks, the web build, and structure checks. Browser acceptance and screenshot capture run separately; see [validation](docs/phase1-validation.md) and [screenshot generation](docs/screenshots.md).
+The check runs Go tests and `go vet` with `GOWORK=off`, Python tests for capture tooling and MT5 handshake research, frontend type and translation checks, the web build, and structure checks. Browser acceptance and screenshot capture run separately. [Acceptance records](docs/phase1-validation.md) · [Screenshot generation](docs/screenshots.md)
 
 ## Code and tests
 
-- Keep native MT4 production protocol code in `packages/mt4`. Its API is `Probe`, `Fetch`, and protocol types; do not add dependencies on the main application, storage, CLI input/output, or research tools.
+- Keep MT4 protocol code in `packages/mt4` and MT5 protocol code in `packages/mt5`. Both SDKs expose typed protocol data and run independently of the main application, storage, CLI input/output, and research tools.
 - Keep application behavior in `internal/` and command entry points in `cmd/`. `internal/cli` handles probe input and redacted output; `internal/appcli` handles product administration.
-- Keep MT5 Web Terminal protocol code in `packages/mt5`. Keep main application and storage dependencies outside the protocol module.
 - Put SDK tests in `packages/mt4/tests` and `packages/mt5/tests`, application and capture-tool tests in root `tests`, and historical experiment tests in the relevant `research/*/tests` directory.
 - Keep source, test, script, and documentation files at or below 1,000 lines. `make structure` checks the limit and module boundaries.
 - Use `gofmt` for changed Go files. Update related documentation when behavior, configuration, or supported scope changes.

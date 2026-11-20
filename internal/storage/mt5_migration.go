@@ -12,6 +12,9 @@ var mt5Schema string
 //go:embed migrations/014_mt5_history.sql
 var mt5HistorySchema string
 
+//go:embed migrations/015_mt5_native_only.sql
+var mt5NativeOnlySchema string
+
 func migrateMT5(tx *sql.Tx) error {
 	// Preserve indexes and triggers on the two tables being rebuilt, including
 	// application invariants added in earlier migrations.

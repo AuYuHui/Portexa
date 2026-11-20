@@ -163,7 +163,6 @@ export interface Endpoint {
   id: string;
   revision: number;
   ip_address: string;
-  web_hostname?: string;
   port: number;
   state: string;
   evidence_ref: string | null;

@@ -2,7 +2,6 @@ package syncer
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"net"
 	"strings"
@@ -18,14 +17,12 @@ func convertMT5(job accounts.Job, result mt5.Result, from, to int64) (storage.Sn
 	a := result.Account
 	currency := strings.ToUpper(strings.TrimSpace(a.Currency))
 	if from > to || len(currency) == 0 || len(currency) > 12 || !utf8.ValidString(currency) ||
-		!finite(a.Balance) || !finite(a.Credit) || !finite(a.Margin) || a.Margin < 0 {
+		!finite(a.Balance) || !finite(a.Credit) {
 		return storage.Snapshot{}, nil, ErrIncomplete
 	}
-	margin := decimal.NewFromFloat(a.Margin)
 	snapshot := storage.Snapshot{ID: storage.NewID(), AccountID: job.Account.ID, SyncRunID: job.Run.ID,
 		ObservedFromMS: from, ObservedToMS: to, NativeCurrency: currency, UnitRevision: job.Account.UnitRevision,
-		Balance: decimal.NewFromFloat(a.Balance), Credit: decimal.NewFromFloat(a.Credit), Leverage: a.Leverage,
-		Margin: &margin, MarginAvailable: true}
+		Balance: decimal.NewFromFloat(a.Balance), Credit: decimal.NewFromFloat(a.Credit), Leverage: a.Leverage}
 	if job.Account.Currency != nil && *job.Account.Currency == currency && job.Account.UnitVerifiedAtMS != nil {
 		snapshot.USDScale = job.Account.USDScale
 	}
@@ -63,9 +60,7 @@ func convertMT5(job accounts.Job, result mt5.Result, from, to int64) (storage.Sn
 		seen[order.Ticket] = true
 		positions = append(positions, position)
 	}
-	// Web Terminal account snapshots expose balance and credit. The display
-	// labels this calculated value as an estimate because broker adjustments
-	// such as blocked funds may be absent from the open position results.
+	// Broker adjustments such as blocked funds may be absent from the snapshot.
 	snapshot.Equity = snapshot.Balance.Add(snapshot.Credit).Add(snapshot.FloatingNetProfit)
 	return snapshot, positions, nil
 }
@@ -94,7 +89,6 @@ func makeMT5Position(accountID, snapshotID string, position mt5.Position) (stora
 }
 
 func classifyMT5(err error) accounts.Failure {
-	var certificate *tls.CertificateVerificationError
 	var network net.Error
 	failure := accounts.Failure{Code: "connection", Operation: "mt5_snapshot"}
 	switch {
@@ -106,10 +100,6 @@ func classifyMT5(err error) accounts.Failure {
 		failure.Code, failure.Permanent = "read_only_required", true
 	case errors.Is(err, mt5.ErrRejected):
 		failure.Code, failure.Permanent = "server_rejected", true
-	case errors.Is(err, mt5.ErrServerMismatch):
-		failure.Code, failure.Permanent = "mt5_server_mismatch", true
-	case errors.As(err, &certificate):
-		failure.Code, failure.Permanent = "mt5_tls_verification_failed", true
 	case errors.Is(err, mt5.ErrConfig):
 		failure.Code, failure.Permanent = "invalid_config", true
 	case errors.Is(err, mt5.ErrResourceLimit):

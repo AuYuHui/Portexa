@@ -81,7 +81,7 @@ watch(
 );
 
 function choose(candidate: DirectoryCandidate | DirectoryServerName) {
-  if (!("endpoints" in candidate)) {
+  if (!("endpoints" in candidate) || !candidate.endpoints.length) {
     emit("selectMt5", candidate);
     return;
   }
@@ -189,7 +189,7 @@ async function submit() {
       </div>
       <div v-else-if="!error" class="directory-empty">
         <ServerIcon :size="26" /><strong>{{ t('directoryPicker.chooseABrokerAndServerToBegin') }}</strong>
-        <p v-if="platform === 'mt4'">{{ t('directoryPicker.candidateEndpointsAreRetrievedAndTheirSourceRecorded') }}</p>
+        <p>{{ t('directoryPicker.candidateEndpointsAreRetrievedAndTheirSourceRecorded') }}</p>
       </div>
     </template>
 

@@ -31,7 +31,7 @@ func (s *Service) collectionConfig(tx *gorm.DB, account storage.Account) (collec
 		return collectionConfig{}, err
 	}
 	if server.Protocol == "mt5" {
-		return collectionConfig{mt5: &mt5.Config{IPAddress: endpoint.IPAddress, Port: endpoint.Port, Hostname: endpoint.WebHostname,
+		return collectionConfig{mt5: &mt5.Config{IPAddress: endpoint.IPAddress, Port: endpoint.Port,
 			Server: server.ServerName, Login: account.Login, Password: password}}, nil
 	}
 	return collectionConfig{mt4: mt4.Config{Address: net.JoinHostPort(endpoint.IPAddress, strconv.Itoa(endpoint.Port)), Server: server.ServerName,

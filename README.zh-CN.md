@@ -2,7 +2,7 @@
 
 **在自己的工作台，一览多个 MT4 和 MT5 账户。**
 
-Portexa 是可私有部署的多账户只读看板，通过 Go 客户端使用 MT4 原生协议和 MT5 Web 终端协议采集资金、持仓。两个平台均可查看挂单、历史流水、当日交易和收益分析。主工程使用 Go、GORM、SQLite 和 Vue。
+Portexa 是可私有部署的多账户只读看板，通过原生 TCP 连接 MT4 和 MT5 交易服务器。两个平台均可查看资金、持仓、挂单、历史流水、当日交易统计和收益分析。主工程使用 Go、GORM、SQLite 和 Vue。
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
@@ -14,14 +14,14 @@ Portexa 是可私有部署的多账户只读看板，通过 Go 客户端使用 M
 - **收益与风险分析**：查看资金流调整后的净收益、估算收益率、采样回撤、收益日历和同区间账户比较；缺失、资金待分类及对账差额按指标说明，详见[统计规则](docs/analytics.md)。
 - **资产历史走势**：总览看组合，详情看账户；支持24小时至90天和自定义范围、余额与净值切换、原币及已确认美元换算。采样缺口留白，账户纳入和已确认出入金分别标记。
 - **明确币种单位**：确认单位后的 USD、USC 按 100 USC = 1 USD 计入美元小计，保留原币金额；其他币种单列。
-- **当日交易统计**：按 MT4 服务器日期展示当日净利润、结余、平仓笔数、胜率和盈利/亏损。
+- **当日交易统计**：按各交易服务器确认的日期展示当日净利润、结余、平仓笔数和胜率。
 - **历史与出入金**：按窗口回填可用历史，依据明确订单备注识别出入金，支持人工校正及修订追踪。
 - **周期采集**：可选 30、60、120、300 秒。失败保留最后完整快照，明确标记缺失与过期数据。
 - **私有部署**：单用户系统密码登录、独立加密投资者凭据、SQLite、本地备份和轮转 JSONL 日志。
 - **中英文界面**：登录页和顶部均可切换，偏好保存在当前浏览器；账户名称和原始备注保留原文。
-- **独立 Go SDK**：`packages/mt4` 对外提供 `Probe`、`Fetch` 及协议数据类型，不依赖看板或存储。
+- **独立 Go SDK**：[MT4](packages/mt4/README.md) 和 [MT5](packages/mt5/README.md) 客户端均可独立于看板和存储使用。
 
-当前提供账户监控、资金统计和基于有效采样的收益风险分析，快照归档仍属后续阶段。经纪商兼容性取决于协议 profile 和服务端保留的历史；已验证范围和日期见[研究与验收记录](docs/research/README.md)。
+经纪商兼容性取决于接入点、协议 profile 和服务端保留的历史。历史线上记录与合成测试的验证范围见[协议研究索引](docs/research/README.md)。
 
 ## 桌面截图
 
@@ -63,7 +63,7 @@ make build
 
 构建产物包括 `.local/bin/portexa`、`.local/bin/mt4probe`、`.local/bin/mt4verify` 及 `.local/web/`。部署时同时携带服务二进制和前端静态目录，运行时不需要 Node.js。数据、密钥、备份及日志默认保存在被忽略的 `.local/portexa/`。
 
-### 第一次接入账户
+### 接入 MT4 账户
 
 1. 打开“接入与设置 → 登记服务器”，搜索经纪商或准确的 MT4 服务器名称。
 2. 独立核验候选接入点，确认该修订的剩余连接风险后完成登记。
@@ -73,9 +73,9 @@ make build
 
 ### 接入 MT5 账户
 
-打开“接入与设置 → 登记服务器”，选择 **MT5**，可按经纪商或服务器名称搜索并带入结果。填写经纪商提供的 Web 终端域名和独立核验过的固定 IP、端口，也可在高级入口手动填写。通过核验后，使用投资者只读密码接入账户。
+打开“接入与设置 → 登记服务器”，选择 **MT5**，按经纪商或服务器名称搜索。核对候选 IP、端口并确认接入风险。目录无可用地址时，可在“手动填写（高级）”登记已核验的固定 IP 和端口。接入账户使用 MT5 登录号和 **1–32 个 UTF-16 代码单元**的投资者只读密码。[接入指南](docs/product-start.md#第一次账户接入)
 
-在服务器卡片打开「服务器时间」，按经纪商资料确认时区，启用成交回填、当日统计、出入金和收益分析。首次设置可填写经核实的历史生效日期。账户详情提供挂单和成交明细，收益分析支持单账户与组合。MT5 净值依据余额、信用额与持仓浮动净盈亏估算。[MT5 统计口径](docs/account-statistics.md#mt5-成交与资金口径) · [协议模块说明](packages/mt5/README.md)
+在服务器卡片打开“服务器时间”，按经纪商资料确认时区，启用成交回填、当日统计、出入金和收益分析。首次设置可填写经核实的历史生效日期。MT5 净值依据余额、信用额与持仓浮动净盈亏估算。[MT5 统计口径](docs/account-statistics.md#mt5-成交与资金口径)
 
 ### 生产部署
 
@@ -99,7 +99,7 @@ make web-install
 make check
 ```
 
-`make check` 包含目录与文件行数检查、各模块 Go 测试、Python 采集工具测试、`go vet`、前端类型检查、翻译检查和生产构建。普通检查仅使用合成数据和环回服务，不登录真实交易账户。
+`make check` 包含结构检查、各模块 Go 测试和 `go vet`、采集工具与 MT5 握手研究的 Python 测试、前端类型与翻译检查及生产构建。常规检查使用合成数据和环回服务。
 
 前端热更新在两个终端分别执行，Go 服务须已完成初始化与构建：
 
@@ -115,14 +115,14 @@ npm --prefix web run dev
 
 ## 独立协议模块
 
-[`packages/mt4`](packages/mt4/README.md) 的模块名为 `portexa/mt4`，对外提供 `Probe`、`Fetch` 及类型化协议数据，不读取业务配置、不落库、不输出命令行结果。
+[`portexa/mt4`](packages/mt4/README.md) 提供 `Probe`、`Fetch`，[`portexa/mt5`](packages/mt5/README.md) 提供 `Probe`、`Fetch`、`FetchHistory`。两个模块均返回类型化协议数据，可关闭 Go workspace 独立验证。
 
 ```sh
 GOWORK=off go -C packages/mt4 test ./...
-GOWORK=off go -C packages/mt4 vet ./...
+GOWORK=off go -C packages/mt5 test ./...
 ```
 
-当前模块按项目本地路径命名，通过仓库中的 `replace` 接入，尚未配置公开 `go get` 模块地址。调用接口和限制见[SDK 说明](packages/mt4/README.md)，联网与离线验证见[命令行说明](cmd/mt4probe/README.md)。
+主工程通过 `replace` 引用本地模块。命令行示例见 [MT4 探测工具](cmd/mt4probe/README.md)。
 
 ## 文档导航
 
@@ -132,12 +132,12 @@ GOWORK=off go -C packages/mt4 vet ./...
 | --- | --- |
 | [启动与管理](docs/product-start.md) | 构建、部署、接入、私有数据、日志、备份与恢复 |
 | [账户统计](docs/account-statistics.md) | 当日统计、保证金、历史覆盖及资金分类 |
+| [收益与风险分析](docs/analytics.md) | 收益率、采样回撤、收益日历和账户比较 |
 | [资产走势](docs/asset-trends.md) | 组合与账户曲线、单位、采样缺口及数据明细 |
 | [服务器发现](docs/server-discovery.md) | 目录搜索、独立核验和接入点修订 |
 | [截图示例](docs/screenshots.md) | 中英文桌面图、数值说明和复现命令 |
 | [工程结构](docs/architecture.md) | 目录、依赖边界与 SDK 独立分发 |
-| [验收记录](docs/phase1-validation.md) | 合成验收、浏览器回归和历史性能证据 |
-| [产品方案](docs/product-plan.md) | 已实现范围与后续分析规划 |
+| [验收记录](docs/phase1-validation.md) | 历史合成验收、浏览器回归和性能结果 |
 | [协议研究](docs/research/README.md) | 历史研究和经纪商兼容性证据 |
 
 ## 参与贡献
@@ -146,7 +146,7 @@ GOWORK=off go -C packages/mt4 vet ./...
 
 ## 开源协议
 
-Portexa 使用 [MIT License](LICENSE)，独立 SDK 也保留[许可证副本](packages/mt4/LICENSE)。第三方依赖遵循各自许可，SDK 的第三方许可原文见[声明](packages/mt4/THIRD_PARTY_NOTICES.md)。
+Portexa 使用 [MIT License](LICENSE)。两个独立 SDK 均附许可证副本和第三方许可原文。[MT4 许可声明](packages/mt4/THIRD_PARTY_NOTICES.md) · [MT5 许可声明](packages/mt5/THIRD_PARTY_NOTICES.md)
 
 ## Star History
 

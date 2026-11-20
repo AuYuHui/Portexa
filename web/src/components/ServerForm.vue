@@ -9,7 +9,7 @@ import ManualServerForm from "./ManualServerForm.vue";
 const { t } = useI18n();
 const props = defineProps<{ server?: Server }>();
 const emit = defineEmits<{ cancel: []; saved: [] }>();
-const manual = ref(props.server?.protocol === "mt5");
+const manual = ref(false);
 const mt5Selection = shallowRef<DirectoryServerName>();
 
 function selectMT5(server: DirectoryServerName) {
@@ -20,7 +20,7 @@ function selectMT5(server: DirectoryServerName) {
 
 <template>
   <div class="server-entry">
-    <div v-if="server?.protocol !== 'mt5'" class="entry-modes" :aria-label="t('serverForm.serverConnectionMethod')">
+    <div class="entry-modes" :aria-label="t('serverForm.serverConnectionMethod')">
       <button
         type="button"
         :class="{ active: !manual }"
@@ -42,7 +42,7 @@ function selectMT5(server: DirectoryServerName) {
     <DirectoryPicker
       v-else
       :server="server"
-      :initial-platform="mt5Selection ? 'mt5' : undefined"
+      :initial-platform="server?.protocol ?? (mt5Selection ? 'mt5' : undefined)"
       @select-mt5="selectMT5"
       @saved="emit('saved')"
       @cancel="emit('cancel')"

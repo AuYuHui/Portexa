@@ -24,6 +24,7 @@ type Access struct {
 
 type Candidate struct {
 	ID             string   `json:"id"`
+	Protocol       string   `json:"protocol,omitempty"`
 	BrokerName     string   `json:"broker_name"`
 	ServerName     string   `json:"server_name"`
 	Demo           bool     `json:"demo"`
@@ -105,12 +106,12 @@ func (c *Catalog) Search(ctx context.Context, query string) ([]Candidate, error)
 	return copyList(result.candidates), nil
 }
 
-func (c *Catalog) SearchMT5(ctx context.Context, query string) ([]ServerName, error) {
+func (c *Catalog) SearchMT5(ctx context.Context, query string) ([]Candidate, error) {
 	result, err := c.search(ctx, query, true)
 	if err != nil {
 		return nil, err
 	}
-	return append([]ServerName{}, result.serverNames...), nil
+	return copyList(result.candidates), nil
 }
 
 func (c *Catalog) search(ctx context.Context, query string, mt5 bool) (entry, error) {
@@ -150,7 +151,7 @@ func (c *Catalog) search(ctx context.Context, query string, mt5 bool) (entry, er
 	now := c.now()
 	result := entry{expires: now.Add(15 * time.Minute).UnixMilli(), bytes: len(body), created: now.UnixNano()}
 	if mt5 {
-		result.serverNames, err = parseMT5Names(body, query)
+		result.candidates, result.serverNames, err = c.parseMT5(ctx, body, now)
 	} else {
 		result.candidates, err = c.parse(ctx, body, now)
 	}

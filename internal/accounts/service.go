@@ -41,19 +41,17 @@ func New(store *storage.Store, key *vault.Vault, policy TargetPolicy) *Service {
 }
 
 type ServerInput struct {
-	Protocol    string `json:"protocol"`
-	WebHostname string `json:"web_hostname"`
-	BrokerName  string `json:"broker_name"`
-	ServerName  string `json:"server_name"`
-	IPAddress   string `json:"ip_address"`
-	Port        int    `json:"port"`
-	TimeZone    string `json:"time_zone"`
+	Protocol   string `json:"protocol"`
+	BrokerName string `json:"broker_name"`
+	ServerName string `json:"server_name"`
+	IPAddress  string `json:"ip_address"`
+	Port       int    `json:"port"`
+	TimeZone   string `json:"time_zone"`
 }
 
 type EndpointInput struct {
-	WebHostname string `json:"web_hostname"`
-	IPAddress   string `json:"ip_address"`
-	Port        int    `json:"port"`
+	IPAddress string `json:"ip_address"`
+	Port      int    `json:"port"`
 }
 
 type ReviewInput struct {
@@ -98,9 +96,8 @@ func (s *Service) createServer(ctx context.Context, input ServerInput, approval 
 	if protocol == "" {
 		protocol = "mt4"
 	}
-	host, err := endpointHostname(protocol, input.WebHostname)
-	if err != nil {
-		return storage.Server{}, storage.Endpoint{}, err
+	if protocol != "mt4" && protocol != "mt5" {
+		return storage.Server{}, storage.Endpoint{}, &InputError{"请选择 MT4 或 MT5"}
 	}
 	if input.TimeZone != "" {
 		if _, err := time.LoadLocation(input.TimeZone); err != nil {
@@ -109,8 +106,8 @@ func (s *Service) createServer(ctx context.Context, input ServerInput, approval 
 	}
 	now := s.Now().UnixMilli()
 	server := storage.Server{ID: storage.NewID(), Protocol: protocol, BrokerName: strings.TrimSpace(input.BrokerName), ServerName: strings.TrimSpace(input.ServerName), CreatedAtMS: now}
-	endpoint := storage.Endpoint{ID: storage.NewID(), ServerID: server.ID, Revision: 1, IPAddress: input.IPAddress, Port: input.Port, WebHostname: host, State: "pending", CreatedAtMS: now}
-	err = s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
+	endpoint := storage.Endpoint{ID: storage.NewID(), ServerID: server.ID, Revision: 1, IPAddress: input.IPAddress, Port: input.Port, State: "pending", CreatedAtMS: now}
+	err := s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
 		if err := approval.apply(tx, &endpoint, now); err != nil {
 			return err
 		}
@@ -146,11 +143,6 @@ func (s *Service) newEndpoint(ctx context.Context, serverID string, input Endpoi
 		if err := tx.First(&server, "id = ? AND retired_at_ms IS NULL", serverID).Error; err != nil {
 			return err
 		}
-		host, err := endpointHostname(server.Protocol, input.WebHostname)
-		if err != nil {
-			return err
-		}
-		endpoint.WebHostname = host
 		if !approval.matchesServer(server) {
 			return &InputError{"新接入点必须属于当前 MT4 服务器"}
 		}

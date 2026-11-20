@@ -64,7 +64,7 @@ var ErrDenied = errors.New("operation denied")
 var ErrClosed = errors.New("store closed")
 
 const ApplicationID = 0x50545841
-const SchemaVersion = 14
+const SchemaVersion = 15
 
 type Priority int
 
@@ -317,8 +317,15 @@ func migrate(db *sql.DB) (result error) {
 			return err
 		}
 	}
-	if _, err = tx.Exec(mt5HistorySchema); err != nil {
-		return err
+	if version < 14 {
+		if _, err = tx.Exec(mt5HistorySchema); err != nil {
+			return err
+		}
+	}
+	if version < 15 {
+		if _, err = tx.Exec(mt5NativeOnlySchema); err != nil {
+			return err
+		}
 	}
 	if err = checkForeignKeys(tx); err != nil {
 		return err

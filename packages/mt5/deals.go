@@ -1,33 +1,54 @@
 package mt5
 
-import "portexa/mt5/internal/terminal"
+type HistoryRange struct {
+	Start, End uint32 // Half-open broker wall-clock seconds.
+}
 
-type DealType = terminal.DealType
-type DealEntry = terminal.DealEntry
-type Deal = terminal.Deal
+type HistoryResult struct {
+	Account Account
+	Deals   []Deal
+}
+
+type DealType uint32
 
 const (
-	DealBuy                    = terminal.DealBuy
-	DealSell                   = terminal.DealSell
-	DealBalance                = terminal.DealBalance
-	DealCredit                 = terminal.DealCredit
-	DealCharge                 = terminal.DealCharge
-	DealCorrection             = terminal.DealCorrection
-	DealBonus                  = terminal.DealBonus
-	DealCommission             = terminal.DealCommission
-	DealCommissionDaily        = terminal.DealCommissionDaily
-	DealCommissionMonthly      = terminal.DealCommissionMonthly
-	DealCommissionAgentDaily   = terminal.DealCommissionAgentDaily
-	DealCommissionAgentMonthly = terminal.DealCommissionAgentMonthly
-	DealInterest               = terminal.DealInterest
-	DealBuyCanceled            = terminal.DealBuyCanceled
-	DealSellCanceled           = terminal.DealSellCanceled
-	DealDividend               = terminal.DealDividend
-	DealDividendFranked        = terminal.DealDividendFranked
-	DealTax                    = terminal.DealTax
-
-	EntryIn    = terminal.EntryIn
-	EntryOut   = terminal.EntryOut
-	EntryInOut = terminal.EntryInOut
-	EntryOutBy = terminal.EntryOutBy
+	DealBuy DealType = iota
+	DealSell
+	DealBalance
+	DealCredit
+	DealCharge
+	DealCorrection
+	DealBonus
+	DealCommission
+	DealCommissionDaily
+	DealCommissionMonthly
+	DealCommissionAgentDaily
+	DealCommissionAgentMonthly
+	DealInterest
+	DealBuyCanceled
+	DealSellCanceled
+	DealDividend
+	DealDividendFranked
+	DealTax
 )
+
+type DealEntry uint32
+
+const (
+	EntryIn DealEntry = iota
+	EntryOut
+	EntryInOut
+	EntryOutBy
+)
+
+type Deal struct {
+	Ticket, Order, PositionID     uint64
+	WallTimeMS                    int64
+	Symbol, Comment               string
+	Type                          DealType
+	Entry                         DealEntry
+	Digits                        uint32
+	VolumeUnits                   uint64
+	Price, SL, TP                 float64
+	Profit, Commission, Swap, Fee float64
+}

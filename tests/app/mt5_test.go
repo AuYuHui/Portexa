@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 	"portexa/internal/accounts"
+	"portexa/internal/discovery"
 	"portexa/internal/storage"
 	"portexa/internal/syncer"
 	"portexa/mt4"
@@ -21,11 +23,7 @@ func TestMT5SnapshotsDealsFundingAndAnalytics(t *testing.T) {
 	f := testutil.New(t, false)
 	ctx := t.Context()
 	input := accounts.ServerInput{Protocol: "mt5", BrokerName: "Synthetic Broker", ServerName: "Synthetic-MT5",
-		IPAddress: "203.0.113.9", Port: 443, TimeZone: "UTC"}
-	if _, _, err := f.Accounts.CreateServer(ctx, input); err == nil {
-		t.Fatal("MT5 endpoint registered without a hostname")
-	}
-	input.WebHostname = "MT5.Broker.Example"
+		IPAddress: "203.0.113.9", Port: 2085, TimeZone: "UTC"}
 	server, endpoint, err := f.Accounts.CreateServer(ctx, input)
 	if err != nil {
 		t.Fatal(err)
@@ -77,14 +75,14 @@ func TestMT5SnapshotsDealsFundingAndAnalytics(t *testing.T) {
 		return err == nil && view.Account.Snapshot != nil
 	})
 	used := <-fetched
-	if used.Hostname != "mt5.broker.example" || used.IPAddress != input.IPAddress || used.Login != cfg.Login ||
-		used.Server != input.ServerName || used.Password != cfg.Password || used.Port != 443 {
+	if used.IPAddress != input.IPAddress || used.Login != cfg.Login ||
+		used.Server != input.ServerName || used.Password != cfg.Password || used.Port != input.Port {
 		t.Fatal("snapshot did not use the reviewed endpoint and approved account credentials")
 	}
 	snapshot := view.Account.Snapshot
 	if view.Account.Protocol != "mt5" || view.Account.Login != cfg.Login || view.Account.SyncState != "succeeded" ||
 		snapshot.Equity.String() != "2054.7" || snapshot.FloatingNetProfit.String() != "4.7" ||
-		!snapshot.MarginAvailable || snapshot.Margin == nil || snapshot.Margin.String() != "20" ||
+		snapshot.MarginAvailable || snapshot.Margin != nil ||
 		view.Account.Funding.State != "time_zone_unconfirmed" || view.Account.Daily.State != "time_zone_unconfirmed" {
 		t.Fatalf("unexpected MT5 account snapshot: %+v", view.Account)
 	}
@@ -186,5 +184,78 @@ func seedMT5Valuations(t *testing.T, fixture testutil.Fixture, account storage.A
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMT5NativeDiscoveryAndSync(t *testing.T) {
+	f := testutil.New(t, false)
+	ctx := t.Context()
+	now := time.Now()
+
+	// 1. Simulate MT5 Candidate from directory search
+	evidence := []byte(`[{"companyName":"EC Markets Ltd.","results":[{"name":"ECMarketsLtd-MT5-Live08","access":["203.0.113.9:2085"]}]}]`)
+	evidenceSHA := sha256.Sum256(evidence)
+	candidate := discovery.Candidate{
+		ID:             "mt5-cand-1234",
+		Protocol:       "mt5",
+		BrokerName:     "EC Markets Ltd.",
+		ServerName:     "ECMarketsLtd-MT5-Live08",
+		Endpoints:      []discovery.Access{{IPAddress: "203.0.113.9", Port: 2085}},
+		SourceName:     "MTAPI MT5 Directory",
+		SourceURL:      discovery.MT5SourceURL,
+		FetchedAtMS:    now.UnixMilli(),
+		ExpiresAtMS:    now.Add(15 * time.Minute).UnixMilli(),
+		EvidenceBody:   evidence,
+		EvidenceSHA256: evidenceSHA[:],
+	}
+
+	// 2. Discover and register MT5 server using native endpoint
+	server, endpoint, err := f.Accounts.CreateDiscovered(ctx, candidate, 0, true)
+	if err != nil {
+		t.Fatalf("CreateDiscovered for MT5 failed: %v", err)
+	}
+	if server.Protocol != "mt5" || endpoint.IPAddress != "203.0.113.9" || endpoint.Port != 2085 {
+		t.Fatalf("unexpected MT5 discovered server or endpoint: server=%+v, endpoint=%+v", server, endpoint)
+	}
+
+	// 3. Register account
+	cfg := accounts.AccountInput{
+		ServerID:          server.ID,
+		EndpointID:        endpoint.ID,
+		Login:             90000001,
+		Label:             "ECMarkets Native",
+		Password:          "SyntheticPass123!",
+		ConfirmedCurrency: "USD",
+		ConfirmUnit:       true,
+		SyncEnabled:       true,
+	}
+	account, err := f.Accounts.CreateAccount(ctx, cfg)
+	if err != nil {
+		t.Fatalf("CreateAccount for native MT5 failed: %v", err)
+	}
+
+	// 4. Verify the scheduler uses the selected native endpoint.
+	fetched := make(chan mt5.Config, 1)
+	engine := syncer.New(f.Accounts, nil, syncer.Options{
+		Interval: time.Hour,
+		FetchMT5: func(ctx context.Context, input mt5.Config) (mt5.Result, error) {
+			select {
+			case fetched <- input:
+			case <-ctx.Done():
+				return mt5.Result{}, ctx.Err()
+			}
+			return testutil.MT5Snapshot(), nil
+		},
+	})
+	startEngine(t, engine)
+
+	eventually(t, func() bool {
+		view, err := f.Accounts.Detail(ctx, account.ID, "")
+		return err == nil && view.Account.Snapshot != nil
+	})
+
+	used := <-fetched
+	if used.IPAddress != "203.0.113.9" || used.Port != 2085 || used.Login != 90000001 {
+		t.Fatal("syncer did not use the reviewed native endpoint and account")
 	}
 }

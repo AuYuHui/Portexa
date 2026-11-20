@@ -165,7 +165,7 @@ async function submit() {
           {{ t('accountForm.thePreviousEndpointIsRetiredRebindTheAccount') }}
         </option>
         <option v-for="e in endpoints" :key="e.id" :value="e.id">
-          {{ t('accountForm.revision') }} {{ e.revision }} · {{ e.ip_address }}:{{ e.port }}{{ e.web_hostname ? ` · ${e.web_hostname}` : "" }}
+          {{ t('accountForm.revision') }} {{ e.revision }} · {{ e.ip_address }}:{{ e.port }}
         </option></select
       ><small
         >{{ t('accountForm.onlyVerifiedRevisionsWithAcceptedRiskAreAllowed') }}</small

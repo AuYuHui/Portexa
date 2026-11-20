@@ -2,9 +2,9 @@
 
 [English README](../README.md) · [中文 README](../README.zh-CN.md) · [文档索引](README.md)
 
-这些截图由仓库当前构建的真实网页和 `tests/e2e/server` 合成服务生成，使用 1440 × 1000 桌面视口并保存完整页面。截图不包含真实凭据、真实账户明细或私有接入地址，也不以线上经纪商连接作为生成条件。
+这些截图展示合成 MT4 账户，使用 `tests/e2e/server` 和 1440 × 1000 桌面视口生成完整页面。账户名称、登录号、金额、订单和备注均为示例。
 
-These are full-page captures of the real application at a 1440 × 1000 desktop viewport, backed by the repository's isolated synthetic server. Account names, login numbers, orders, comments, and amounts are fictional. No live MT4 server is contacted. User-supplied account names retain their original text in both UI languages.
+These full-page captures show synthetic MT4 accounts at a 1440 × 1000 desktop viewport. Account names, login numbers, orders, comments, and amounts are fictional. User-supplied account names retain their original text in both UI languages.
 
 ## 账户总览 / Account overview
 

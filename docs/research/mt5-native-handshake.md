@@ -1,5 +1,7 @@
 # MT5 原生握手研究
 
+本文保留独立研究探针与官方客户端的历史对照。当前 Go SDK 的原生账户快照与成交读取已有环回合成测试，真实样本范围以本文记录为准。[MT5 SDK](../../packages/mt5/README.md)
+
 前序研究离线分析了第三方厂商 MTAPI 公开发布的 Linux x64 试用程序集 `mt5api.dll`，并用合成数据验证传输层解析。受检程序集的 SHA-256 为 `01c93aea0d7c698bbd9e2b8a3415e0b044b23c04f9974db9fae22bf50ab9f734`。 [MTAPI 试用程序集](https://reg.mtapi.io/root/mt5rest-trial/-/blob/a823b370242a6af8a1799759910c832b1e2e8229/trial-linux-x64/mt5api.dll)
 
 ## 静态证据

@@ -1,6 +1,6 @@
 # MT4 原生协议模块
 
-[English overview](../../README.md#standalone-mt4-module) · [中文项目说明](../../README.zh-CN.md) · [文档索引](../../docs/README.md)
+[English overview](../../README.md#standalone-protocol-modules) · [中文项目说明](../../README.zh-CN.md#独立协议模块) · [文档索引](../../docs/README.md)
 
 模块名为 `portexa/mt4`，只依赖 Go 标准库和固定版本的 MIT 许可纯 Go LZO 解码器。它可脱离 Portexa 主工程独立编译、测试，运行时不依赖 MT4、Wine、EA、手机或第三方账户服务。第三方许可见[声明](THIRD_PARTY_NOTICES.md)。
 
@@ -85,7 +85,7 @@ go run ./tests/cmd/verify --vector /absolute/path/to/private-vector.json < /abso
 
 ## 已验证范围
 
-2026-11-11 本轮在 macOS arm64 对 EC Markets（1492）、DPrime 与 DLSMarkets（1470）完成新的直连和官方客户端对照，见[当前验收记录](../../docs/research/mt4-readonly-acceptance.md)。早先 Linux arm64 的独立运行证据仍保留原日期，见[历史验证报告](../../docs/research/mt4-native-validation.md)，不能视为本次新运行。
+2026-11-11 在 macOS arm64 对三家经纪商完成直连和官方客户端对照。更早的 Linux arm64 独立运行证据见历史报告。[只读验收记录](../../docs/research/mt4-readonly-acceptance.md) · [早期验证报告](../../docs/research/mt4-native-validation.md)
 
 投资者字段只保留原值，不推断全部权限。自动发现、OTP、旧版零挑战、实时订阅、业务持久化及服务器保留范围之外的数据仍不在此次实现内。
 

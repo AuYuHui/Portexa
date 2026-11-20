@@ -1,6 +1,6 @@
 # Portexa 运行与验收规则
 
-本文补充[产品方案](product-plan.md)中同步调度、SQLite 运维、可信服务器、归档和 Analytics 输入验收。这里的数值是实施默认值及验收目标，不代表已有运行结果；数据结构见[SQLite 数据模型](product-data-model.md)。
+本文保留[产品方案](product-plan.md)中的运行设计、资源预算与验收目标。当前部署、采集、接入和备份规则见[启动与管理](product-start.md)，休市行为见[休市降频与估值](market-rest.md)。
 
 ## 同步资源与优先级
 

@@ -83,8 +83,9 @@ func TestMT5DirectorySendsOnlySearchTextAndReturnsNames(t *testing.T) {
 		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
 	})}
 	catalog := discovery.New(discovery.Options{
-		Fetch:    func(context.Context, string) ([]byte, error) { return []byte(`{"result":[]}`), nil },
-		FetchMT5: discovery.MT5HTTPFetcher(client),
+		Fetch:       func(context.Context, string) ([]byte, error) { return []byte(`{"result":[]}`), nil },
+		FetchMT5:    discovery.MT5HTTPFetcher(client),
+		AllowTarget: func(string) bool { return true },
 	})
 	if results, err := catalog.Search(t.Context(), query); err != nil || len(results) != 0 {
 		t.Fatalf("MT4 results: %+v (%v)", results, err)
@@ -93,6 +94,9 @@ func TestMT5DirectorySendsOnlySearchTextAndReturnsNames(t *testing.T) {
 		results, err := catalog.SearchMT5(t.Context(), query)
 		if err != nil || len(results) != 2 || results[0].ServerName != query || results[0].BrokerName != "Synthetic Company" {
 			t.Fatalf("MT5 results: %+v (%v)", results, err)
+		}
+		if results[0].Protocol != "mt5" || len(results[0].Endpoints) != 1 || results[0].Endpoints[0].IPAddress != "203.0.113.9" || results[0].Endpoints[0].Port != 2085 {
+			t.Fatalf("MT5 endpoints mismatch: %+v", results[0])
 		}
 	}
 	if calls != 1 {

@@ -202,7 +202,7 @@ onMounted(() => {
           <span class="revision">v{{ endpoint.revision }}</span>
           <div class="endpoint-address">
             <strong class="mono"
-              >{{ endpoint.ip_address }}:{{ endpoint.port }}{{ endpoint.web_hostname ? ` · ${endpoint.web_hostname}` : "" }}</strong
+              >{{ endpoint.ip_address }}:{{ endpoint.port }}</strong
             ><small>{{
               endpoint.state === "retired"
                 ? t('settings.retiredCredentialsCanNoLongerBeSent')
