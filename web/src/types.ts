@@ -266,3 +266,64 @@ export interface DirectoryCandidate extends DirectoryServerName {
 
 export interface RestLearningModel { id: string; close_minute: number; open_minute: number; expires_at_ms: number; }
 export interface RestLearningGroup { id: string; server_id: string; server_name: string; symbol: string; state: string; reason: string; valid_weekends: number; candidate?: RestLearningModel; active?: RestLearningModel; }
+
+export interface StrategyMetrics {
+  total_trades: number;
+  win_count: number;
+  loss_count: number;
+  win_rate: number;
+  gross_profit: string;
+  gross_loss: string;
+  net_profit: string;
+  profit_factor: number;
+  avg_win: string;
+  avg_loss: string;
+  total_commission: string;
+  total_swap: string;
+}
+
+export interface ActiveGrid {
+  has_active: boolean;
+  symbol: string;
+  direction: string;
+  dominant_side: string;
+  buy_count: number;
+  sell_count: number;
+  buy_lots: string;
+  sell_lots: string;
+  layers: number;
+  total_lots: string;
+  avg_price: string;
+  current_price: string;
+  dist_to_cost: string;
+  total_profit: string;
+  max_historic_layer: number;
+}
+
+export interface LayerDist {
+  layer: number;
+  count: number;
+  percent: number;
+}
+
+export interface GridHistory {
+  total_cycles: number;
+  cycle_win_rate: number;
+  total_cycle_profit: string;
+  avg_cycle_profit: string;
+  layer_distribution: LayerDist[];
+}
+
+export interface StrategyView {
+  account_id: string;
+  currency: string;
+  archetype: string;
+  confidence: number;
+  tags: string[];
+  basket_exit_ratio: number;
+  sltp_ratio: number;
+  metrics: StrategyMetrics;
+  active_grid: ActiveGrid;
+  grid_history: GridHistory;
+}
+

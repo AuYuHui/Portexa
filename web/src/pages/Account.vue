@@ -33,6 +33,7 @@ import DailySummary from "../components/DailySummary.vue";
 import FundingSummary from "../components/FundingSummary.vue";
 import DealHistory from "../components/DealHistory.vue";
 import EquityTrend from "../components/charts/EquityTrend.vue";
+import StrategyCard from "../components/StrategyCard.vue";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -280,6 +281,7 @@ async function deleteAccount() {
       </p>
       <DailySummary v-if="data.account.daily" :account="data.account" />
       <FundingSummary v-if="data.account.funding" :account="data.account" />
+      <StrategyCard :account-id="id" />
       <section class="panel">
         <div class="panel-heading">
           <div class="tabs" :aria-label="t('account.orderType')">

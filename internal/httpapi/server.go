@@ -145,6 +145,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /api/accounts/{id}/funds/{ticket}/classification", s.protected(s.classifyFund))
 	s.mux.HandleFunc("GET /api/accounts/{id}/snapshots", s.protected(s.snapshots))
 	s.mux.HandleFunc("GET /api/accounts/{id}/equity-history", s.protected(s.assetTrend))
+	s.mux.HandleFunc("GET /api/accounts/{id}/strategy", s.protected(s.strategy))
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		s.protected(func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 404, map[string]string{"error": "接口不存在"})

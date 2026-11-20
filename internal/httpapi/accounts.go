@@ -188,3 +188,13 @@ func (s *Server) snapshots(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, list)
 }
+
+func (s *Server) strategy(w http.ResponseWriter, r *http.Request) {
+	view, err := s.accounts.Strategy(r.Context(), r.PathValue("id"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, 200, view)
+}
+
