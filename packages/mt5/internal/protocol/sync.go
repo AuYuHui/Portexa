@@ -28,7 +28,8 @@ type SyncOptions struct {
 	InstallationNumber uint64 // Client installation ID (randomly generated if 0)
 	DeviceID           string // 10-char alphanumeric device ID (randomly generated if empty)
 	ClientDeclaration  []byte // Raw UTF-16LE client declaration (built from DeviceID if nil)
-	MarketCache        []byte // Baseline market catalog descriptor (defaults to DefaultMarketCache if nil)
+	MarketCache        []byte // Explicit market catalog descriptor.
+	FullMarketCatalog  bool   // Request full symbol configuration when no descriptor is supplied.
 }
 
 // EncodeUTF16LE converts a string to little-endian UTF-16 byte slice.
@@ -93,13 +94,15 @@ var (
 )
 
 type AccountSnapshot struct {
-	Login      uint64
-	Balance    float64
-	Credit     float64
-	Leverage   uint32
-	Currency   string
-	IsInvestor bool
-	Name       string
+	Login           uint64
+	Balance         float64
+	Credit          float64
+	Leverage        uint32
+	Currency        string
+	Margin          float64
+	MarginAvailable bool
+	IsInvestor      bool
+	Name            string
 }
 
 type PositionSnapshot struct {
@@ -171,6 +174,11 @@ func BuildSyncRequest(session *AuthSession, login uint64, opts ...SyncOptions) (
 	marketCache := opt.MarketCache
 	if len(marketCache) == 0 {
 		marketCache = DefaultMarketCache
+		if opt.FullMarketCatalog {
+			marketCache = make([]byte, 44)
+			copy(marketCache[12:28], emptyMD5[:])
+			copy(marketCache[28:44], emptyMD5[:])
+		}
 	}
 
 	fields := []struct {
@@ -266,19 +274,16 @@ func PerformSync(r io.Reader, w io.Writer, session *AuthSession, login uint64, o
 }
 
 func ParseSyncPayload(payload []byte, login uint64) (*SyncResult, error) {
-	var loginBytes [8]byte
-	binary.LittleEndian.PutUint64(loginBytes[:], login)
+	var marker [9]byte
+	marker[0] = AccountRecordTag
+	binary.LittleEndian.PutUint64(marker[1:], login)
 
-	off := bytes.Index(payload, loginBytes[:])
-	if off < 1 || off+AccountRecordSize > len(payload) {
+	off := bytes.Index(payload, marker[:])
+	if off < 0 || off+1+AccountRecordSize > len(payload) {
 		return nil, errors.New("mt5: account record not found in synchronization payload")
 	}
-
-	if payload[off-1] != AccountRecordTag {
-		return nil, errors.New("mt5: invalid account section tag")
-	}
-
-	record := payload[off : off+AccountRecordSize]
+	end := off + 1 + AccountRecordSize
+	record := payload[off+1 : end]
 
 	flags := binary.LittleEndian.Uint32(record[456:460])
 	if (flags & InvestorFlag) == 0 {
@@ -313,6 +318,7 @@ func ParseSyncPayload(payload []byte, login uint64) (*SyncResult, error) {
 
 	// Parse positions (Tag 0x20) and orders (Tag 0x1F) if present
 	parseEmbeddedRecords(payload, res)
+	res.Account.Margin, res.Account.MarginAvailable = calculateNativeMargin(payload[:off], payload[end:], res)
 	return res, nil
 }
 
@@ -335,7 +341,7 @@ func parseEmbeddedRecords(payload []byte, res *SyncResult) {
 			if len(symbol) >= 2 && ticket > 0 && !seenTickets[ticket] {
 				seenTickets[ticket] = true
 				openTime := binary.LittleEndian.Uint32(rec[32:36])
-				side := int(binary.LittleEndian.Uint32(rec[16:20]))
+				side := int(binary.LittleEndian.Uint32(rec[112:116]))
 				openPrice := math.Float64frombits(binary.LittleEndian.Uint64(rec[120:128]))
 				currPrice := math.Float64frombits(binary.LittleEndian.Uint64(rec[128:136]))
 				sl := math.Float64frombits(binary.LittleEndian.Uint64(rec[136:144]))

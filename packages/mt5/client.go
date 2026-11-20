@@ -24,7 +24,7 @@ type Config struct {
 	Password           string
 	InstallationNumber uint64 // Optional: client installation ID (randomly generated if 0)
 	DeviceID           string // Optional: 10-char alphanumeric device ID (randomly generated if empty)
-	MarketCache        []byte // Optional: market catalog cache descriptor (defaults to verified baseline if nil)
+	MarketCache        []byte // Optional: override the market catalog cache descriptor.
 }
 
 var (
@@ -64,7 +64,7 @@ func Probe(ctx context.Context, cfg Config) (Result, error) {
 
 	session, err := protocol.HandshakeAndAuthenticate(conn, conn, cfg.Login, cfg.Password)
 	if err != nil {
-		return Result{}, mapProtocolError(err)
+		return Result{}, sessionProtocolError(ctx, err)
 	}
 
 	return Result{
@@ -86,7 +86,10 @@ func Fetch(ctx context.Context, cfg Config) (Result, error) {
 	if !validConfig(cfg) {
 		return Result{}, ErrConfig
 	}
+	return fetchSnapshot(ctx, cfg, len(cfg.MarketCache) == 0)
+}
 
+func fetchSnapshot(ctx context.Context, cfg Config, fullCatalog bool) (Result, error) {
 	target := net.JoinHostPort(cfg.IPAddress, strconv.Itoa(cfg.Port))
 	d := net.Dialer{Timeout: 15 * time.Second}
 	conn, err := d.DialContext(ctx, "tcp", target)
@@ -94,6 +97,8 @@ func Fetch(ctx context.Context, cfg Config) (Result, error) {
 		return Result{}, err
 	}
 	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
 
 	session, err := protocol.HandshakeAndAuthenticate(conn, conn, cfg.Login, cfg.Password)
 	if err != nil {
@@ -104,10 +109,16 @@ func Fetch(ctx context.Context, cfg Config) (Result, error) {
 		InstallationNumber: cfg.InstallationNumber,
 		DeviceID:           cfg.DeviceID,
 		MarketCache:        cfg.MarketCache,
+		FullMarketCatalog:  fullCatalog,
 	}
 	syncRes, err := protocol.PerformSync(conn, conn, session, cfg.Login, syncOpts)
 	if err != nil {
-		return Result{}, mapProtocolError(err)
+		if fullCatalog && ctx.Err() == nil &&
+			(errors.Is(err, protocol.ErrPeerClosed) || errors.Is(err, protocol.ErrFrameTooLarge)) {
+			_ = conn.Close()
+			return fetchSnapshot(ctx, cfg, false)
+		}
+		return Result{}, sessionProtocolError(ctx, err)
 	}
 
 	res := Result{
@@ -118,7 +129,8 @@ func Fetch(ctx context.Context, cfg Config) (Result, error) {
 			Credit:          syncRes.Account.Credit,
 			Leverage:        syncRes.Account.Leverage,
 			Investor:        syncRes.Account.IsInvestor,
-			MarginAvailable: true,
+			Margin:          syncRes.Account.Margin,
+			MarginAvailable: syncRes.Account.MarginAvailable,
 		},
 	}
 

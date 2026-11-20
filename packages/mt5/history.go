@@ -28,7 +28,7 @@ func FetchHistory(ctx context.Context, cfg Config, window HistoryRange) (History
 
 	session, err := protocol.HandshakeAndAuthenticate(conn, conn, cfg.Login, cfg.Password)
 	if err != nil {
-		return HistoryResult{}, historyProtocolError(ctx, err)
+		return HistoryResult{}, sessionProtocolError(ctx, err)
 	}
 
 	syncOpts := protocol.SyncOptions{
@@ -38,12 +38,12 @@ func FetchHistory(ctx context.Context, cfg Config, window HistoryRange) (History
 	}
 	syncRes, err := protocol.PerformSync(conn, conn, session, cfg.Login, syncOpts)
 	if err != nil {
-		return HistoryResult{}, historyProtocolError(ctx, err)
+		return HistoryResult{}, sessionProtocolError(ctx, err)
 	}
 
 	dealRecords, err := protocol.FetchHistoryDeals(conn, session.OutState, session.InState, 4, cfg.Login, window.Start, window.End)
 	if err != nil {
-		return HistoryResult{}, historyProtocolError(ctx, err)
+		return HistoryResult{}, sessionProtocolError(ctx, err)
 	}
 
 	res := HistoryResult{
@@ -82,7 +82,7 @@ func FetchHistory(ctx context.Context, cfg Config, window HistoryRange) (History
 	return res, nil
 }
 
-func historyProtocolError(ctx context.Context, err error) error {
+func sessionProtocolError(ctx context.Context, err error) error {
 	if cause := ctx.Err(); cause != nil {
 		return cause
 	}

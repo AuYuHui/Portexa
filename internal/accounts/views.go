@@ -189,7 +189,6 @@ func readView(tx *gorm.DB, account storage.Account, now int64, settings storage.
 		if err := tx.First(&snapshot, "id = ? AND account_id = ?", *account.CurrentSnapshotID, account.ID).Error; err != nil {
 			return view, err
 		}
-		view.Snapshot = &snapshot
 		active, err := restSnapshotTemplateActive(tx, account, snapshot, settings, time.UnixMilli(now))
 		if err != nil {
 			return view, err
@@ -214,6 +213,8 @@ func readView(tx *gorm.DB, account storage.Account, now int64, settings storage.
 		if account.Currency == nil || (*account.Currency != snapshot.NativeCurrency && !isUSC) || account.UnitRevision != snapshot.UnitRevision {
 			view.UnitConfirmed = false
 		}
+		hideUnverifiedMT5Margin(view.Protocol, &snapshot)
+		view.Snapshot = &snapshot
 	}
 	var run storage.SyncRun
 	err := tx.Where("account_id = ?", account.ID).Order("started_at_ms DESC, id DESC").First(&run).Error
@@ -312,17 +313,32 @@ func (s *Service) Snapshots(ctx context.Context, id string, before int64, limit 
 	if limit < 1 || limit > 200 {
 		return nil, &InputError{"查询条数需要在1至200之间"}
 	}
-	var account storage.Account
-	if err := s.Store.Read.WithContext(ctx).Select("id").First(&account, "id = ? AND removed_at_ms IS NULL", id).Error; err != nil {
+	var server storage.Server
+	read := s.Store.Read.WithContext(ctx)
+	if err := read.Table("accounts AS a").Select("s.protocol").
+		Joins("JOIN servers AS s ON s.id = a.server_id").
+		Where("a.id = ? AND a.removed_at_ms IS NULL", id).Take(&server).Error; err != nil {
 		return nil, err
 	}
-	query := s.Store.Read.WithContext(ctx).Where("account_id = ?", id)
+	query := read.Where("account_id = ?", id)
 	if before > 0 {
 		query = query.Where("observed_to_ms < ?", before)
 	}
 	list := make([]storage.Snapshot, 0)
-	err := query.Order("observed_to_ms DESC, id DESC").Limit(limit).Find(&list).Error
-	return list, err
+	if err := query.Order("observed_to_ms DESC, id DESC").Limit(limit).Find(&list).Error; err != nil {
+		return nil, err
+	}
+	for i := range list {
+		hideUnverifiedMT5Margin(server.Protocol, &list[i])
+	}
+	return list, nil
+}
+
+func hideUnverifiedMT5Margin(protocol string, snapshot *storage.Snapshot) {
+	// Older native MT5 builds stored zero when the margin was missing.
+	if protocol == "mt5" && snapshot.Margin != nil && snapshot.Margin.IsZero() {
+		snapshot.Margin, snapshot.MarginAvailable = nil, false
+	}
 }
 
 func addTotal(total *MoneyTotals, snapshot storage.Snapshot, scale decimal.Decimal, stale bool) {

@@ -92,6 +92,30 @@ func TestAccountRecordParsing(t *testing.T) {
 	}
 }
 
+func TestSyncReadsNativePositionSide(t *testing.T) {
+	const login = uint64(10001001)
+	payload := make([]byte, 1+protocol.AccountRecordSize+672)
+	payload[0] = protocol.AccountRecordTag
+	account := payload[1 : 1+protocol.AccountRecordSize]
+	binary.LittleEndian.PutUint64(account[:8], login)
+	binary.LittleEndian.PutUint32(account[456:460], protocol.InvestorFlag)
+
+	position := payload[1+protocol.AccountRecordSize:]
+	binary.LittleEndian.PutUint64(position[:8], login)
+	binary.LittleEndian.PutUint32(position[112:116], 1)
+	binary.LittleEndian.PutUint64(position[152:160], 2_000_000)
+	binary.LittleEndian.PutUint64(position[216:224], 123456)
+	copy(position[48:112], protocol.EncodeUTF16LE("TESTUSD"))
+
+	result, err := protocol.ParseSyncPayload(payload, login)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Positions) != 1 || result.Positions[0].Type != 1 {
+		t.Fatalf("expected one sell position, got %+v", result.Positions)
+	}
+}
+
 func TestNativeMockLoopbackFetch(t *testing.T) {
 	protocol.SetChallengeOverride(func(chal []byte) (uint64, error) {
 		return 0x1234567890ABCDEF, nil
@@ -190,6 +214,9 @@ func TestNativeMockLoopbackFetch(t *testing.T) {
 	}
 	if res.Account.Balance != 99999.0 || !res.Account.IsInvestor() {
 		t.Fatalf("unexpected account result: %+v", res.Account)
+	}
+	if res.Account.MarginAvailable {
+		t.Fatal("snapshot without a margin field advertised an available margin")
 	}
 }
 
