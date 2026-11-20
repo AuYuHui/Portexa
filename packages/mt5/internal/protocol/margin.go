@@ -6,12 +6,16 @@ import (
 )
 
 const (
-	fullCatalogHeaderSize = 7365 // Status, tag 0x07, group record, cache mode and count.
-	symbolCatalogRowSize  = 3716
-	symbolInfoSize        = 1952
-	cfdLeverageMode       = 4
-	hedgedUseLargerLeg    = 4
-	nativePositionSize    = 672
+	groupSymbolCountOffset = 4233 // From the start of the tagged full catalog.
+	groupSymbolRuleSize    = 1228
+	groupTrailerSize       = 664
+	symbolSessionsOffset   = 3180
+	sessionRecordSize      = 40
+	symbolTrailerSize      = 80
+	symbolInfoSize         = 1952
+	cfdLeverageMode        = 4
+	hedgedUseLargerLeg     = 4
+	nativePositionSize     = 672
 )
 
 type marginSymbol struct {
@@ -20,21 +24,53 @@ type marginSymbol struct {
 	largerLeg                bool
 }
 
+// Each weekday carries two counted session lists (quote and trade).
+// Their lengths can differ even between adjacent symbols in the same catalog.
+func catalogSymbolSize(data []byte) (int, bool) {
+	end := symbolSessionsOffset
+	for range 7 * 2 {
+		if len(data) < end+4 {
+			return 0, false
+		}
+		count := binary.LittleEndian.Uint32(data[end:])
+		end += 4
+		if count > uint32((len(data)-end)/sessionRecordSize) {
+			return 0, false
+		}
+		end += int(count) * sessionRecordSize
+	}
+	end += symbolTrailerSize
+	return end, end <= len(data)
+}
+
 func marginSymbols(catalog []byte) map[string]marginSymbol {
-	if len(catalog) < fullCatalogHeaderSize || binary.LittleEndian.Uint32(catalog[:4]) != 0 || catalog[4] != 0x07 ||
-		binary.LittleEndian.Uint32(catalog[7357:7361]) != 0 {
+	const headerSize = groupSymbolCountOffset + 4 + groupTrailerSize + 8
+	if len(catalog) < headerSize || binary.LittleEndian.Uint32(catalog) != 0 || catalog[4] != 0x07 {
 		return nil
 	}
-	count := binary.LittleEndian.Uint32(catalog[7361:7365])
-	catalog = catalog[fullCatalogHeaderSize:]
-	if count == 0 || count > uint32(len(catalog)/symbolCatalogRowSize) {
+	rules := binary.LittleEndian.Uint32(catalog[groupSymbolCountOffset:])
+	if rules > uint32((len(catalog)-headerSize)/groupSymbolRuleSize) {
+		return nil
+	}
+	headerEnd := headerSize + int(rules)*groupSymbolRuleSize
+	if binary.LittleEndian.Uint32(catalog[headerEnd-8:]) != 0 {
+		return nil // A cache response does not supply the full symbol list.
+	}
+	count := binary.LittleEndian.Uint32(catalog[headerEnd-4:])
+	catalog = catalog[headerEnd:]
+	const minSymbolSize = symbolSessionsOffset + 14*4 + symbolTrailerSize
+	if count == 0 || count > uint32(len(catalog)/minSymbolSize) {
 		return nil
 	}
 	symbols := make(map[string]marginSymbol)
 	seen := make(map[string]bool)
 	for range count {
-		row := catalog[:symbolCatalogRowSize]
-		catalog = catalog[symbolCatalogRowSize:]
+		size, ok := catalogSymbolSize(catalog)
+		if !ok {
+			return nil
+		}
+		row := catalog[:size]
+		catalog = catalog[size:]
 		name := decodeUTF16String(row[8:72])
 		if name == "" || seen[name] {
 			return nil

@@ -11,16 +11,24 @@ import (
 func TestSyncComputesCFDLeverageMargin(t *testing.T) {
 	const login = uint64(10001001)
 	for _, tc := range []struct {
-		name   string
-		change func(catalog, symbol, trades []byte)
-		want   float64
+		name          string
+		change        func(catalog, symbol, trades []byte)
+		expandCatalog bool
+		want          float64
 	}{
 		{name: "basic hedge", want: 46.67},
+		{name: "variable groups and symbol sessions", expandCatalog: true, want: 46.67},
 		{name: "larger leg", want: 60, change: func(_, symbol, _ []byte) {
 			binary.LittleEndian.PutUint32(symbol[1952+1080:], 4)
 		}},
 		{name: "no full catalog", change: func(catalog, _, _ []byte) {
 			binary.LittleEndian.PutUint32(catalog[7357:], 1)
+		}},
+		{name: "invalid group rule count", change: func(catalog, _, _ []byte) {
+			binary.LittleEndian.PutUint32(catalog[4233:], ^uint32(0))
+		}},
+		{name: "invalid session count", change: func(_, symbol, _ []byte) {
+			binary.LittleEndian.PutUint32(symbol[3180:], ^uint32(0))
 		}},
 		{name: "fixed maintenance margin", change: func(_, symbol, _ []byte) {
 			putMarginFloat(symbol[1952:], 844, 100)
@@ -39,8 +47,13 @@ func TestSyncComputesCFDLeverageMargin(t *testing.T) {
 			// Leave space for sections that follow the counted positions.
 			payload := make([]byte, tradesStart+18+2*positionSize+80)
 			payload[4] = 0x07
+			binary.LittleEndian.PutUint32(payload[4233:], 2)
 			binary.LittleEndian.PutUint32(payload[7361:], 1)
 			symbol := payload[catalogHeaderSize:accountTag]
+			// Ten session records across the weekly quote/trade lists.
+			for cursor, n := 3188, 0; n < 10; cursor, n = cursor+44, n+1 {
+				binary.LittleEndian.PutUint32(symbol[cursor:], 1)
+			}
 			copy(symbol[8:72], protocol.EncodeUTF16LE("TESTUSD"))
 			putMarginFloat(symbol, 1648, 10)
 			binary.LittleEndian.PutUint32(symbol[1660:], 4)
@@ -72,6 +85,19 @@ func TestSyncComputesCFDLeverageMargin(t *testing.T) {
 			}
 			if tc.change != nil {
 				tc.change(payload[:catalogHeaderSize], symbol, trades)
+			}
+			if tc.expandCatalog {
+				// A catalog with more group overrides and a longer first symbol.
+				const extraRules = 3 * 1228
+				prefix := append([]byte(nil), payload[:4237]...)
+				binary.LittleEndian.PutUint32(prefix[4233:], 5)
+				prefix = append(prefix, make([]byte, extraRules)...)
+				prefix = append(prefix, payload[4237:catalogHeaderSize]...)
+				binary.LittleEndian.PutUint32(prefix[len(prefix)-4:], 2)
+				first := make([]byte, 3180+14*4+16*40+80)
+				copy(first[8:], protocol.EncodeUTF16LE("OTHER"))
+				binary.LittleEndian.PutUint32(first[3180:], 16)
+				payload = append(append(prefix, first...), payload[catalogHeaderSize:]...)
 			}
 			result, err := protocol.ParseSyncPayload(payload, login)
 			if err != nil {
