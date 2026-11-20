@@ -82,7 +82,7 @@ func TestMT5SnapshotsDealsFundingAndAnalytics(t *testing.T) {
 	snapshot := view.Account.Snapshot
 	if view.Account.Protocol != "mt5" || view.Account.Login != cfg.Login || view.Account.SyncState != "succeeded" ||
 		snapshot.Equity.String() != "2054.7" || snapshot.FloatingNetProfit.String() != "4.7" ||
-		!snapshot.MarginAvailable || snapshot.Margin == nil || snapshot.Margin.String() != "0.7620692" ||
+		snapshot.MarginAvailable || snapshot.Margin != nil || snapshot.Leverage != 200 ||
 		view.Account.Funding.State != "time_zone_unconfirmed" || view.Account.Daily.State != "time_zone_unconfirmed" {
 		t.Fatalf("unexpected MT5 account snapshot: %+v", view.Account)
 	}

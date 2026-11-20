@@ -227,6 +227,10 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 		if err := tx.Model(&current).Updates(updates).Error; err != nil {
 			return err
 		}
+		var server storage.Server
+		if err := tx.First(&server, "id = ?", current.ServerID).Error; err == nil && server.ActiveTimeRulesetID == nil {
+			_ = ensureAutomaticTime(tx, &server, s.Now())
+		}
 		return tx.Model(&run).Updates(map[string]any{"state": "succeeded", "finished_at_ms": snapshot.ObservedToMS, "completion_reason": "complete"}).Error
 	})
 }

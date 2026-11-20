@@ -44,6 +44,9 @@ func TestMT5NativeMigrationRetiresLegacyEndpoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer old.Close()
+	if _, err := old.Exec("UPDATE account_snapshots SET leverage=100, margin='64', margin_available=1 WHERE account_id=?", legacy.ID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := old.Exec("ALTER TABLE server_endpoints ADD COLUMN web_hostname TEXT NOT NULL DEFAULT ''"); err != nil {
 		t.Fatal(err)
 	}
@@ -80,6 +83,11 @@ func TestMT5NativeMigrationRetiresLegacyEndpoints(t *testing.T) {
 	var snapshots int64
 	if err := store.Read.Model(&storage.Snapshot{}).Where("account_id = ?", legacy.ID).Count(&snapshots).Error; err != nil || snapshots != 2 {
 		t.Fatalf("previous snapshots were lost: %d, %v", snapshots, err)
+	}
+	var invalidated int64
+	if err := store.Read.Model(&storage.Snapshot{}).Where("account_id = ? AND leverage = 0 AND margin IS NULL AND margin_available = 0", legacy.ID).
+		Count(&invalidated).Error; err != nil || invalidated != snapshots {
+		t.Fatalf("old MT5 estimates are still visible: %d invalidated, %v", invalidated, err)
 	}
 	var unchanged storage.Account
 	if err := store.Read.First(&unchanged, "id = ?", native.ID).Error; err != nil {

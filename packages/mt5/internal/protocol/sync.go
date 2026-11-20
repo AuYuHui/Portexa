@@ -87,9 +87,9 @@ var (
 	}
 
 	// Backward compatibility aliases
-	OfficialMarketCache         = DefaultMarketCache
+	OfficialMarketCache               = DefaultMarketCache
 	OfficialInstallationNumber uint64 = 0x4664982c15aaab4d
-	OfficialClientDeclaration = BuildClientDeclaration("4LK8F7J843")
+	OfficialClientDeclaration         = BuildClientDeclaration("4LK8F7J843")
 )
 
 type AccountSnapshot struct {
@@ -118,15 +118,15 @@ type PositionSnapshot struct {
 }
 
 type OrderSnapshot struct {
-	Ticket    uint64
-	Symbol    string
-	Type      int
-	Lots      float64
-	Price     float64
-	SL        float64
-	TP        float64
-	OpenTime  uint32
-	Comment   string
+	Ticket   uint64
+	Symbol   string
+	Type     int
+	Lots     float64
+	Price    float64
+	SL       float64
+	TP       float64
+	OpenTime uint32
+	Comment  string
 }
 
 type SyncResult struct {
@@ -287,9 +287,9 @@ func ParseSyncPayload(payload []byte, login uint64) (*SyncResult, error) {
 
 	balance := math.Float64frombits(binary.LittleEndian.Uint64(record[1836:1844]))
 	credit := math.Float64frombits(binary.LittleEndian.Uint64(record[1844:1852]))
-	leverage := binary.LittleEndian.Uint32(record[192:196])
-	if leverage == 0 {
-		leverage = 100
+	var leverage uint32
+	if value := int32(binary.LittleEndian.Uint32(record[2020:2024])); value > 0 {
+		leverage = uint32(value)
 	}
 
 	name := decodeUTF16String(record[24:152])

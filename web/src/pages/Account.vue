@@ -266,9 +266,10 @@ async function deleteAccount() {
           <p class="metric-note">
             {{
               current?.margin_available
-                ? t('account.usedLeverage', { value1: money(current.margin), value2: current.native_currency, value3: current.leverage })
+                ? t('account.usedMargin', { value1: money(current.margin), value2: current.native_currency })
                 : t('account.marginDataUnavailable')
             }}
+            <span v-if="current?.leverage"> · {{ t('account.leverage', { value: current.leverage }) }}</span>
           </p>
         </article>
       </section>

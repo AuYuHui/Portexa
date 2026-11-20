@@ -66,6 +66,9 @@ func (s *Service) analyticsSource(ctx context.Context, account storage.Account, 
 		Joins("JOIN history_runs r ON r.coverage_id=c.id AND r.account_id=c.account_id AND r.state='succeeded'").
 		Where("c.account_id=? AND c.unit_revision=?", account.ID, account.UnitRevision).
 		Select("c.*,MAX(r.started_at_ms) AS source_through_ms").Group("c.id").Order("c.start_wall,c.end_wall")
+	if source.server.Protocol == "mt5" {
+		query = query.Where("r.completion_reason = ?", mt5HistoryComplete)
+	}
 	if err := query.Scan(&source.coverage).Error; err != nil {
 		return nil, err
 	}

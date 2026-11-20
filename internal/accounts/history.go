@@ -11,7 +11,7 @@ import (
 	"portexa/mt5"
 )
 
-const HistoryPublishLimit = 5000
+const HistoryPublishLimit = 10000
 
 // HistoryJob contains a credential capability and must not be logged/serialized.
 type HistoryJob struct {

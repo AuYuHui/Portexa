@@ -137,8 +137,11 @@ func readFundingView(tx *gorm.DB, account storage.Account, server storage.Server
 		view.State = "ready"
 	}
 	var run storage.HistoryRun
-	found := tx.Where("account_id=? AND unit_revision=? AND native_currency=?", account.ID, account.UnitRevision, snapshot.NativeCurrency).
-		Order("started_at_ms DESC,id DESC").Limit(1).Find(&run)
+	runs := tx.Where("account_id=? AND unit_revision=? AND native_currency=?", account.ID, account.UnitRevision, snapshot.NativeCurrency)
+	if server.Protocol == "mt5" {
+		runs = runs.Where("state != 'succeeded' OR completion_reason = ?", mt5HistoryComplete)
+	}
+	found := runs.Order("started_at_ms DESC,id DESC").Limit(1).Find(&run)
 	if found.Error != nil {
 		return view, found.Error
 	}

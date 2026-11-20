@@ -10,10 +10,17 @@ import (
 	"portexa/internal/storage"
 )
 
-func currentHistory(tx *gorm.DB, id string) *gorm.DB {
+const mt5HistoryComplete = "mt5_deals_complete"
+
+func publishedHistory(tx *gorm.DB, id string) *gorm.DB {
 	return tx.Table("history_order_revisions AS o").
 		Joins("JOIN history_order_heads AS h ON h.account_id=o.account_id AND h.ticket=o.ticket AND h.revision=o.revision").
 		Where("o.account_id=?", id)
+}
+
+func currentHistory(tx *gorm.DB, id string) *gorm.DB {
+	return publishedHistory(tx, id).Where(`o.mt5_deal_type IS NULL OR EXISTS (
+		SELECT 1 FROM history_runs r WHERE r.id=o.source_run_id AND r.completion_reason=?)`, mt5HistoryComplete)
 }
 
 // Prepare revisions outside the short publication transaction. The durable
@@ -30,9 +37,14 @@ func (s *Service) historyRevisions(ctx context.Context, job HistoryJob, orders [
 		for _, order := range batch {
 			tickets = append(tickets, order.Ticket)
 		}
-		var previous []storage.HistoryOrder
-		if err := currentHistory(s.Store.Read.WithContext(ctx), job.Account.ID).Where("o.ticket IN ?", tickets).
-			Select("o.*").Scan(&previous).Error; err != nil {
+		type previousOrder struct {
+			storage.HistoryOrder
+			CompletionReason string
+		}
+		var previous []previousOrder
+		if err := publishedHistory(s.Store.Read.WithContext(ctx), job.Account.ID).Where("o.ticket IN ?", tickets).
+			Joins("JOIN history_runs r ON r.id=o.source_run_id").
+			Select("o.*,r.completion_reason").Scan(&previous).Error; err != nil {
 			return nil, err
 		}
 		byTicket := make(map[int64]int, len(previous))
@@ -49,7 +61,9 @@ func (s *Service) historyRevisions(ctx context.Context, job HistoryJob, orders [
 			order.Revision = 1
 			if index, ok := byTicket[order.Ticket]; ok {
 				old := previous[index]
-				if bytes.Equal(old.SourceHash, order.SourceHash) || old.MT5DealType == nil && order.MT5DealType == nil && old.Comment == "" && order.Comment == "" && sameHistoryFields(old, order) {
+				if (order.MT5DealType == nil || old.CompletionReason == mt5HistoryComplete) &&
+					(bytes.Equal(old.SourceHash, order.SourceHash) || old.MT5DealType == nil && order.MT5DealType == nil &&
+						old.Comment == "" && order.Comment == "" && sameHistoryFields(old.HistoryOrder, order)) {
 					continue
 				}
 				order.Revision = old.Revision + 1
@@ -150,7 +164,11 @@ func (s *Service) PublishHistory(ctx context.Context, job HistoryJob, orders []s
 				}
 			}
 		}
-		if err = tx.Model(&run).Updates(map[string]any{"state": "succeeded", "finished_at_ms": finished, "completion_reason": "complete"}).Error; err != nil {
+		reason := "complete"
+		if job.MT5Config != nil {
+			reason = mt5HistoryComplete
+		}
+		if err = tx.Model(&run).Updates(map[string]any{"state": "succeeded", "finished_at_ms": finished, "completion_reason": reason}).Error; err != nil {
 			return err
 		}
 		refresh := 24 * time.Hour

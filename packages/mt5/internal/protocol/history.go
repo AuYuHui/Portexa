@@ -2,233 +2,190 @@ package protocol
 
 import (
 	"encoding/binary"
-	"errors"
 	"io"
 	"math"
-	"os"
 	"time"
 )
 
 const (
-	TypeHistoryRequest = 101 // 0x65
-	TypeHistoryReply   = 55  // 0x37
-
-	DealRecordTag  = 0x21
-	DealRecordSize = 1765
-
-	// Windows FILETIME epoch offset in 100ns (from 1601-01-01 to 1970-01-01)
-	FiletimeEpochOffset = 116444736000000000
+	TypeHistory        = 0x65
+	dealHistoryCommand = 0x21
+	DealRecordSize     = 672
 )
 
 type DealRecord struct {
-	Ticket     uint64
-	Order      uint64
-	Position   uint64
-	Time       int64 // Unix millisecond
-	Type       int   // 0 buy, 1 sell, 2 balance, 3 credit...
-	Entry      int   // 0 in, 1 out, 2 in/out, 3 out by
-	Symbol     string
-	Lots       float64
-	Price      float64
-	Profit     float64
-	Commission float64
-	Swap       float64
-	Comment    string
+	Ticket, Order, Position uint64
+	Time                    int64 // Broker wall clock, in Unix milliseconds.
+	Type, Entry, Digits     uint32
+	VolumeUnits             uint64
+	Symbol, Comment         string
+	Price, SL, TP           float64
+	Profit, Commission      float64
+	Swap, Fee               float64
 }
 
-func UnixToFILETIME(t time.Time) uint64 {
-	nanos := t.UnixNano()
-	return uint64(nanos/100) + FiletimeEpochOffset
+// The wire interval includes both endpoints. Send no cached month descriptors.
+func BuildHistoryRequest(start, end uint32) []byte {
+	request := make([]byte, 21)
+	request[0] = dealHistoryCommand
+	binary.LittleEndian.PutUint64(request[1:9], uint64(start))
+	binary.LittleEndian.PutUint64(request[9:17], uint64(end-1))
+	return request
 }
 
-func FILETIMEToUnixMilli(ft uint64) int64 {
-	if ft < FiletimeEpochOffset {
-		return 0
-	}
-	return int64((ft - FiletimeEpochOffset) / 10000)
-}
-
-func BuildHistoryRequest(subCmd uint8, startTime, endTime time.Time) []byte {
-	buf := make([]byte, 57)
-	buf[0] = subCmd
-	buf[1] = 0x00
-
-	prefix := []byte{
-		0x91, 0x13, 0x6a, 0x00, 0x00, 0x00, 0x00, 0xff,
-		0xde, 0x00, 0x6b, 0x00, 0x00, 0x00, 0x00, 0x01,
-		0x00, 0x00, 0x00, 0x00, 0x81, 0xe6, 0x6a, 0x00,
-		0x00, 0x00, 0x00, 0xff, 0x0d, 0x0e, 0x6b, 0x00,
-		0x00, 0x00, 0x00,
-	}
-	copy(buf[2:37], prefix)
-
-	endFT := UnixToFILETIME(endTime)
-	binary.LittleEndian.PutUint64(buf[37:45], endFT)
-
-	if subCmd == 0x20 {
-		buf[45] = 0x2e
-	} else {
-		buf[45] = 0x2f
-	}
-	buf[46] = 0x11
-	return buf
-}
-
-func FetchHistoryDeals(r io.Reader, w io.Writer, outState, inState *RollingPayload, startSeq uint16, start, end time.Time) ([]DealRecord, error) {
-	// Send 0x65 sub-command 0x20
-	req20 := BuildHistoryRequest(0x20, start, end)
-	enc20 := outState.Encode(req20)
-	if err := WriteFrame(w, FrameHeader{Type: TypeHistoryRequest, Length: uint32(len(enc20)), Sequence: startSeq, Flags: FlagFinal}, enc20); err != nil {
+func FetchHistoryDeals(conn io.ReadWriter, outState, inState *RollingPayload, seq uint16, login uint64, start, end uint32) ([]DealRecord, error) {
+	request := outState.Encode(BuildHistoryRequest(start, end))
+	if err := WriteFrame(conn, FrameHeader{Type: TypeHistory, Length: uint32(len(request)), Sequence: seq, Flags: FlagFinal}, request); err != nil {
 		return nil, err
 	}
 
-	// Send 0x65 sub-command 0x21
-	req21 := BuildHistoryRequest(0x21, start, end)
-	enc21 := outState.Encode(req21)
-	if err := WriteFrame(w, FrameHeader{Type: TypeHistoryRequest, Length: uint32(len(enc21)), Sequence: startSeq + 1, Flags: FlagFinal}, enc21); err != nil {
-		return nil, err
-	}
-
-	type deadliner interface {
-		SetReadDeadline(time.Time) error
-	}
-	dl, hasDeadline := r.(deadliner)
-	if hasDeadline {
-		_ = dl.SetReadDeadline(time.Now().Add(3 * time.Second))
-	}
-
-	var deals []DealRecord
-	// Read replies until stream quiesces or final flags received
+	var payload []byte
+	deadliner, hasDeadline := conn.(interface{ SetReadDeadline(time.Time) error })
 	for {
-		hdr, err := ReadHeader(r)
-		if err != nil {
-			if errorsIsEOF(err) || isTimeout(err) {
-				break
-			}
-			return deals, err
-		}
 		if hasDeadline {
-			_ = dl.SetReadDeadline(time.Now().Add(1500 * time.Millisecond))
-		}
-
-		rawPayload, err := ReadFramePayload(r, hdr.Length)
-		if err != nil {
-			if errorsIsEOF(err) || isTimeout(err) {
-				break
+			if err := deadliner.SetReadDeadline(time.Now().Add(4 * time.Second)); err != nil {
+				return nil, err
 			}
-			return deals, err
 		}
-
-		compressed := (hdr.Flags & FlagCompressed) != 0
-		decPayload := inState.Decode(rawPayload, compressed)
-
-		piece := decPayload
+		header, err := ReadHeader(conn)
+		if err != nil {
+			return nil, err
+		}
+		raw, err := ReadFramePayload(conn, header.Length)
+		if err != nil {
+			return nil, err
+		}
+		compressed := header.Flags&FlagCompressed != 0
+		piece := inState.Decode(raw, compressed)
+		// Account updates share the rolling state but are not query replies.
+		if header.Type != TypeHistory || header.Sequence != seq {
+			continue
+		}
 		if compressed {
-			piece, err = DecompressLZO(decPayload)
+			piece, err = DecompressLZO(piece)
 			if err != nil {
+				return nil, err
+			}
+		}
+		if len(piece) > MaxFrameSize-len(payload) {
+			return nil, ErrFrameTooLarge
+		}
+		payload = append(payload, piece...)
+		if header.Flags&FlagFinal != 0 {
+			return parseHistoryReply(payload, login, start, end)
+		}
+	}
+}
+
+func parseHistoryReply(payload []byte, login uint64, start, end uint32) ([]DealRecord, error) {
+	const headerSize = 9
+	const monthHeaderSize = 12
+	if len(payload) < headerSize || payload[0] != dealHistoryCommand {
+		return nil, ErrProtocolMismatch
+	}
+	groups := binary.LittleEndian.Uint32(payload[5:9])
+	payload = payload[headerSize:]
+	if groups > uint32(len(payload)/monthHeaderSize) {
+		return nil, ErrProtocolMismatch
+	}
+	var deals []DealRecord
+	seen := make(map[uint64]struct{})
+	for range groups {
+		if len(payload) < monthHeaderSize+4 {
+			return nil, ErrProtocolMismatch
+		}
+		mode := binary.LittleEndian.Uint32(payload[8:12])
+		payload = payload[monthHeaderSize:]
+		var tickets map[uint64]struct{}
+		var footerSize int
+		switch mode {
+		case 0:
+			// The manifest lists every ticket. With no client cache,
+			// the reply must include a record for each listed ticket.
+			count := binary.LittleEndian.Uint32(payload[:4])
+			payload = payload[4:]
+			footerSize = 16
+			if len(payload) < footerSize+4 || count > uint32((len(payload)-footerSize-4)/(8+DealRecordSize)) {
+				return nil, ErrTruncatedFrame
+			}
+			tickets = make(map[uint64]struct{}, count)
+			for range count {
+				tickets[binary.LittleEndian.Uint64(payload[:8])] = struct{}{}
+				payload = payload[8:]
+			}
+			if len(tickets) != int(count) {
+				return nil, ErrProtocolMismatch
+			}
+		case 2, 3, 4:
+			// Full records without a ticket manifest.
+		default:
+			return nil, ErrProtocolMismatch
+		}
+		rows := binary.LittleEndian.Uint32(payload[:4])
+		payload = payload[4:]
+		if len(payload) < footerSize || rows > uint32((len(payload)-footerSize)/DealRecordSize) {
+			return nil, ErrTruncatedFrame
+		}
+		if tickets != nil && len(tickets) != int(rows) {
+			return nil, ErrProtocolMismatch
+		}
+		for range rows {
+			deal, err := ParseDealRecord(payload[:DealRecordSize], login)
+			payload = payload[DealRecordSize:]
+			if err != nil {
+				return nil, err
+			}
+			if tickets != nil {
+				if _, present := tickets[deal.Ticket]; !present {
+					return nil, ErrProtocolMismatch
+				}
+				delete(tickets, deal.Ticket)
+			}
+			if deal.Time < int64(start)*1000 || deal.Time >= int64(end)*1000 {
 				continue
 			}
-		}
-
-		if hdr.Type == TypeHistoryReply && len(piece) >= DealRecordSize && piece[0] == DealRecordTag {
-			deal := ParseDealRecord(piece)
-			if deal.Ticket > 0 {
-				deals = append(deals, deal)
+			if _, duplicate := seen[deal.Ticket]; duplicate {
+				return nil, ErrProtocolMismatch
 			}
+			seen[deal.Ticket] = struct{}{}
+			deals = append(deals, deal)
 		}
+		payload = payload[footerSize:]
 	}
-
+	if len(payload) != 0 {
+		return nil, ErrProtocolMismatch
+	}
 	return deals, nil
 }
 
-func isTimeout(err error) bool {
-	if err == nil {
-		return false
+func ParseDealRecord(row []byte, login uint64) (DealRecord, error) {
+	if len(row) != DealRecordSize || binary.LittleEndian.Uint64(row[72:80]) != login {
+		return DealRecord{}, ErrProtocolMismatch
 	}
-	type timeoutErr interface {
-		Timeout() bool
+	uint64At := func(offset int) uint64 {
+		return binary.LittleEndian.Uint64(row[offset : offset+8])
 	}
-	if te, ok := err.(timeoutErr); ok && te.Timeout() {
-		return true
+	float64At := func(offset int) float64 {
+		return math.Float64frombits(uint64At(offset))
 	}
-	return errors.Is(err, os.ErrDeadlineExceeded)
-}
-
-func ParseDealRecord(b []byte) DealRecord {
-	if len(b) < DealRecordSize || b[0] != DealRecordTag {
-		return DealRecord{}
+	ticket := uint64At(0)
+	seconds := uint64At(104)
+	millis := uint64At(548)
+	if seconds == 0 || seconds > math.MaxInt32 || ticket == 0 {
+		return DealRecord{}, ErrProtocolMismatch
 	}
-
-	sub := binary.LittleEndian.Uint32(b[9:13])
-	ticket := uint64(binary.LittleEndian.Uint32(b[5:9]))
-	if ticket == 0 || sub == 0 {
-		ticket = binary.LittleEndian.Uint64(b[592:600])
-		if ticket == 0 {
-			ticket = binary.LittleEndian.Uint64(b[4:12])
-		}
+	if millis == 0 {
+		millis = seconds * 1000
 	}
-	if ticket == 0 {
-		return DealRecord{}
+	if millis/1000 != seconds {
+		return DealRecord{}, ErrProtocolMismatch
 	}
-
-	timeFT := binary.LittleEndian.Uint64(b[909:917])
-	if timeFT < FiletimeEpochOffset {
-		timeFT = binary.LittleEndian.Uint64(b[616:624])
-	}
-	milli := FILETIMEToUnixMilli(timeFT)
-	if milli == 0 {
-		milli = time.Now().UnixMilli()
-	}
-
-	openPrice := math.Float64frombits(binary.LittleEndian.Uint64(b[1021:1029]))
-	closePrice := math.Float64frombits(binary.LittleEndian.Uint64(b[1029:1037]))
-	profit := math.Float64frombits(binary.LittleEndian.Uint64(b[1061:1069]))
-	volumeUnits := binary.LittleEndian.Uint64(b[1053:1061])
-	lots := float64(volumeUnits) / 100000000.0
-
-	price := closePrice
-	if price == 0 {
-		price = openPrice
-	}
-	if price == 0 {
-		price = math.Float64frombits(binary.LittleEndian.Uint64(b[272:280]))
-	}
-	if profit == 0 {
-		profit = math.Float64frombits(binary.LittleEndian.Uint64(b[640:648]))
-	}
-	if lots == 0 {
-		rawLots := binary.LittleEndian.Uint64(b[632:640])
-		if rawLots > 0 {
-			lots = float64(rawLots) / 10000.0
-		}
-	}
-
-	var symbol string
-	if len(b) >= 949+32 {
-		symbol = decodeUTF16String(b[949 : 949+32])
-	}
-	var comment string
-	if len(b) >= 1125+32 {
-		comment = decodeUTF16String(b[1125 : 1125+32])
-	}
-
-	order := binary.LittleEndian.Uint64(b[600:608])
-	pos := binary.LittleEndian.Uint64(b[608:616])
-
 	return DealRecord{
-		Ticket:     ticket,
-		Order:      order,
-		Position:   pos,
-		Time:       milli,
-		Price:      price,
-		Profit:     profit,
-		Lots:       lots,
-		Symbol:     symbol,
-		Comment:    comment,
-		Entry:      1,
-	}
-}
-
-func errorsIsEOF(err error) bool {
-	return err == io.EOF || err == ErrPeerClosed
+		Ticket: ticket, Order: uint64At(88), Position: uint64At(288), Time: int64(millis),
+		Type: binary.LittleEndian.Uint32(row[184:188]), Entry: binary.LittleEndian.Uint32(row[188:192]),
+		Digits: binary.LittleEndian.Uint32(row[368:372]), VolumeUnits: uint64At(224),
+		Symbol: decodeUTF16String(row[120:184]), Comment: decodeUTF16String(row[296:360]),
+		Price: float64At(200), SL: float64At(208), TP: float64At(216), Profit: float64At(232),
+		Commission: float64At(256), Fee: float64At(264), Swap: float64At(272),
+	}, nil
 }

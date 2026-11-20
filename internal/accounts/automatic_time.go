@@ -18,6 +18,12 @@ const dprimeTimeSource = "https://www.dooprimenews.com/service-updates/trading-s
 var dprimeBroker = regexp.MustCompile(`(?i)^(?:d|doo) prime(?: (?:vanuatu|seychelles|mauritius) limited)?$`)
 var dprimeServer = regexp.MustCompile(`(?i)^(?:dprime|dooprime)(?:vu|sc|mu)?-(?:live|demo)(?:[ -]?[0-9]{1,3})?$`)
 
+const ecmarketsTimePolicy = "ecmarkets-us-dst-v1"
+const ecmarketsTimeSource = "https://www.ecmarkets.com/help/trading-hours"
+
+var ecmarketsBroker = regexp.MustCompile(`(?i)^ec\s*markets(?: (?:ltd\.?|limited))?$`)
+var ecmarketsServer = regexp.MustCompile(`(?i)^ecmarkets(?:ltd)?-(?:mt[45]-)?(?:live|demo)[0-9]{0,3}$`)
+
 type AutomaticTimeZone struct {
 	Available        bool   `json:"available"`
 	TimeZone         string `json:"time_zone"`
@@ -33,15 +39,19 @@ type AutomaticTimeZone struct {
 }
 
 // Broker policy is a business calendar, not an inferred protocol timestamp.
-// D Prime's published platform clock follows US DST: UTC+2 / UTC+3. In
-// particular, Europe/Helsinki would be wrong during the US/EU transition weeks.
+// D Prime and EC Markets published platform clock follows US DST: UTC+2 / UTC+3.
 func automaticTimeRule(server storage.Server, now time.Time) (timeRuleEntry, bool) {
-	if server.Protocol != "mt4" || !dprimeBroker.MatchString(strings.TrimSpace(server.BrokerName)) ||
-		!dprimeServer.MatchString(strings.TrimSpace(server.ServerName)) {
-		return timeRuleEntry{}, false
+	broker := strings.TrimSpace(server.BrokerName)
+	srv := strings.TrimSpace(server.ServerName)
+	if dprimeBroker.MatchString(broker) && dprimeServer.MatchString(srv) {
+		return timeRuleEntry{FromUTCMS: now.UnixMilli(), Kind: "broker_us_dst", Zone: "America/New_York",
+			PolicyID: dprimeTimePolicy, SourceRef: dprimeTimeSource}, true
 	}
-	return timeRuleEntry{FromUTCMS: now.UnixMilli(), Kind: "broker_us_dst", Zone: "America/New_York",
-		PolicyID: dprimeTimePolicy, SourceRef: dprimeTimeSource}, true
+	if ecmarketsBroker.MatchString(broker) && ecmarketsServer.MatchString(srv) {
+		return timeRuleEntry{FromUTCMS: now.UnixMilli(), Kind: "broker_us_dst", Zone: "America/New_York",
+			PolicyID: ecmarketsTimePolicy, SourceRef: ecmarketsTimeSource}, true
+	}
+	return timeRuleEntry{}, false
 }
 
 func automaticTimeZone(server storage.Server, now time.Time) AutomaticTimeZone {
@@ -53,8 +63,9 @@ func automaticTimeZone(server storage.Server, now time.Time) AutomaticTimeZone {
 	if err != nil {
 		return AutomaticTimeZone{}
 	}
+	desc := "按官方交易规则，冬令时 UTC+2、夏令时 UTC+3，随美国夏令时自动切换。新平仓事件会继续校准当前时差。"
 	return AutomaticTimeZone{Available: true, TimeZone: label,
-		Description: "按 D Prime 官方规则，冬令时 UTC+2、夏令时 UTC+3，随美国夏令时自动切换。新平仓事件会继续校准当前时差。", SourceURL: entry.SourceRef,
+		Description: desc, SourceURL: entry.SourceRef,
 		Source: "official", Status: "learning", RequiredEvents: ClockRequiredEvents}
 }
 
@@ -69,7 +80,7 @@ func serverLocation(entry timeRuleEntry, at time.Time) (*time.Location, string, 
 			return zone, entry.Zone, nil
 		}
 	}
-	if entry.Kind == "broker_us_dst" && entry.PolicyID == dprimeTimePolicy && entry.Zone == "America/New_York" {
+	if entry.Kind == "broker_us_dst" && entry.Zone == "America/New_York" {
 		newYork, err := entry.loadLocation()
 		if err != nil {
 			return nil, "", err

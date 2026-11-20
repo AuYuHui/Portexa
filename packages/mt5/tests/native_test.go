@@ -9,7 +9,6 @@ import (
 	"math"
 	"net"
 	"testing"
-	"time"
 
 	"portexa/mt5"
 	"portexa/mt5/internal/protocol"
@@ -30,7 +29,7 @@ func TestBootstrapTransformSymmetry(t *testing.T) {
 func TestRollingPayloadTransform(t *testing.T) {
 	var table [256]byte
 	for i := 0; i < 256; i++ {
-		table[i] = byte((i * 37 + 13) & 0xFF)
+		table[i] = byte((i*37 + 13) & 0xFF)
 	}
 
 	raw := []byte("Synchronized synthetic MT5 terminal payload 1234567890!")
@@ -90,43 +89,6 @@ func TestAccountRecordParsing(t *testing.T) {
 	binary.LittleEndian.PutUint32(rec[456:460], 0)
 	if _, err := protocol.ParseSyncPayload(payload, login); err != protocol.ErrInvestorDenied {
 		t.Fatalf("expected ErrInvestorDenied, got %v", err)
-	}
-}
-
-func TestDealRecordParsing(t *testing.T) {
-	rec := make([]byte, protocol.DealRecordSize)
-	rec[0] = protocol.DealRecordTag
-
-	ticket := uint64(4238299)
-	order := uint64(4238290)
-	pos := uint64(4238200)
-
-	binary.LittleEndian.PutUint64(rec[592:600], ticket)
-	binary.LittleEndian.PutUint64(rec[600:608], order)
-	binary.LittleEndian.PutUint64(rec[608:616], pos)
-
-	// Time
-	now := time.Date(2026, 11, 20, 1, 50, 0, 0, time.UTC)
-	ft := protocol.UnixToFILETIME(now)
-	binary.LittleEndian.PutUint64(rec[616:624], ft)
-
-	// Type=0 (Buy), Entry=1 (Out)
-	binary.LittleEndian.PutUint32(rec[624:628], 0)
-	binary.LittleEndian.PutUint32(rec[628:632], 1)
-
-	// Lots = 10000 (1.00 lot)
-	binary.LittleEndian.PutUint64(rec[632:640], 10000)
-
-	// Price = 2650.50, Profit = 150.25
-	binary.LittleEndian.PutUint64(rec[272:280], math.Float64bits(2650.50))
-	binary.LittleEndian.PutUint64(rec[640:648], math.Float64bits(150.25))
-
-	deal := protocol.ParseDealRecord(rec)
-	if deal.Ticket != ticket || deal.Order != order || deal.Position != pos {
-		t.Fatalf("ticket/order mismatch: got %+v", deal)
-	}
-	if deal.Price != 2650.50 || deal.Profit != 150.25 || deal.Lots != 1.0 {
-		t.Fatalf("deal price/lots mismatch: got %+v", deal)
 	}
 }
 
@@ -323,36 +285,24 @@ func TestNativeMockLoopbackFetchHistory(t *testing.T) {
 		encSync := outState.Encode(replySync)
 		protocol.WriteFrame(conn, protocol.FrameHeader{Type: protocol.TypeInitialSync, Length: uint32(len(encSync)), Sequence: 3, Flags: protocol.FlagFinal}, encSync)
 
-		// 7. Read History Request 1 (seq=4)
+		// 7. Read the bounded deal history request.
 		hdr, _ = protocol.ReadHeader(conn)
-		req20, _ := protocol.ReadFramePayload(conn, hdr.Length)
-		_ = inState.Decode(req20, false)
+		encrypted, _ := protocol.ReadFramePayload(conn, hdr.Length)
+		request := inState.Decode(encrypted, false)
+		expectedRequest := historyRequest(1_795_132_800, 1_795_219_200)
+		if hdr.Type != protocol.TypeHistory || !bytes.Equal(request, expectedRequest) {
+			t.Errorf("unexpected history request: type=%d, bytes=%x", hdr.Type, request)
+			return
+		}
 
-		// 8. Read History Request 2 (seq=5)
-		hdr, _ = protocol.ReadHeader(conn)
-		req21, _ := protocol.ReadFramePayload(conn, hdr.Length)
-		_ = inState.Decode(req21, false)
-
-		// 9. Reply Deal Record (seq=4)
-		dealRec := make([]byte, protocol.DealRecordSize)
-		dealRec[0] = protocol.DealRecordTag
-		binary.LittleEndian.PutUint64(dealRec[592:600], 4238299)
-		binary.LittleEndian.PutUint64(dealRec[600:608], 4238290)
-		binary.LittleEndian.PutUint64(dealRec[608:616], 4238200)
-		ft := protocol.UnixToFILETIME(time.Date(2026, 11, 20, 1, 50, 0, 0, time.UTC))
-		binary.LittleEndian.PutUint64(dealRec[616:624], ft)
-		binary.LittleEndian.PutUint32(dealRec[624:628], 0) // Buy
-		binary.LittleEndian.PutUint32(dealRec[628:632], 1) // Out
-		binary.LittleEndian.PutUint64(dealRec[632:640], 10000)
-		binary.LittleEndian.PutUint64(dealRec[272:280], math.Float64bits(2650.50))
-		binary.LittleEndian.PutUint64(dealRec[640:648], math.Float64bits(150.25))
-
-		encDeal := outState.Encode(dealRec)
-		protocol.WriteFrame(conn, protocol.FrameHeader{Type: protocol.TypeHistoryReply, Length: uint32(len(encDeal)), Sequence: 4, Flags: 0}, encDeal)
-
-		// 10. Reply Final Frame (seq=5, FlagFinal)
-		encFinal := outState.Encode(nil)
-		protocol.WriteFrame(conn, protocol.FrameHeader{Type: protocol.TypeHistoryReply, Length: uint32(len(encFinal)), Sequence: 5, Flags: protocol.FlagFinal}, encFinal)
+		// 8. Send a complete history response split across two frames.
+		rows := append(historyTrade(login, 1_795_139_400_150), historyBalance(login, 1_795_139_400_828)...)
+		reply := historyReply(rows)
+		for i, piece := range [][]byte{reply[:13], reply[13:]} {
+			enc := outState.Encode(piece)
+			protocol.WriteFrame(conn, protocol.FrameHeader{Type: protocol.TypeHistory, Length: uint32(len(enc)),
+				Sequence: hdr.Sequence, Flags: uint16(i) * protocol.FlagFinal}, enc)
+		}
 	}()
 
 	addr := l.Addr().(*net.TCPAddr)
@@ -365,8 +315,8 @@ func TestNativeMockLoopbackFetchHistory(t *testing.T) {
 	}
 
 	window := mt5.HistoryRange{
-		Start: 1763596800,
-		End:   1763683200,
+		Start: 1_795_132_800,
+		End:   1_795_219_200,
 	}
 
 	hRes, err := mt5.FetchHistory(context.Background(), cfg, window)
@@ -374,12 +324,19 @@ func TestNativeMockLoopbackFetchHistory(t *testing.T) {
 		t.Fatalf("native FetchHistory failed: %v", err)
 	}
 
-	if len(hRes.Deals) != 1 {
-		t.Fatalf("expected 1 deal, got %d", len(hRes.Deals))
+	if len(hRes.Deals) != 2 {
+		t.Fatalf("expected trade and balance deal, got %d rows", len(hRes.Deals))
 	}
 	d := hRes.Deals[0]
-	if d.Ticket != 4238299 || d.Order != 4238290 || d.PositionID != 4238200 || d.Price != 2650.50 || d.Profit != 150.25 {
-		t.Fatalf("unexpected deal data: %+v", d)
+	if d.Ticket != 2001 || d.Order != 1001 || d.PositionID != 3001 || d.Price != 2650.50 ||
+		d.Digits != 3 || d.VolumeUnits != 1234567 || d.WallTimeMS != 1_795_139_400_150 ||
+		d.Symbol != "TESTUSD" || d.Type != mt5.DealSell || d.Entry != mt5.EntryOutBy ||
+		d.Profit != 15.25 || d.Commission != -1 || d.Swap != -2 || d.Fee != -0.25 {
+		t.Fatalf("unexpected trade: %+v", d)
+	}
+	fund := hRes.Deals[1]
+	if fund.Type != mt5.DealBalance || fund.Profit != 50 || fund.Comment != "deposit" {
+		t.Fatalf("unexpected funding deal: %+v", fund)
 	}
 	if hRes.Account.Balance != 99999.0 || !hRes.Account.IsInvestor() {
 		t.Fatalf("unexpected account in history result: %+v", hRes.Account)

@@ -10,7 +10,7 @@
 
 ## 原生 TCP
 
-`Fetch` 和 `FetchHistory` 在同步账户时检查投资者权限。原生适配当前未提供实际已用保证金、挂单触发价或单独的成交手续费字段，价格位数固定为 2。[原生握手研究与线上范围](../../docs/research/mt5-native-handshake.md)
+`Fetch` 和 `FetchHistory` 在同步账户时检查投资者权限。原生快照读取服务端账户杠杆，当前缺少已用保证金和挂单触发价。持仓和挂单价格按 2 位小数展示。历史响应按请求序列重组，逐笔读取类型、方向、价格位数、佣金、隔夜费和单独的成交手续费。[原生握手研究与线上范围](../../docs/research/mt5-native-handshake.md)
 
 应用侧的服务器登记、服务器时区和净值估算见[启动与管理](../../docs/product-start.md)和[账户统计](../../docs/account-statistics.md)。
 

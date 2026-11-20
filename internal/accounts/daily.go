@@ -154,10 +154,14 @@ func (s *Service) PublishDaily(ctx context.Context, job DailyJob, report storage
 		if _, err = s.validEndpoint(tx, job.Run.EndpointID, job.Run.ServerID); err != nil {
 			return err
 		}
+		reason := "complete"
+		if job.MT5Config != nil {
+			reason = mt5HistoryComplete
+		}
 		result := tx.Model(&storage.DailyReport{}).Where("id = ? AND state = 'running'", job.Run.ID).Updates(map[string]any{
 			"state": "succeeded", "finished_at_ms": report.FinishedAtMS, "native_currency": report.NativeCurrency,
 			"net_profit": report.NetProfit, "balance_adjustment": report.BalanceAdjustment, "balance_change": report.BalanceChange,
-			"credit_change": report.CreditChange, "closed_trades": report.ClosedTrades, "completion_reason": "complete",
+			"credit_change": report.CreditChange, "closed_trades": report.ClosedTrades, "completion_reason": reason,
 			"winning_trades": report.WinningTrades, "losing_trades": report.LosingTrades, "breakeven_trades": report.BreakevenTrades,
 			"gross_profit": report.GrossProfit, "gross_loss": report.GrossLoss,
 		})
@@ -218,8 +222,12 @@ func readDailyView(tx *gorm.DB, account storage.Account, server storage.Server, 
 	}
 	view.Date, view.TimeZone = day.Date, day.TimeZone
 	query := func() *gorm.DB {
-		return tx.Where("account_id = ? AND report_date = ? AND time_ruleset_id = ? AND unit_revision = ?",
+		rows := tx.Where("account_id = ? AND report_date = ? AND time_ruleset_id = ? AND unit_revision = ?",
 			account.ID, day.Date, day.TimeRulesetID, account.UnitRevision)
+		if server.Protocol == "mt5" {
+			rows = rows.Where("state != 'succeeded' OR completion_reason = ?", mt5HistoryComplete)
+		}
+		return rows
 	}
 	var latest storage.DailyReport
 	if err = query().Where("config_version = ?", account.ConfigVersion).Order("started_at_ms DESC, id DESC").First(&latest).Error; err != nil && !errors.Is(err, storage.ErrNotFound) {

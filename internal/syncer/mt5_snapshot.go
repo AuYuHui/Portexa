@@ -65,59 +65,16 @@ func convertMT5(job accounts.Job, result mt5.Result, from, to int64) (storage.Sn
 		seen[order.Ticket] = true
 		positions = append(positions, position)
 	}
-	margin := calcMT5Margin(positions, a.Leverage, isUSC)
-	snapshot.Margin, snapshot.MarginAvailable = &margin, true
+	if a.MarginAvailable {
+		if !finite(a.Margin) || a.Margin < 0 {
+			return storage.Snapshot{}, nil, ErrIncomplete
+		}
+		margin := decimal.NewFromFloat(a.Margin)
+		snapshot.Margin, snapshot.MarginAvailable = &margin, true
+	}
 	// Broker adjustments such as blocked funds may be absent from the snapshot.
 	snapshot.Equity = snapshot.Balance.Add(snapshot.Credit).Add(snapshot.FloatingNetProfit)
 	return snapshot, positions, nil
-}
-
-func calcMT5Margin(positions []storage.Position, leverage uint32, isUSC bool) decimal.Decimal {
-	if len(positions) == 0 {
-		return decimal.Zero
-	}
-	if leverage == 0 {
-		leverage = 100
-	}
-	lev := decimal.NewFromInt(int64(leverage))
-	total := decimal.Zero
-	for _, p := range positions {
-		if p.Command > 1 {
-			continue
-		}
-		sym := strings.ToLower(p.Symbol)
-		contractSize := decimal.NewFromInt(100_000)
-		switch {
-		case strings.HasPrefix(sym, "xau") || strings.Contains(sym, "gold"):
-			contractSize = decimal.NewFromInt(100)
-		case strings.HasPrefix(sym, "xag") || strings.Contains(sym, "silver"):
-			contractSize = decimal.NewFromInt(5_000)
-		case strings.HasPrefix(sym, "uso") || strings.HasPrefix(sym, "wti") || strings.HasPrefix(sym, "brent") || strings.HasPrefix(sym, "xbr") || strings.HasPrefix(sym, "xti"):
-			contractSize = decimal.NewFromInt(1_000)
-		case strings.HasPrefix(sym, "btc"):
-			contractSize = decimal.NewFromInt(1)
-		case strings.HasPrefix(sym, "eth"):
-			contractSize = decimal.NewFromInt(10)
-		}
-		if isUSC || strings.HasSuffix(sym, ".c") {
-			if strings.HasPrefix(sym, "xau") || strings.Contains(sym, "gold") {
-				contractSize = decimal.NewFromInt(10)
-			} else {
-				contractSize = contractSize.Div(decimal.NewFromInt(100))
-			}
-		}
-		lots := decimal.New(int64(p.VolumeHundredths), -2)
-		if p.ExactLots != nil {
-			lots = *p.ExactLots
-		}
-		price := p.OpenPrice
-		if price.IsZero() {
-			price = p.CurrentPrice
-		}
-		posMargin := lots.Mul(price).Mul(contractSize).DivRound(lev, 8)
-		total = total.Add(posMargin)
-	}
-	return total
 }
 
 const maxMT5BrowserTicket = 1<<53 - 1
