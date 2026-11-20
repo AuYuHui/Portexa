@@ -94,13 +94,15 @@ func TestAccountRecordParsing(t *testing.T) {
 
 func TestSyncReadsNativePositionSide(t *testing.T) {
 	const login = uint64(10001001)
-	payload := make([]byte, 1+protocol.AccountRecordSize+672)
+	const positionStart = 1 + protocol.AccountRecordSize
+	payload := make([]byte, positionStart+72+672)
 	payload[0] = protocol.AccountRecordTag
 	account := payload[1 : 1+protocol.AccountRecordSize]
 	binary.LittleEndian.PutUint64(account[:8], login)
 	binary.LittleEndian.PutUint32(account[456:460], protocol.InvestorFlag)
 
-	position := payload[1+protocol.AccountRecordSize:]
+	binary.LittleEndian.PutUint64(payload[positionStart:], 456789)
+	position := payload[positionStart+72:]
 	binary.LittleEndian.PutUint64(position[:8], login)
 	binary.LittleEndian.PutUint32(position[112:116], 1)
 	binary.LittleEndian.PutUint64(position[152:160], 2_000_000)
@@ -113,6 +115,9 @@ func TestSyncReadsNativePositionSide(t *testing.T) {
 	}
 	if len(result.Positions) != 1 || result.Positions[0].Type != 1 {
 		t.Fatalf("expected one sell position, got %+v", result.Positions)
+	}
+	if got := result.Positions[0]; got.Identifier != 123456 || got.NativeTicket != 456789 {
+		t.Fatalf("stable position identifier and native ticket were confused: %+v", got)
 	}
 }
 

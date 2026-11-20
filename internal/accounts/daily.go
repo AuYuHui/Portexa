@@ -22,6 +22,7 @@ type DailyJob struct {
 	MT5Config      *mt5.Config
 	Day            ServerDay
 	NativeCurrency string
+	PositionExits  []DailyPositionExit
 }
 
 type DailyView struct {
@@ -171,6 +172,15 @@ func (s *Service) PublishDaily(ctx context.Context, job DailyJob, report storage
 		if result.RowsAffected != 1 {
 			return storage.ErrConflict
 		}
+		if job.PositionExits != nil {
+			summary, err := summarizePositionExcursions(tx, job, current, report.NativeCurrency)
+			if err != nil {
+				return err
+			}
+			if err := tx.Create(&storage.DailyPositionExcursionRecord{ReportID: report.ID, Summary: summary}).Error; err != nil {
+				return err
+			}
+		}
 		if report.FinishedAtMS != nil {
 			if rest, err := restBackgroundRefresh(tx, current, time.UnixMilli(*report.FinishedAtMS)); err != nil {
 				return err
@@ -245,6 +255,12 @@ func readDailyView(tx *gorm.DB, account storage.Account, server storage.Server, 
 		return view, err
 	}
 	if err == nil {
+		var excursions storage.DailyPositionExcursionRecord
+		if err := tx.First(&excursions, "report_id = ?", report.ID).Error; err == nil {
+			report.PositionExcursions = &excursions.Summary
+		} else if !errors.Is(err, storage.ErrNotFound) {
+			return view, err
+		}
 		view.Report = &report
 		freshness, err := restHistoryFreshness(tx, account, now)
 		if err != nil {

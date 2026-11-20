@@ -158,6 +158,8 @@ type Position struct {
 	Commission       decimal.Decimal  `gorm:"column:commission;type:text" json:"commission"`
 	Swap             decimal.Decimal  `gorm:"column:swap;type:text" json:"swap"`
 	Taxes            decimal.Decimal  `gorm:"column:taxes;type:text" json:"taxes"`
+	MT5Identifier    uint64           `gorm:"-" json:"-"`
+	MT5NativeTicket  uint64           `gorm:"-" json:"-"`
 }
 
 func (Position) TableName() string { return "positions" }

@@ -183,6 +183,9 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 		if err := tx.Create(&snapshot).Error; err != nil {
 			return err
 		}
+		if err := recordPositionExcursions(tx, snapshot, positions, job.MT5Config != nil); err != nil {
+			return err
+		}
 		if job.MT5Config == nil {
 			if err := captureRestActivity(tx, current, snapshot, positions, settings); err != nil {
 				return err

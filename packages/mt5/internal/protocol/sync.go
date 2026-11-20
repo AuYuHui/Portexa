@@ -106,6 +106,8 @@ type AccountSnapshot struct {
 }
 
 type PositionSnapshot struct {
+	Identifier   uint64
+	NativeTicket uint64
 	Ticket       uint64
 	Symbol       string
 	Type         int // 0 buy, 1 sell
@@ -355,7 +357,7 @@ func parseEmbeddedRecords(payload []byte, res *SyncResult) {
 				comment := decodeUTF16String(rec[224:])
 
 				if side <= 1 {
-					res.Positions = append(res.Positions, PositionSnapshot{
+					position := PositionSnapshot{
 						Ticket:       ticket,
 						Symbol:       symbol,
 						Type:         side,
@@ -367,7 +369,14 @@ func parseEmbeddedRecords(payload []byte, res *SyncResult) {
 						Profit:       profit,
 						OpenTime:     openTime,
 						Comment:      comment,
-					})
+					}
+					if i >= 72 {
+						// The record starts 72 bytes before login. idn can change on
+						// a netting reversal while expert_position_id stays stable.
+						position.NativeTicket = binary.LittleEndian.Uint64(payload[i-72 : i-64])
+						position.Identifier = binary.LittleEndian.Uint64(rec[216:224])
+					}
+					res.Positions = append(res.Positions, position)
 				} else if side <= 7 {
 					res.Orders = append(res.Orders, OrderSnapshot{
 						Ticket:   ticket,

@@ -137,6 +137,8 @@ func fetchSnapshot(ctx context.Context, cfg Config, fullCatalog bool) (Result, e
 	for _, p := range syncRes.Positions {
 		res.Positions = append(res.Positions, Position{
 			ID:           p.Ticket,
+			Identifier:   p.Identifier,
+			NativeTicket: p.NativeTicket,
 			Symbol:       p.Symbol,
 			Side:         uint32(p.Type),
 			Digits:       2,

@@ -17,6 +17,7 @@ func (a Account) IsInvestor() bool {
 
 type Position struct {
 	ID                              uint64
+	Identifier, NativeTicket        uint64 // Stable deal position ID and the current native ticket.
 	Symbol                          string
 	Side, Digits, OpenTime          uint32
 	VolumeUnits                     uint64 // 1 lot = 100,000,000 units

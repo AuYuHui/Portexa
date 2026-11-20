@@ -102,6 +102,7 @@ func (e *Engine) runDaily(ctx context.Context, id string) {
 			report = totals.report(job.Run, job.NativeCurrency, finished.UnixMilli())
 		}
 		if err == nil {
+			job.PositionExits = dailyPositionExits(job, result.History, orders)
 			next := finished.Add(e.historyInterval)
 			if job.Day.NextDayUTC.Before(next) {
 				next = job.Day.NextDayUTC

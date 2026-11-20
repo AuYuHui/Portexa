@@ -64,13 +64,16 @@ var accountDeletionSchema string
 //go:embed migrations/017_mt5_collection.sql
 var mt5CollectionSchema string
 
+//go:embed migrations/018_position_excursions.sql
+var positionExcursionsSchema string
+
 var ErrNotFound = gorm.ErrRecordNotFound
 var ErrConflict = errors.New("state conflict")
 var ErrDenied = errors.New("operation denied")
 var ErrClosed = errors.New("store closed")
 
 const ApplicationID = 0x50545841
-const SchemaVersion = 17
+const SchemaVersion = 18
 
 type Priority int
 
@@ -344,6 +347,11 @@ func migrate(db *sql.DB) (result error) {
 	}
 	if version < 17 {
 		if _, err = tx.Exec(mt5CollectionSchema); err != nil {
+			return err
+		}
+	}
+	if version < 18 {
+		if _, err = tx.Exec(positionExcursionsSchema); err != nil {
 			return err
 		}
 	}

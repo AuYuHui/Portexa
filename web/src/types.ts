@@ -65,6 +65,18 @@ export interface DailyReport {
   gross_profit?: string | null;
   gross_loss?: string | null;
   win_rate?: string | null;
+  position_excursions?: {
+    sampled: number;
+    closed: number;
+    loss: PositionExcursionPoint | null;
+    profit: PositionExcursionPoint | null;
+  };
+}
+interface PositionExcursionPoint {
+  amount: string;
+  ticket: string;
+  symbol: string;
+  at_ms: number;
 }
 export interface FundingView {
   state: string;

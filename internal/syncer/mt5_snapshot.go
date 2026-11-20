@@ -94,6 +94,7 @@ func makeMT5Position(accountID, snapshotID string, position mt5.Position) (stora
 	lots := decimal.New(int64(p.VolumeUnits), -8)
 	return storage.Position{AccountID: accountID, SnapshotID: snapshotID, Ticket: int64(p.ID),
 		Command: int32(p.Side), Digits: int32(p.Digits), Symbol: p.Symbol, OpenTimeWall: p.OpenTime,
+		MT5Identifier: p.Identifier, MT5NativeTicket: p.NativeTicket,
 		VolumeHundredths: int32(p.VolumeUnits / 1_000_000), ExactLots: &lots,
 		OpenPrice: decimal.NewFromFloat(p.OpenPrice), CurrentPrice: decimal.NewFromFloat(p.CurrentPrice),
 		SL: decimal.NewFromFloat(p.SL), TP: decimal.NewFromFloat(p.TP), Profit: decimal.NewFromFloat(p.Profit),

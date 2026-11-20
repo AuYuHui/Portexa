@@ -180,7 +180,30 @@ async function refresh() {
             {{ t('dailySummary.losingTrades', { count: account.daily.report?.losing_trades ?? '—' }) }}
           </p>
         </div>
+        <div
+          v-for="metric in [
+            { label: t('dailySummary.maxFloatingLoss'), point: account.daily.report?.position_excursions?.loss, color: 'negative' },
+            { label: t('dailySummary.maxFloatingProfit'), point: account.daily.report?.position_excursions?.profit, color: 'positive' },
+          ]"
+          :key="metric.label"
+        >
+          <div class="card-label">
+            {{ metric.label }}
+            <span>{{ account.daily.report?.native_currency || account.snapshot?.native_currency || t('account.nativeCurrency') }}</span>
+          </div>
+          <div class="metric-value num" :class="metric.point ? metric.color : ''">{{ money(metric.point?.amount) }}</div>
+          <p v-if="metric.point" class="metric-note">
+            {{ metric.point.symbol }} · #{{ metric.point.ticket }} · {{ date(metric.point.at_ms) }}
+          </p>
+        </div>
       </div>
+      <p v-if="account.daily.report" class="daily-note muted small">
+        {{
+          account.daily.report.position_excursions && account.daily.report.position_excursions.closed > 0
+            ? t('dailySummary.floatingCoverage', account.daily.report.position_excursions)
+            : t('dailySummary.floatingUnavailable')
+        }}
+      </p>
       <p
         v-if="
           account.daily.report && account.daily.report.winning_trades == null
