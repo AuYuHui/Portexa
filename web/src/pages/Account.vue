@@ -326,55 +326,57 @@ async function deleteAccount() {
           ><span>{{ t('account.amountsShownInNativeCurrency') }}</span>
         </div>
       </section>
-      <DealHistory v-if="data.account.protocol === 'mt5'" :account-id="id" :has-snapshot="!!current" />
-      <section class="panel snapshot-panel">
-        <div class="panel-heading">
-          <div>
-            <h2>{{ t('account.recentSuccessfulSnapshots') }}</h2>
-            <p class="muted small">
-              {{ t('account.theLastCompleteCollectionsFailedCollectionsNeverBecome') }}
+      <div class="account-tables-grid">
+        <DealHistory v-if="data.account.protocol === 'mt5'" :account-id="id" :has-snapshot="!!current" />
+        <section class="panel snapshot-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>{{ t('account.recentSuccessfulSnapshots') }}</h2>
+              <p class="muted small">
+                {{ t('account.theLastCompleteCollectionsFailedCollectionsNeverBecome') }}
+              </p>
+            </div>
+            <span class="badge badge-neutral">{{ t('account.snapshotDetails') }}</span>
+          </div>
+          <p v-if="snapshotsError" class="error-message">
+            {{ localizeMessage(snapshotsError.message) }}
+          </p>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>{{ t('account.sampleStarted') }}</th>
+                  <th>{{ t('account.sampleCompleted') }}</th>
+                  <th class="text-right">{{ t('account.balance') }}</th>
+                  <th class="text-right">{{ data.account.protocol === 'mt5' ? t('mt5.estimatedEquity') : t('account.equity') }}</th>
+                  <th class="text-right">{{ t('account.floatingNetPL') }}</th>
+                  <th>{{ t('account.unit') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="s in snapshots" :key="s.id">
+                  <td class="num muted small">{{ date(s.observed_from_ms) }}</td>
+                  <td class="num small">{{ date(s.observed_to_ms) }}</td>
+                  <td class="num text-right">{{ money(s.balance) }}</td>
+                  <td class="num text-right">{{ money(s.equity) }}</td>
+                  <td
+                    class="num text-right"
+                    :class="
+                      positive(s.floating_net_profit) ? 'positive' : 'negative'
+                    "
+                  >
+                    {{ money(s.floating_net_profit) }}
+                  </td>
+                  <td>{{ s.native_currency }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-if="snapshots && !snapshots.length" class="empty-inline">
+              {{ t('account.snapshotsAccumulateAfterTheFirstCompleteCollection') }}
             </p>
           </div>
-          <span class="badge badge-neutral">{{ t('account.snapshotDetails') }}</span>
-        </div>
-        <p v-if="snapshotsError" class="error-message">
-          {{ localizeMessage(snapshotsError.message) }}
-        </p>
-        <div class="table-scroll">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>{{ t('account.sampleStarted') }}</th>
-                <th>{{ t('account.sampleCompleted') }}</th>
-                <th class="text-right">{{ t('account.balance') }}</th>
-                <th class="text-right">{{ data.account.protocol === 'mt5' ? t('mt5.estimatedEquity') : t('account.equity') }}</th>
-                <th class="text-right">{{ t('account.floatingNetPL') }}</th>
-                <th>{{ t('account.unit') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="s in snapshots" :key="s.id">
-                <td class="num muted small">{{ date(s.observed_from_ms) }}</td>
-                <td class="num small">{{ date(s.observed_to_ms) }}</td>
-                <td class="num text-right">{{ money(s.balance) }}</td>
-                <td class="num text-right">{{ money(s.equity) }}</td>
-                <td
-                  class="num text-right"
-                  :class="
-                    positive(s.floating_net_profit) ? 'positive' : 'negative'
-                  "
-                >
-                  {{ money(s.floating_net_profit) }}
-                </td>
-                <td>{{ s.native_currency }}</td>
-              </tr>
-            </tbody>
-          </table>
-          <p v-if="snapshots && !snapshots.length" class="empty-inline">
-            {{ t('account.snapshotsAccumulateAfterTheFirstCompleteCollection') }}
-          </p>
-        </div>
-      </section>
+        </section>
+      </div>
       <Modal
         v-model:open="open"
         :title="t('account.accountSettings')"

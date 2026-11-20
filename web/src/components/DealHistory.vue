@@ -46,7 +46,7 @@ function back() {
 </script>
 
 <template>
-  <section class="panel" :aria-label="t('mt5.dealHistory')">
+  <section class="panel deal-history-panel" :aria-label="t('mt5.dealHistory')">
     <div class="panel-heading">
       <div>
         <h2>{{ t("mt5.dealHistory") }}</h2>

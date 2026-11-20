@@ -931,7 +931,6 @@
     "brokerTimeZone": "使用经纪商公布的 IANA 时区，含其适用的夏令时规则。",
     "analyticsEstimate": "MT5 收益分析使用估算净值，按已采集的成交和资金流水对账。",
     "tradeBooking": "开仓费用或成交更正",
-    "dailyBasis": "MT5 胜率按平仓成交笔数统计。开仓费用计入其入账日的净收益。",
     "timeEffectiveDate": "历史生效日期（UTC，可选）",
     "timeEffectiveHelp": "仅当经纪商资料确认该时区覆盖历史时填写。留空时从本次确认起生效。",
     "exactServerName": "准确的 MT5 交易服务器名称",

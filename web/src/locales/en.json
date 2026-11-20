@@ -931,7 +931,6 @@
     "brokerTimeZone": "Use the broker’s IANA time zone, including its applicable daylight-saving rules.",
     "analyticsEstimate": "MT5 performance uses estimated equity and reconciles it against collected deals and cash flows.",
     "tradeBooking": "Opening costs or deal adjustment",
-    "dailyBasis": "MT5 win rate counts closing executions. Opening costs affect net profit on the day they are booked.",
     "timeEffectiveDate": "Historical effective date (UTC, optional)",
     "timeEffectiveHelp": "Enter a date only if the broker’s time-zone rules cover that history. Leave it blank to start at confirmation.",
     "exactServerName": "Exact MT5 trading server name",
