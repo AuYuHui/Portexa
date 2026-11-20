@@ -85,10 +85,11 @@ func TestAccountRecordParsing(t *testing.T) {
 		t.Fatalf("parsed account mismatch: %+v", res.Account)
 	}
 
-	// Test investor permission denied
+	// A missing investor flag still describes an authenticated account record.
 	binary.LittleEndian.PutUint32(rec[456:460], 0)
-	if _, err := protocol.ParseSyncPayload(payload, login); err != protocol.ErrInvestorDenied {
-		t.Fatalf("expected ErrInvestorDenied, got %v", err)
+	res, err = protocol.ParseSyncPayload(payload, login)
+	if err != nil || res.Account.IsInvestor || res.Account.Login != login || res.Account.Balance != 12345.67 {
+		t.Fatalf("unexpected account without investor flag: result=%+v err=%v", res, err)
 	}
 }
 
@@ -310,7 +311,6 @@ func TestNativeMockLoopbackFetchHistory(t *testing.T) {
 		replySync[999] = protocol.AccountRecordTag
 		rec := replySync[1000 : 1000+protocol.AccountRecordSize]
 		binary.LittleEndian.PutUint64(rec[0:8], login)
-		binary.LittleEndian.PutUint32(rec[456:460], protocol.InvestorFlag)
 		binary.LittleEndian.PutUint64(rec[1836:1844], math.Float64bits(99999.0))
 		binary.LittleEndian.PutUint64(rec[1844:1852], math.Float64bits(0.0))
 
@@ -370,7 +370,7 @@ func TestNativeMockLoopbackFetchHistory(t *testing.T) {
 	if fund.Type != mt5.DealBalance || fund.Profit != 50 || fund.Comment != "deposit" {
 		t.Fatalf("unexpected funding deal: %+v", fund)
 	}
-	if hRes.Account.Balance != 99999.0 || !hRes.Account.IsInvestor() {
+	if hRes.Account.Balance != 99999.0 || hRes.Account.IsInvestor() {
 		t.Fatalf("unexpected account in history result: %+v", hRes.Account)
 	}
 }

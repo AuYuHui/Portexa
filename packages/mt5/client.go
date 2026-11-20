@@ -177,9 +177,6 @@ func mapProtocolError(err error) error {
 	if errors.Is(err, protocol.ErrAuthFailed) {
 		return ErrRejected
 	}
-	if errors.Is(err, protocol.ErrInvestorDenied) {
-		return ErrReadOnly
-	}
 	if errors.Is(err, protocol.ErrFrameTooLarge) {
 		return ErrResourceLimit
 	}

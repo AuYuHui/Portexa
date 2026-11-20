@@ -288,9 +288,6 @@ func ParseSyncPayload(payload []byte, login uint64) (*SyncResult, error) {
 	record := payload[off+1 : end]
 
 	flags := binary.LittleEndian.Uint32(record[456:460])
-	if (flags & InvestorFlag) == 0 {
-		return nil, ErrInvestorDenied
-	}
 
 	balance := math.Float64frombits(binary.LittleEndian.Uint64(record[1836:1844]))
 	credit := math.Float64frombits(binary.LittleEndian.Uint64(record[1844:1852]))
@@ -312,7 +309,7 @@ func ParseSyncPayload(payload []byte, login uint64) (*SyncResult, error) {
 			Credit:     credit,
 			Leverage:   leverage,
 			Currency:   currency,
-			IsInvestor: true,
+			IsInvestor: flags&InvestorFlag != 0,
 			Name:       name,
 		},
 		RawData: payload,

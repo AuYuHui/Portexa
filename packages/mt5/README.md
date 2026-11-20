@@ -12,7 +12,7 @@
 
 `Fetch` 和 `FetchHistory` 还需要匹配的挑战计算程序及终端镜像。通过进程环境设置 `MT5_COMPUTE_WORKER` 和 `MT5_TERMINAL_IMAGE` 并做离线验证。`Probe` 通过只验证握手与证明阶段；验证采集请使用 `Fetch`。[运行依赖与部署](../../docs/product-start.md#mt5-采集运行依赖)
 
-`Fetch` 和 `FetchHistory` 在同步账户时检查投资者权限。原生快照读取服务端账户杠杆。对无挂单且规则完整的 CFD Leverage 持仓，适配器按品种保证金费率、对冲规则及持仓换算率计算已用保证金。其余配置的保证金标记为缺失。当前快照缺少挂单触发价，持仓和挂单价格按 2 位小数展示。历史响应按请求序列重组，逐笔读取类型、方向、价格位数、佣金、隔夜费和单独的成交手续费。[原生握手研究与线上范围](../../docs/research/mt5-native-handshake.md)
+`Fetch` 和 `FetchHistory` 在认证通过后核对账号并读取数据。返回的 `Account.IsInvestor()` 表示账户记录是否带有投资者标记；标记缺失也可采集。原生快照读取服务端账户杠杆。对无挂单且规则完整的 CFD Leverage 持仓，适配器按品种保证金费率、对冲规则及持仓换算率计算已用保证金。其余配置的保证金标记为缺失。当前快照缺少挂单触发价，持仓和挂单价格按 2 位小数展示。历史响应按请求序列重组，逐笔读取类型、方向、价格位数、佣金、隔夜费和单独的成交手续费。[原生握手研究与线上范围](../../docs/research/mt5-native-handshake.md)
 
 应用侧的服务器登记、服务器时区和净值估算见[启动与管理](../../docs/product-start.md)和[账户统计](../../docs/account-statistics.md)。
 

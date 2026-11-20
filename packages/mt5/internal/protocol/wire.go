@@ -22,7 +22,6 @@ var (
 	ErrTruncatedFrame   = errors.New("mt5: truncated wire frame")
 	ErrProtocolMismatch = errors.New("mt5: unexpected message type or sequence")
 	ErrAuthFailed       = errors.New("mt5: server proof authentication failed")
-	ErrInvestorDenied   = errors.New("mt5: account investor readonly permission not granted")
 )
 
 type FrameHeader struct {
