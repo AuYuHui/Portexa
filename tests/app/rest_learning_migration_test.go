@@ -8,8 +8,31 @@ import (
 	"portexa/internal/storage"
 )
 
+func stripMT5Schema(t *testing.T, db *sql.DB) {
+	t.Helper()
+	for _, statement := range []string{
+		"DROP INDEX history_mt5_deal_page",
+		"ALTER TABLE history_order_revisions DROP COLUMN mt5_deal_type",
+		"ALTER TABLE history_order_revisions DROP COLUMN mt5_entry",
+		"ALTER TABLE history_order_revisions DROP COLUMN mt5_order_ticket",
+		"ALTER TABLE history_order_revisions DROP COLUMN mt5_position_id",
+		"ALTER TABLE history_order_revisions DROP COLUMN mt5_wall_time_ms",
+		"ALTER TABLE history_order_revisions DROP COLUMN exact_lots",
+		"ALTER TABLE history_order_revisions DROP COLUMN fee",
+		"ALTER TABLE positions DROP COLUMN trigger_price",
+		"DROP TRIGGER endpoint_web_hostname_is_immutable",
+		"ALTER TABLE server_endpoints DROP COLUMN web_hostname",
+		"ALTER TABLE positions DROP COLUMN exact_lots",
+	} {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatal(statement, err)
+		}
+	}
+}
+
 func stripRestLearningSchema(t *testing.T, db *sql.DB) {
 	t.Helper()
+	stripMT5Schema(t, db)
 	for _, q := range []string{
 		"DROP TABLE market_activity_observations", "DROP TABLE market_learning_events", "DROP TABLE market_learning_models", "DROP TABLE market_learning_groups", "DROP TABLE market_rest_windows",
 		"ALTER TABLE account_snapshots DROP COLUMN rest_window_id", "ALTER TABLE market_rest_policies DROP COLUMN learning_enabled", "ALTER TABLE market_rest_policies DROP COLUMN learning_epoch_ms",
@@ -33,6 +56,7 @@ func TestRestLearningMigrationPreservesOldSnapshotsAndPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stripMT5Schema(t, db)
 	// Keep the old rest verification and policy intact while removing only v12.
 	if _, err = db.Exec("ALTER TABLE account_snapshots DROP COLUMN rest_window_id"); err != nil {
 		t.Fatal(err)

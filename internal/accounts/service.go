@@ -41,16 +41,19 @@ func New(store *storage.Store, key *vault.Vault, policy TargetPolicy) *Service {
 }
 
 type ServerInput struct {
-	BrokerName string `json:"broker_name"`
-	ServerName string `json:"server_name"`
-	IPAddress  string `json:"ip_address"`
-	Port       int    `json:"port"`
-	TimeZone   string `json:"time_zone"`
+	Protocol    string `json:"protocol"`
+	WebHostname string `json:"web_hostname"`
+	BrokerName  string `json:"broker_name"`
+	ServerName  string `json:"server_name"`
+	IPAddress   string `json:"ip_address"`
+	Port        int    `json:"port"`
+	TimeZone    string `json:"time_zone"`
 }
 
 type EndpointInput struct {
-	IPAddress string `json:"ip_address"`
-	Port      int    `json:"port"`
+	WebHostname string `json:"web_hostname"`
+	IPAddress   string `json:"ip_address"`
+	Port        int    `json:"port"`
 }
 
 type ReviewInput struct {
@@ -62,7 +65,7 @@ type ReviewInput struct {
 type AccountInput struct {
 	ServerID          string `json:"server_id"`
 	EndpointID        string `json:"endpoint_id"`
-	Login             uint32 `json:"login"`
+	Login             uint64 `json:"login"`
 	Label             string `json:"label"`
 	Password          string `json:"password"`
 	ConfirmedCurrency string `json:"confirmed_currency"`
@@ -91,15 +94,23 @@ func (s *Service) createServer(ctx context.Context, input ServerInput, approval 
 	if !s.AllowTarget(input.IPAddress) || input.Port < 1 || input.Port > 65535 {
 		return storage.Server{}, storage.Endpoint{}, ErrTarget
 	}
+	protocol := input.Protocol
+	if protocol == "" {
+		protocol = "mt4"
+	}
+	host, err := endpointHostname(protocol, input.WebHostname)
+	if err != nil {
+		return storage.Server{}, storage.Endpoint{}, err
+	}
 	if input.TimeZone != "" {
 		if _, err := time.LoadLocation(input.TimeZone); err != nil {
 			return storage.Server{}, storage.Endpoint{}, &InputError{"时区名称无效"}
 		}
 	}
 	now := s.Now().UnixMilli()
-	server := storage.Server{ID: storage.NewID(), Protocol: "mt4", BrokerName: strings.TrimSpace(input.BrokerName), ServerName: strings.TrimSpace(input.ServerName), CreatedAtMS: now}
-	endpoint := storage.Endpoint{ID: storage.NewID(), ServerID: server.ID, Revision: 1, IPAddress: input.IPAddress, Port: input.Port, State: "pending", CreatedAtMS: now}
-	err := s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
+	server := storage.Server{ID: storage.NewID(), Protocol: protocol, BrokerName: strings.TrimSpace(input.BrokerName), ServerName: strings.TrimSpace(input.ServerName), CreatedAtMS: now}
+	endpoint := storage.Endpoint{ID: storage.NewID(), ServerID: server.ID, Revision: 1, IPAddress: input.IPAddress, Port: input.Port, WebHostname: host, State: "pending", CreatedAtMS: now}
+	err = s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
 		if err := approval.apply(tx, &endpoint, now); err != nil {
 			return err
 		}
@@ -135,6 +146,11 @@ func (s *Service) newEndpoint(ctx context.Context, serverID string, input Endpoi
 		if err := tx.First(&server, "id = ? AND retired_at_ms IS NULL", serverID).Error; err != nil {
 			return err
 		}
+		host, err := endpointHostname(server.Protocol, input.WebHostname)
+		if err != nil {
+			return err
+		}
+		endpoint.WebHostname = host
 		if !approval.matchesServer(server) {
 			return &InputError{"新接入点必须属于当前 MT4 服务器"}
 		}
@@ -246,11 +262,8 @@ func (s *Service) CreateAccount(ctx context.Context, input AccountInput) (storag
 	if !s.Vault.Ready() {
 		return storage.Account{}, vault.ErrUnavailable
 	}
-	if input.Login == 0 || !clean(input.Label, 1, 96) {
-		return storage.Account{}, &InputError{"请填写账户名称和有效的MT4账号"}
-	}
-	if err := checkPassword(input.Password); err != nil {
-		return storage.Account{}, err
+	if input.Login == 0 || input.Login > maxBrowserInteger || !clean(input.Label, 1, 96) {
+		return storage.Account{}, &InputError{"请填写账户名称和有效的交易账号"}
 	}
 	now := s.Now().UnixMilli()
 	account := storage.Account{ID: storage.NewID(), ServerID: input.ServerID, PinnedEndpointID: input.EndpointID, Login: input.Login,
@@ -259,15 +272,25 @@ func (s *Service) CreateAccount(ctx context.Context, input AccountInput) (storag
 	if err := setUnit(&account, input.ConfirmedCurrency, input.ConfirmUnit, now); err != nil {
 		return account, err
 	}
-	var err error
-	account.CredentialEnvelope, err = s.Vault.Seal(input.Password, vault.AAD(account.ID, account.ServerID, account.PinnedEndpointID, 1))
-	if err != nil {
-		return account, err
-	}
-	err = s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
+	err := s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
 		if _, err := s.validEndpoint(tx, input.EndpointID, input.ServerID); err != nil {
 			return err
 		}
+		var server storage.Server
+		if err := tx.First(&server, "id = ? AND retired_at_ms IS NULL", input.ServerID).Error; err != nil {
+			return err
+		}
+		if server.Protocol == "mt4" && input.Login > 4294967295 {
+			return &InputError{"请填写账户名称和有效的交易账号"}
+		}
+		if err := checkProtocolPassword(server.Protocol, input.Password); err != nil {
+			return err
+		}
+		envelope, err := s.Vault.Seal(input.Password, vault.AAD(account.ID, account.ServerID, account.PinnedEndpointID, 1))
+		if err != nil {
+			return err
+		}
+		account.CredentialEnvelope = envelope
 		if err := tx.Create(&account).Error; err != nil {
 			return err
 		}
@@ -291,6 +314,10 @@ func (s *Service) UpdateAccount(ctx context.Context, id string, patch AccountPat
 			}
 			account.Label = strings.TrimSpace(*patch.Label)
 		}
+		var server storage.Server
+		if err := tx.First(&server, "id = ?", account.ServerID).Error; err != nil {
+			return err
+		}
 		oldEndpoint := account.PinnedEndpointID
 		oldUnitRevision, wasEnabled := account.UnitRevision, account.SyncEnabled
 		if patch.EndpointID != nil {
@@ -310,7 +337,7 @@ func (s *Service) UpdateAccount(ctx context.Context, id string, patch AccountPat
 					return err
 				}
 			}
-			if err := checkPassword(password); err != nil {
+			if err := checkProtocolPassword(server.Protocol, password); err != nil {
 				return err
 			}
 			account.CredentialVersion++
@@ -376,10 +403,6 @@ func (s *Service) UpdateAccount(ctx context.Context, id string, patch AccountPat
 			"next_clock_sync_at_ms": 0, "clock_failure_count": clockFailures, "clock_sync_paused": clockPaused,
 			"next_history_sync_at_ms": 0, "history_sync_paused": historyPaused,
 		}).Error; err != nil {
-			return err
-		}
-		var server storage.Server
-		if err := tx.First(&server, "id = ?", account.ServerID).Error; err != nil {
 			return err
 		}
 		return refreshClockCalibration(tx, &server, s.Now())

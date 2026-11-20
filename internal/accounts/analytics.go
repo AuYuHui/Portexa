@@ -121,7 +121,7 @@ func (s *Service) Analytics(ctx context.Context, requested AnalyticsRequest) (An
 			}
 		}
 		for _, event := range source.input.Events {
-			if event.TimeMS < input.FromMS || event.TimeMS >= cutoff || event.Kind == "trade" || event.Kind == "credit" {
+			if event.TimeMS < input.FromMS || event.TimeMS >= cutoff || event.Trading() || event.Kind == "credit" {
 				continue
 			}
 			if len(view.Events) < 200 {

@@ -63,7 +63,7 @@ func (f Fixture) Server(t testing.TB, name string) (storage.Server, storage.Endp
 
 func (f Fixture) Account(t testing.TB, server storage.Server, endpoint storage.Endpoint, login uint32, currency string) storage.Account {
 	t.Helper()
-	account, err := f.Accounts.CreateAccount(context.Background(), accounts.AccountInput{ServerID: server.ID, EndpointID: endpoint.ID, Login: login, Label: "合成账户", Password: InvestorPassword, ConfirmedCurrency: currency, ConfirmUnit: true, SyncEnabled: true})
+	account, err := f.Accounts.CreateAccount(context.Background(), accounts.AccountInput{ServerID: server.ID, EndpointID: endpoint.ID, Login: uint64(login), Label: "合成账户", Password: InvestorPassword, ConfirmedCurrency: currency, ConfirmUnit: true, SyncEnabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -54,7 +54,7 @@ func Convert(job accounts.Job, result mt4.Result, from, to int64) (storage.Snaps
 				return snapshot, nil, ErrIncomplete
 			}
 		}
-		position := storage.Position{AccountID: job.Account.ID, SnapshotID: snapshot.ID, Ticket: trade.Ticket,
+		position := storage.Position{AccountID: job.Account.ID, SnapshotID: snapshot.ID, Ticket: int64(trade.Ticket),
 			Symbol: trade.Symbol, Command: trade.Command, Digits: trade.Digits, VolumeHundredths: trade.VolumeHundredths,
 			OpenTimeWall: trade.OpenTime, CloseTimeWall: trade.CloseTime, OpenPrice: decimal.NewFromFloat(trade.OpenPrice),
 			CurrentPrice: decimal.NewFromFloat(trade.ClosePrice), SL: decimal.NewFromFloat(trade.SL), TP: decimal.NewFromFloat(trade.TP),

@@ -40,7 +40,7 @@ func TestTradeClockSharesHistoryPoolAndYieldsToSnapshot(t *testing.T) {
 	dailyAccount := f.Account(t, dailyServer, dailyEndpoint, 7953, "USC")
 	clockSnapshot(t, f, dailyAccount, now, nil)
 	f.Accounts.Now = time.Now
-	ids := map[uint32]string{first.Login: first.ID, second.Login: second.ID}
+	ids := map[uint32]string{uint32(first.Login): first.ID, uint32(second.Login): second.ID}
 	var mu sync.Mutex
 	active := map[uint32]int{}
 	historyActive, historyMaximum, accountMaximum := 0, 0, 0
@@ -70,7 +70,7 @@ func TestTradeClockSharesHistoryPoolAndYieldsToSnapshot(t *testing.T) {
 			snapshotCalls.Add(1)
 			return result, nil
 		}
-		if config.Login != dailyAccount.Login {
+		if config.Login != uint32(dailyAccount.Login) {
 			clockCalls.Add(1)
 			entered <- config.Login
 		}

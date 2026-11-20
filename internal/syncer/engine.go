@@ -10,6 +10,7 @@ import (
 	"portexa/internal/accounts"
 	"portexa/internal/storage"
 	"portexa/mt4"
+	"portexa/mt5"
 )
 
 type Fetcher func(context.Context, mt4.Config, mt4.Options) (mt4.Result, error)
@@ -20,11 +21,15 @@ type Options struct {
 	Workers         int
 	Logger          *slog.Logger
 	HistoryInterval time.Duration
+	FetchMT5        func(context.Context, mt5.Config) (mt5.Result, error)
+	FetchMT5History func(context.Context, mt5.Config, mt5.HistoryRange) (mt5.HistoryResult, error)
 }
 
 type Engine struct {
 	accounts           *accounts.Service
 	fetch              Fetcher
+	fetchMT5           func(context.Context, mt5.Config) (mt5.Result, error)
+	fetchMT5History    func(context.Context, mt5.Config, mt5.HistoryRange) (mt5.HistoryResult, error)
 	interval, timeout  time.Duration
 	sem                chan struct{}
 	wake               chan struct{}
@@ -46,6 +51,12 @@ func New(service *accounts.Service, fetch Fetcher, options Options) *Engine {
 	if fetch == nil {
 		fetch = mt4.Fetch
 	}
+	if options.FetchMT5 == nil {
+		options.FetchMT5 = mt5.Fetch
+	}
+	if options.FetchMT5History == nil {
+		options.FetchMT5History = mt5.FetchHistory
+	}
 	if options.Timeout <= 0 {
 		options.Timeout = 20 * time.Second
 	}
@@ -58,7 +69,7 @@ func New(service *accounts.Service, fetch Fetcher, options Options) *Engine {
 	if options.HistoryInterval <= 0 {
 		options.HistoryInterval = 5 * time.Minute
 	}
-	return &Engine{accounts: service, fetch: fetch, interval: options.Interval, timeout: options.Timeout,
+	return &Engine{accounts: service, fetch: fetch, fetchMT5: options.FetchMT5, fetchMT5History: options.FetchMT5History, interval: options.Interval, timeout: options.Timeout,
 		sem: make(chan struct{}, options.Workers), wake: make(chan struct{}, 1), active: map[string]context.CancelFunc{}, fatal: make(chan error, 1),
 		logger: options.Logger.With("component", "syncer"), historySem: make(chan struct{}, 2), historyInterval: options.HistoryInterval,
 		historyActive: map[string]bool{}, historyYielded: map[string]bool{}}
@@ -182,26 +193,23 @@ func (e *Engine) runOne(ctx context.Context, id string) {
 	logger := e.logger.With("account_id", id, "run_id", job.Run.ID)
 	logger.Info("sync_started", "attempt", job.Run.Attempt, "due_at_ms", job.Run.DueAtMS,
 		"schedule_delay_ms", max(int64(0), *job.Run.StartedAtMS-job.Run.DueAtMS))
-	result, err := e.fetch(ctx, job.Config, mt4.Options{})
-	job.Config.Password = ""
+	snapshot, positions, err := e.readSnapshot(ctx, &job, from)
 	finished := time.Now()
-	if err == nil {
-		err = ctx.Err()
+	failure := classify(err)
+	if job.MT5Config != nil && err != nil {
+		failure = classifyMT5(err)
 	}
 	if err == nil {
-		var snapshot storage.Snapshot
-		var positions []storage.Position
-		snapshot, positions, err = Convert(job, result, from.UnixMilli(), finished.UnixMilli())
-		if err == nil {
-			if e.interval > 0 {
-				err = e.accounts.Publish(ctx, job, snapshot, positions, accounts.NextSnapshotAt(id, finished, e.interval).UnixMilli())
-			} else {
-				err = e.accounts.PublishScheduled(ctx, job, snapshot, positions)
-			}
+		if e.interval > 0 {
+			err = e.accounts.Publish(ctx, job, snapshot, positions, accounts.NextSnapshotAt(id, finished, e.interval).UnixMilli())
+		} else {
+			err = e.accounts.PublishScheduled(ctx, job, snapshot, positions)
+		}
+		if err != nil {
+			failure = classify(err)
 		}
 	}
 	if err != nil {
-		failure := classify(err)
 		level := slog.LevelWarn
 		if failure.Canceled {
 			level = slog.LevelInfo
@@ -223,6 +231,29 @@ func (e *Engine) runOne(ctx context.Context, id string) {
 		logger.Info("sync_completed", "duration_ms", time.Since(from).Milliseconds(),
 			"recovered", job.Account.FailureCount > 0, "previous_failure_count", job.Account.FailureCount)
 	}
+}
+
+func (e *Engine) readSnapshot(ctx context.Context, job *accounts.Job, from time.Time) (storage.Snapshot, []storage.Position, error) {
+	if job.MT5Config != nil {
+		result, err := e.fetchMT5(ctx, *job.MT5Config)
+		job.MT5Config.Password = ""
+		if err == nil {
+			err = ctx.Err()
+		}
+		if err != nil {
+			return storage.Snapshot{}, nil, err
+		}
+		return convertMT5(*job, result, from.UnixMilli(), time.Now().UnixMilli())
+	}
+	result, err := e.fetch(ctx, job.Config, mt4.Options{})
+	job.Config.Password = ""
+	if err == nil {
+		err = ctx.Err()
+	}
+	if err != nil {
+		return storage.Snapshot{}, nil, err
+	}
+	return Convert(*job, result, from.UnixMilli(), time.Now().UnixMilli())
 }
 
 func (e *Engine) stopForStorageFailure() {

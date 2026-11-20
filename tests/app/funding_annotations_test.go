@@ -51,12 +51,12 @@ func TestDINAndDOUTProtocolCommentsIdentifyCashFlows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	entries := map[int32]accounts.FundEntry{}
+	entries := map[int64]accounts.FundEntry{}
 	for _, entry := range page.Items {
 		entries[entry.Ticket] = entry
 	}
 	for i, test := range cases {
-		entry := entries[int32(100+i)]
+		entry := entries[int64(100+i)]
 		if test.category == "" {
 			if entry.Classification != nil {
 				t.Fatal("ambiguous or credit record classified", i)

@@ -22,6 +22,7 @@ import (
 	"portexa/internal/syncer"
 	"portexa/internal/vault"
 	"portexa/mt4"
+	"portexa/mt5"
 	"portexa/tests/testutil"
 )
 
@@ -98,7 +99,7 @@ func run() error {
 	}
 	for i, label := range []string{"稳健策略 · 美元", "美分账户 · 多策略", "欧元观察账户", "备用账户 · 已暂停", "新接入 · 等待采集"} {
 		currency := []string{"USD", "USC", "EUR", "USD", "USD"}[i]
-		account, err := service.CreateAccount(ctx, accounts.AccountInput{ServerID: server.ID, EndpointID: endpoint.ID, Login: uint32(100101 + i), Label: label, Password: testutil.InvestorPassword, ConfirmedCurrency: currency, ConfirmUnit: true, SyncEnabled: true})
+		account, err := service.CreateAccount(ctx, accounts.AccountInput{ServerID: server.ID, EndpointID: endpoint.ID, Login: uint64(100101 + i), Label: label, Password: testutil.InvestorPassword, ConfirmedCurrency: currency, ConfirmUnit: true, SyncEnabled: true})
 		if err != nil {
 			return err
 		}
@@ -152,13 +153,27 @@ func run() error {
 			return err
 		}
 	}
-	engine := syncer.New(service, fetch, syncer.Options{Interval: time.Hour})
+	mt5Deals := testutil.MT5Deals(time.Now().UTC().Truncate(24 * time.Hour))
+	engine := syncer.New(service, fetch, syncer.Options{
+		Interval: time.Hour,
+		FetchMT5: func(context.Context, mt5.Config) (mt5.Result, error) {
+			return testutil.MT5Snapshot(), nil
+		},
+		FetchMT5History: func(_ context.Context, _ mt5.Config, window mt5.HistoryRange) (mt5.HistoryResult, error) {
+			return testutil.MT5History(window, mt5Deals), nil
+		},
+	})
 	directory := discovery.New(discovery.Options{AllowTarget: service.AllowTarget, Fetch: func(ctx context.Context, query string) ([]byte, error) {
 		result := []map[string]any{}
 		if strings.Contains(strings.ToLower(query), "directory") {
 			result = append(result, map[string]any{"company": "Synthetic Directory Broker", "results": []map[string]any{{"name": "Synthetic-DirectoryLive", "access": []string{"203.0.113.9:443", "203.0.113.10:443"}, "is_demo": false}}})
 		}
 		return json.Marshal(map[string]any{"result": result})
+	}, FetchMT5: func(_ context.Context, query string) ([]byte, error) {
+		if strings.Contains(strings.ToLower(query), "directory") {
+			return []byte(`[{"companyName":"Synthetic MT5 Directory","results":[{"name":"Synthetic-MT5DirectoryLive","access":["203.0.113.9:2085"]}]}]`), nil
+		}
+		return []byte(`[]`), nil
 	}})
 	handler, err := httpapi.New(authService, service, engine, httpapi.Config{Origin: "http://" + *listen, DevelopmentHTTP: true, Static: os.DirFS(*webDir), Directory: directory})
 	if err != nil {

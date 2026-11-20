@@ -10,14 +10,16 @@ import (
 	"portexa/internal/storage"
 	"portexa/internal/vault"
 	"portexa/mt4"
+	"portexa/mt5"
 )
 
 // Job is an internal capability for one immutable account configuration.
 // It must never be serialized or logged: Config contains the investor password.
 type Job struct {
-	Account storage.Account
-	Run     storage.SyncRun
-	Config  mt4.Config
+	Account   storage.Account
+	Run       storage.SyncRun
+	Config    mt4.Config
+	MT5Config *mt5.Config
 }
 
 func (s *Service) Due(ctx context.Context, now int64, limit int) ([]string, error) {
@@ -94,10 +96,11 @@ func (s *Service) Claim(ctx context.Context, id string) (Job, error) {
 		if busy {
 			return ErrPaused
 		}
-		job.Config, err = s.fetchConfig(tx, account)
+		cfg, err := s.collectionConfig(tx, account)
 		if err != nil {
 			return err
 		}
+		job.Config, job.MT5Config = cfg.mt4, cfg.mt5
 		now := s.Now().UnixMilli()
 		job.Run = storage.SyncRun{ID: storage.NewID(), AccountID: account.ID, ServerID: account.ServerID,
 			EndpointID: account.PinnedEndpointID, CredentialVersion: account.CredentialVersion, ConfigVersion: account.ConfigVersion,
@@ -166,9 +169,13 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 		if err != nil {
 			return err
 		}
-		interval, blockedUntil, err := restSchedule(tx, current, &snapshot, positions, settings)
-		if err != nil {
-			return err
+		interval := time.Duration(settings.SnapshotIntervalSeconds) * time.Second
+		var blockedUntil int64
+		if job.MT5Config == nil {
+			interval, blockedUntil, err = restSchedule(tx, current, &snapshot, positions, settings)
+			if err != nil {
+				return err
+			}
 		}
 		interval = dailyBoundaryInterval(time.UnixMilli(snapshot.ObservedToMS), interval)
 		seconds := int(interval / time.Second)
@@ -176,8 +183,10 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 		if err := tx.Create(&snapshot).Error; err != nil {
 			return err
 		}
-		if err := captureRestActivity(tx, current, snapshot, positions, settings); err != nil {
-			return err
+		if job.MT5Config == nil {
+			if err := captureRestActivity(tx, current, snapshot, positions, settings); err != nil {
+				return err
+			}
 		}
 		if len(observations) > 0 && current.CurrentSnapshotID != nil && job.Account.CurrentSnapshotID != nil && *current.CurrentSnapshotID == *job.Account.CurrentSnapshotID {
 			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(&observations, 100).Error; err != nil {

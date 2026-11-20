@@ -1,8 +1,8 @@
 # Portexa
 
-**Your MT4 accounts, in one private workspace.**
+**Your MT4 and MT5 accounts, in one private workspace.**
 
-Portexa is a self-hosted, read-only dashboard for multiple MetaTrader 4 accounts. Track funds, positions, daily results, and cash flows through a native Go protocol client, without an MT4 terminal, Wine, an Expert Advisor, or a third-party account aggregation service.
+Portexa is a self-hosted, read-only dashboard for MetaTrader accounts. Track funds and positions through Go clients for the MT4 native protocol and MT5 Web Terminal protocol. Both platforms support pending orders, history, daily statistics, cash flows, and performance analysis.
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
@@ -72,6 +72,12 @@ The build produces `.local/bin/portexa`, `.local/bin/mt4probe`, `.local/bin/mt4v
 3. Choose **Connect account**, provide the MT4 login and **investor password**, confirm the currency unit, and enable collection. The investor password must be **1–16 UTF-8 bytes**; it is separate from the system password.
 
 The native protocol sends password-derived material over TCP before cryptographic server identity can be established. A matching server name or directory entry does not provide that authentication. Review endpoints before sending credentials and follow the [connection and deployment guide](docs/product-start.md).
+
+### Connect an MT5 account
+
+Open **Connections & Settings → Register server**, select **MT5**, and search by broker or server name. Select a result to fill in both names, then enter the broker-provided Web Terminal hostname and an independently verified fixed IP and port. You can also enter the details under **Manual entry (advanced)**. After verifying the endpoint, connect the account using its read-only investor password.
+
+Open **Server time** on the server card and confirm the broker’s time zone to enable deal history, daily statistics, cash flows, and performance analysis. The first confirmation can include a verified historical effective date. Account details display pending orders and individual deals. MT5 equity is estimated from balance, credit, and net floating profit or loss. [Protocol module](packages/mt5/README.md)
 
 ### Deploy behind HTTPS
 

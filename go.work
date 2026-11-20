@@ -3,5 +3,6 @@ go 1.26.0
 use (
 	.
 	./packages/mt4
+	./packages/mt5
 	./research/mt4-wire
 )

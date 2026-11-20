@@ -90,7 +90,8 @@ const columns: ColumnDef<Account>[] = [
     header: () => t('account.accountEquity'),
     meta: { numeric: true },
     cell: ({ row: { original: a } }) =>
-      h("strong", {}, money(a.snapshot?.equity)),
+      h("strong", { title: a.protocol === "mt5" ? t('mt5.estimatedEquityBasis') : undefined },
+        a.protocol === "mt5" && a.snapshot ? `≈ ${money(a.snapshot.equity)}` : money(a.snapshot?.equity)),
   },
   {
     id: "profit",

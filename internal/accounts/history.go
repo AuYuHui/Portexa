@@ -8,17 +8,19 @@ import (
 	"gorm.io/gorm/clause"
 	"portexa/internal/storage"
 	"portexa/mt4"
+	"portexa/mt5"
 )
 
 const HistoryPublishLimit = 5000
 
 // HistoryJob contains a credential capability and must not be logged/serialized.
 type HistoryJob struct {
-	Account  storage.Account
-	Coverage storage.HistoryCoverage
-	Run      storage.HistoryRun
-	Config   mt4.Config
-	Day      ServerDay
+	Account   storage.Account
+	Coverage  storage.HistoryCoverage
+	Run       storage.HistoryRun
+	Config    mt4.Config
+	MT5Config *mt5.Config
+	Day       ServerDay
 }
 
 func (s *Service) HistoryDue(ctx context.Context, now int64, limit int) ([]string, error) {
@@ -124,10 +126,11 @@ func (s *Service) ClaimHistory(ctx context.Context, id string) (HistoryJob, erro
 		if err != nil {
 			return err
 		}
-		job.Config, err = s.fetchConfig(tx, a)
+		cfg, err := s.collectionConfig(tx, a)
 		if err != nil {
 			return err
 		}
+		job.Config, job.MT5Config = cfg.mt4, cfg.mt5
 		var snapshot storage.Snapshot
 		if err = tx.First(&snapshot, "id=? AND account_id=?", *a.CurrentSnapshotID, id).Error; err != nil {
 			return err

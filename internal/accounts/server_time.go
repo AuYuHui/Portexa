@@ -43,6 +43,7 @@ type ServerTimeInput struct {
 	EvidenceRef       string `json:"evidence_ref"`
 	Confirm           bool   `json:"confirm"`
 	Mode              string `json:"mode"`
+	EffectiveDate     string `json:"effective_date"`
 }
 
 // ConfirmServerTime appends a version. Prior reports keep their interpretation;
@@ -82,6 +83,14 @@ func (s *Service) ConfirmServerTime(ctx context.Context, id string, input Server
 			evidence = "用户手动校正服务器时区"
 		}
 		entry := timeRuleEntry{FromUTCMS: now.UnixMilli(), Kind: "iana", Zone: zone, SourceRef: evidence}
+		if input.EffectiveDate != "" {
+			date, err := time.Parse(time.DateOnly, input.EffectiveDate)
+			if err != nil || server.Protocol != "mt5" || input.Mode != "manual" || previous != "" ||
+				date.UnixMilli() < 0 || date.After(now) {
+				return &InputError{"MT5 历史时区生效日期无效"}
+			}
+			entry.FromUTCMS = date.UnixMilli()
+		}
 		if input.Mode == "automatic" {
 			if err := tx.Model(&storage.Account{}).Where("server_id = ? AND removed_at_ms IS NULL", server.ID).Updates(map[string]any{
 				"next_clock_sync_at_ms": 0, "clock_failure_count": 0, "clock_sync_paused": false,
@@ -138,7 +147,7 @@ type ServerDay struct {
 	Date          string
 	TimeZone      string
 	TimeRulesetID string
-	Start, End    uint32 // Raw MT4 wall-clock seconds, not UTC instants.
+	Start, End    uint32 // Raw trade server wall-clock seconds, not UTC instants.
 	NextDayUTC    time.Time
 }
 

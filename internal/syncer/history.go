@@ -70,30 +70,41 @@ func (e *Engine) runHistory(ctx context.Context, id string) {
 	defer cancel()
 	logger := e.logger.With("account_id", id, "run_id", job.Run.ID, "kind", "history")
 	logger.Info("history_sync_started")
-	result, err := e.fetch(fetchCtx, job.Config, mt4.Options{History: &mt4.HistoryRange{Start: job.Coverage.StartWall, End: job.Coverage.EndWall}})
-	job.Config.Password = ""
+	var orders []storage.HistoryOrder
+	var result mt4.Result
+	if job.MT5Config != nil {
+		orders, err = e.convertMT5History(fetchCtx, job)
+	} else {
+		result, err = e.fetch(fetchCtx, job.Config, mt4.Options{History: &mt4.HistoryRange{Start: job.Coverage.StartWall, End: job.Coverage.EndWall}})
+		job.Config.Password = ""
+	}
 	finished := time.Now()
 	if err == nil {
 		err = fetchCtx.Err()
 	}
+	failure := classify(err)
+	if err != nil && job.MT5Config != nil {
+		failure = classifyMT5(err)
+	}
 	if err == nil {
-		var orders []storage.HistoryOrder
-		orders, err = ConvertHistory(job, result)
+		if job.MT5Config == nil {
+			orders, err = ConvertHistory(job, result)
+		}
 		if err == nil {
 			err = e.accounts.PublishHistory(fetchCtx, job, orders, finished.UnixMilli())
 		}
+		failure = classify(err)
 	}
 	if err == nil {
 		logger.Info("history_sync_completed", "duration_ms", finished.UnixMilli()-job.Run.StartedAtMS)
 		return
 	}
-	failure := classify(err)
 	originalOperation := failure.Operation
 	failure.Operation = "history"
 	if errors.Is(err, ErrHistoryTooLarge) {
 		failure.Code = "history_window_too_large"
 	}
-	if errors.Is(err, ErrIncomplete) {
+	if errors.Is(err, ErrIncomplete) || job.MT5Config != nil && failure.Code == "invalid_response" {
 		failure.Code = "history_invalid"
 	}
 	e.mu.Lock()
@@ -103,7 +114,7 @@ func (e *Engine) runHistory(ctx context.Context, id string) {
 		failure = accounts.Failure{Code: "snapshot_deadline", Operation: "history", Canceled: true}
 	}
 	var protocolFailure *mt4.Error
-	historyPhase := originalOperation == "history" || !errors.As(err, &protocolFailure) && result.HistoryComplete
+	historyPhase := job.MT5Config != nil || originalOperation == "history" || !errors.As(err, &protocolFailure) && result.HistoryComplete
 	split := !failure.Canceled && (errors.Is(err, ErrHistoryTooLarge) || historyPhase && (failure.Code == "resource_limit" || failure.Code == "timeout"))
 	if split {
 		failure.Permanent = false

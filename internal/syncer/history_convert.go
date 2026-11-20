@@ -49,7 +49,7 @@ func ConvertHistory(job accounts.HistoryJob, result mt4.Result) ([]storage.Histo
 		if stamp < job.Coverage.StartWall || stamp >= job.Coverage.EndWall {
 			continue
 		}
-		order := storage.HistoryOrder{AccountID: job.Account.ID, Ticket: trade.Ticket, SourceRunID: job.Run.ID,
+		order := storage.HistoryOrder{AccountID: job.Account.ID, Ticket: int64(trade.Ticket), SourceRunID: job.Run.ID,
 			UnitRevision: job.Account.UnitRevision, NativeCurrency: job.Run.NativeCurrency,
 			Command: trade.Command, Symbol: trade.Symbol, Digits: trade.Digits, VolumeHundredths: trade.VolumeHundredths,
 			Comment:      strings.ToValidUTF8(trade.Comment, "\uFFFD"),
@@ -58,17 +58,24 @@ func ConvertHistory(job accounts.HistoryJob, result mt4.Result) ([]storage.Histo
 			SL: decimal.NewFromFloat(trade.SL), TP: decimal.NewFromFloat(trade.TP), Profit: decimal.NewFromFloat(trade.Profit),
 			Commission: decimal.NewFromFloat(trade.Commission), Swap: decimal.NewFromFloat(trade.Swap), Taxes: decimal.NewFromFloat(trade.Taxes)}
 		order.NetProfit = order.Profit.Add(order.Commission).Add(order.Swap).Add(order.Taxes)
-		body, err := json.Marshal(struct {
-			UnitRevision int64
-			Order        storage.HistoryOrder
-			CommentBytes []byte
-		}{order.UnitRevision, order, []byte(trade.Comment)})
-		if err != nil {
+		if err := hashHistoryOrder(&order, trade.Comment); err != nil {
 			return nil, err
 		}
-		digest := sha256.Sum256(body)
-		order.SourceHash = append([]byte(nil), digest[:]...)
 		orders = append(orders, order)
 	}
 	return orders, nil
+}
+
+func hashHistoryOrder(order *storage.HistoryOrder, rawComment string) error {
+	body, err := json.Marshal(struct {
+		UnitRevision int64
+		Order        storage.HistoryOrder
+		CommentBytes []byte
+	}{order.UnitRevision, *order, []byte(rawComment)})
+	if err != nil {
+		return err
+	}
+	digest := sha256.Sum256(body)
+	order.SourceHash = digest[:]
+	return nil
 }

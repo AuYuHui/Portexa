@@ -40,7 +40,7 @@ type ValuationWindow struct {
 type Event struct {
 	TimeMS          int64            `json:"time_ms"`
 	AccountID       string           `json:"account_id"`
-	Ticket          int32            `json:"ticket"`
+	Ticket          int64            `json:"ticket"`
 	Revision        int64            `json:"revision"`
 	Kind            string           `json:"kind"`
 	Amount          decimal.Decimal  `json:"amount"`
@@ -51,6 +51,8 @@ type Event struct {
 	CreditAmount    *decimal.Decimal `json:"-"`
 	FloatingCapital decimal.Decimal  `json:"-"`
 }
+
+func (e Event) Trading() bool { return e.Kind == "trade" || e.Kind == "trade_booking" }
 
 func (e Event) Capital() bool {
 	return e.Kind == "deposit" || e.Kind == "withdrawal" || e.Kind == "capital_adjustment" || e.Kind == "transfer_in" ||

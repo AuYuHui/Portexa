@@ -154,14 +154,14 @@ func (s *Service) finishAnalyticsPortfolio(ctx context.Context, p *analyticsPort
 			if kind != "transfer_out" {
 				continue
 			}
-			stamp, ok := trendEventUTC(order.EventTimeWall, source.entries)
+			stamp, ok := historyOrderUTC(order.HistoryOrder, source.entries)
 			if !ok {
 				wall, margin := int64(order.EventTimeWall)*1000, int64(14*time.Hour/time.Millisecond)
 				entries, _, err := historicalTimeEntries(ctx, s.Store.Read, source.server, max(0, wall-margin), wall+margin)
 				if err != nil {
 					return err
 				}
-				stamp, ok = trendEventUTC(order.EventTimeWall, entries)
+				stamp, ok = historyOrderUTC(order.HistoryOrder, entries)
 			}
 			if !ok {
 				input.CapitalReasons = append(input.CapitalReasons, "transfer_unresolved")

@@ -140,6 +140,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/accounts/{id}/daily/sync", s.protected(s.syncDaily))
 	s.mux.HandleFunc("POST /api/accounts/{id}/history/sync", s.protected(s.syncHistory))
 	s.mux.HandleFunc("GET /api/accounts/{id}/funds", s.protected(s.funds))
+	s.mux.HandleFunc("GET /api/accounts/{id}/deals", s.protected(s.deals))
 	s.mux.HandleFunc("PUT /api/accounts/{id}/funds/{ticket}/classification", s.protected(s.classifyFund))
 	s.mux.HandleFunc("GET /api/accounts/{id}/snapshots", s.protected(s.snapshots))
 	s.mux.HandleFunc("GET /api/accounts/{id}/equity-history", s.protected(s.assetTrend))

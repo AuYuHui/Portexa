@@ -71,7 +71,7 @@ func fundingView(t *testing.T, f testutil.Fixture, id string) accounts.FundingVi
 
 func classify(t *testing.T, f testutil.Fixture, id string, ticket int32, trade, classification int64, category string) {
 	t.Helper()
-	if _, err := f.Accounts.ClassifyFund(t.Context(), id, ticket, accounts.ClassificationInput{
+	if _, err := f.Accounts.ClassifyFund(t.Context(), id, int64(ticket), accounts.ClassificationInput{
 		TradeRevision: trade, ClassificationRevision: classification, Category: category, Reason: "合成账单核对依据",
 	}); err != nil {
 		t.Fatal(err)
@@ -146,7 +146,7 @@ func TestFundingClassificationRejectsStaleForeignCreditAndWrongDirection(t *test
 		{6, 1, 0, "withdrawal", false}, {7, 1, 0, "deposit", false}, {8, 1, 0, "deposit", false},
 		{1, 1, 0, "deposit", false}, {6, 2, 0, "deposit", true}, {6, 1, 1, "deposit", true}, {6, 1, 0, "unknown", false},
 	} {
-		_, err := f.Accounts.ClassifyFund(t.Context(), a.ID, test.ticket, accounts.ClassificationInput{TradeRevision: test.trade, ClassificationRevision: test.classification, Category: test.category, Reason: "合成核对"})
+		_, err := f.Accounts.ClassifyFund(t.Context(), a.ID, int64(test.ticket), accounts.ClassificationInput{TradeRevision: test.trade, ClassificationRevision: test.classification, Category: test.category, Reason: "合成核对"})
 		if err == nil || test.conflict && !errors.Is(err, storage.ErrConflict) {
 			t.Fatal("invalid classification accepted", test, err)
 		}
@@ -175,7 +175,7 @@ func TestFundingClassificationRejectsStaleForeignCreditAndWrongDirection(t *test
 
 func TestFundingPagingEmptyAndFailurePreserveKnownFacts(t *testing.T) {
 	f, a, now, _ := fundingFixture(t)
-	seen := map[int32]bool{}
+	seen := map[int64]bool{}
 	cursor := ""
 	for {
 		page, err := f.Accounts.Funds(t.Context(), a.ID, cursor, 2, false)

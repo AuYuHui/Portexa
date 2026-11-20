@@ -16,6 +16,7 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(viewport={"width": 1440, "height": 1000}, locale="zh-CN")
+        context.set_default_timeout(10000)
         page = context.new_page()
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
@@ -74,10 +75,25 @@ def main():
         expect(dialog.get_by_label("固定 IP 地址")).to_be_visible()
         dialog.get_by_role("button", name="搜索服务器", exact=True).click()
         expect(dialog.get_by_label("固定 IP 地址")).to_have_count(0)
-        dialog.get_by_role("button", name="关闭", exact=True).click()
+
+        dialog.get_by_label("交易平台", exact=True).select_option("mt5")
+        dialog.get_by_label("搜索经纪商或服务器", exact=True).fill("Unknown company")
+        expect(dialog.get_by_text("没有找到匹配的 MT5 服务器")).to_be_visible()
+        dialog.get_by_label("搜索经纪商或服务器", exact=True).fill("Synthetic Directory")
+        dialog.get_by_role("button", name="选择服务器 Synthetic-MT5DirectoryLive", exact=True).click()
+        expect(dialog.get_by_label("交易平台", exact=True)).to_have_value("mt5")
+        expect(dialog.get_by_placeholder("例如：Synthetic-Live01")).to_have_value("Synthetic-MT5DirectoryLive")
+        expect(dialog.get_by_label("固定 IP 地址")).to_have_value("")
+        dialog.get_by_label("MT5 Web 终端域名").fill("mt5.broker.example")
+        dialog.get_by_label("固定 IP 地址").fill("203.0.113.10")
+        dialog.get_by_role("button", name="登记服务器，继续核验").click()
+        expect(dialog).not_to_be_visible()
+        mt5_server = page.locator(".server-card").filter(has=page.get_by_role("heading", name="Synthetic-MT5DirectoryLive", exact=True))
+        expect(mt5_server.get_by_text("Synthetic MT5 Directory", exact=False)).to_be_visible()
+        expect(mt5_server.get_by_role("button", name="核验接入点")).to_be_visible()
         assert not errors, errors
         browser.close()
-        print("PASS: authenticated directory search, no-result state, automatic addresses/provenance, explicit confirmation, revision discovery, mobile layout and advanced manual fallback; no browser errors")
+        print("PASS: MT4 candidate confirmation and revision, MT5 name search and prefilled registration, mobile layout and manual entry; no browser errors")
 
 
 if __name__ == "__main__":

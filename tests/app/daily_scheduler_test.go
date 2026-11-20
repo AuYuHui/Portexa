@@ -19,7 +19,7 @@ func TestDailyHistoryPoolIsSeparateAndYieldsToSnapshot(t *testing.T) {
 	now := time.Now()
 	f, first := dailyFixture(t, &now, "UTC")
 	ctx := context.Background()
-	ids := map[uint32]string{first.Login: first.ID}
+	ids := map[uint32]string{uint32(first.Login): first.ID}
 	var server storage.Server
 	var endpoint storage.Endpoint
 	if err := f.Store.Read.First(&server, "id = ?", first.ServerID).Error; err != nil {

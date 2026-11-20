@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -46,12 +44,12 @@ func readFundingView(tx *gorm.DB, account storage.Account, server storage.Server
 		return view, nil
 	}
 	view.NativeCurrency = snapshot.NativeCurrency
-	day, err := serverDay(tx, server, now)
-	if err != nil && !errors.Is(err, ErrServerTime) {
-		return view, err
+	day, dayErr := serverDay(tx, server, now)
+	if dayErr != nil && !errors.Is(dayErr, ErrServerTime) {
+		return view, dayErr
 	}
 	var coverage []storage.HistoryCoverage
-	if err == nil {
+	if dayErr == nil {
 		if err := historyScope(tx, account, day).Order("start_wall,end_wall").Find(&coverage).Error; err != nil {
 			return view, err
 		}
@@ -87,7 +85,7 @@ func readFundingView(tx *gorm.DB, account storage.Account, server storage.Server
 	view.Stale = known && recentThrough < day.End
 	query := withClassification(fundingHistory(tx, account, *snapshot)).Where("o.command=6").
 		Select(`o.net_profit,o.revision,o.comment,o.commission,o.swap,o.taxes,
-			o.automatic_category,o.automatic_reason,o.automatic_rule_version,c.category,c.based_trade_revision`)
+			o.automatic_category,o.automatic_reason,o.automatic_rule_version,o.mt5_deal_type,o.fee,c.category,c.based_trade_revision`)
 	rows, readErr := query.Rows()
 	if readErr != nil {
 		return view, readErr
@@ -156,7 +154,7 @@ func readFundingView(tx *gorm.DB, account storage.Account, server storage.Server
 	if view.BlockedWindows > 0 {
 		view.State = "blocked"
 	}
-	if err != nil {
+	if dayErr != nil {
 		view.State = "time_zone_unconfirmed"
 	}
 	if !account.SyncEnabled || account.HistorySyncPaused {
@@ -181,27 +179,21 @@ func (s *Service) Funds(ctx context.Context, id, cursor string, limit int, uncla
 	if limit < 1 || limit > 100 {
 		return page, &InputError{"查询条数需要在1至100之间"}
 	}
-	var wall uint64
-	var ticket int64
-	if cursor != "" {
-		parts := strings.Split(cursor, ":")
-		if len(parts) != 2 {
-			return page, &InputError{"分页游标无效"}
-		}
-		var err error
-		wall, err = strconv.ParseUint(parts[0], 10, 32)
-		if err != nil {
-			return page, &InputError{"分页游标无效"}
-		}
-		ticket, err = strconv.ParseInt(parts[1], 10, 32)
-		if err != nil || ticket <= 0 {
-			return page, &InputError{"分页游标无效"}
-		}
+	wall, ticket, err := parseHistoryCursor(cursor, 1<<32-1)
+	if err != nil {
+		return page, err
 	}
-	err := s.Store.Read.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.Store.Read.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var account storage.Account
 		if err := tx.First(&account, "id=? AND removed_at_ms IS NULL", id).Error; err != nil {
 			return err
+		}
+		supported, err := historyTicketSupported(tx, account.ServerID, ticket)
+		if err != nil {
+			return err
+		}
+		if !supported {
+			return &InputError{"分页游标无效"}
 		}
 		if account.CurrentSnapshotID == nil {
 			return nil
@@ -253,7 +245,7 @@ func (s *Service) Funds(ctx context.Context, id, cursor string, limit int, uncla
 				return nil
 			}
 			last := orders[len(orders)-1]
-			wall, ticket, hasCursor = uint64(last.EventTimeWall), int64(last.Ticket), true
+			wall, ticket, hasCursor = int64(last.EventTimeWall), last.Ticket, true
 		}
 	})
 	return page, err

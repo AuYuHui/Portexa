@@ -13,14 +13,15 @@ import {
 import { api } from "../api";
 import { refreshAccounts } from "../state";
 import { date } from "../format";
-import type { DirectoryCandidate, Server } from "../types";
+import type { DirectoryCandidate, DirectoryServerName, Server } from "../types";
 
 const { t } = useI18n();
 
-const props = defineProps<{ server?: Server }>();
-const emit = defineEmits<{ cancel: []; saved: [] }>();
+const props = defineProps<{ server?: Server; initialPlatform?: Server["protocol"] }>();
+const emit = defineEmits<{ cancel: []; saved: []; selectMt5: [server: DirectoryServerName] }>();
+const platform = ref<Server["protocol"]>(props.server?.protocol ?? props.initialPlatform ?? "mt4");
 const query = ref(props.server?.server_name || "");
-const results = shallowRef<DirectoryCandidate[]>([]);
+const results = shallowRef<(DirectoryCandidate | DirectoryServerName)[]>([]);
 const selected = shallowRef<DirectoryCandidate>();
 const endpoint = ref(0);
 const risk = ref(false);
@@ -39,8 +40,8 @@ const shown = computed(() =>
 );
 
 watch(
-  query,
-  (value, _old, cleanup) => {
+  [query, platform],
+  ([value, protocol], _old, cleanup) => {
     selected.value = undefined;
     results.value = [];
     searched.value = false;
@@ -52,8 +53,8 @@ watch(
     loading.value = true;
     const timer = window.setTimeout(async () => {
       try {
-        const list = await api<DirectoryCandidate[]>(
-          `/server-directory?q=${encodeURIComponent(value.trim())}`,
+        const list = await api<(DirectoryCandidate | DirectoryServerName)[]>(
+          `/server-directory?q=${encodeURIComponent(value.trim())}${protocol === "mt5" ? "&platform=mt5" : ""}`,
           "GET",
           undefined,
           controller.signal,
@@ -79,7 +80,11 @@ watch(
   { immediate: true },
 );
 
-function choose(candidate: DirectoryCandidate) {
+function choose(candidate: DirectoryCandidate | DirectoryServerName) {
+  if (!("endpoints" in candidate)) {
+    emit("selectMt5", candidate);
+    return;
+  }
   selected.value = candidate;
   endpoint.value = 0;
   risk.value = false;
@@ -114,6 +119,13 @@ async function submit() {
     <p v-if="server" class="notice notice-warning">
       {{ t('directoryPicker.revisionWarning', { server: server.server_name }) }}
     </p>
+    <div v-else class="field">
+      <label for="directory-platform">{{ t('mt5.platform') }}</label>
+      <select id="directory-platform" v-model="platform" :disabled="saving">
+        <option value="mt4">MT4</option>
+        <option value="mt5">MT5</option>
+      </select>
+    </div>
     <div class="field">
       <label for="server-directory-search-input">{{ t('directoryPicker.searchBrokerOrServer') }}</label>
       <div class="directory-search">
@@ -134,7 +146,7 @@ async function submit() {
           class="spin loading-icon"
         />
       </div>
-      <small>{{ t('directoryPicker.enterAtLeastCharactersToSearchMtServers') }}</small>
+      <small>{{ platform === 'mt5' ? t('directoryPicker.mt5SearchHelp') : t('directoryPicker.enterAtLeastCharactersToSearchMtServers') }}</small>
     </div>
 
     <template v-if="!selected">
@@ -148,10 +160,10 @@ async function submit() {
       >
         <button
           v-for="candidate in shown"
-          :key="candidate.id"
+          :key="'id' in candidate ? candidate.id : JSON.stringify([candidate.broker_name, candidate.server_name])"
           type="button"
           class="directory-result"
-          :disabled="!candidate.endpoints.length"
+          :disabled="'endpoints' in candidate && !candidate.endpoints.length"
           :aria-label="t('directoryPicker.selectServer', { value1: candidate.server_name })"
           @click="choose(candidate)"
         >
@@ -159,12 +171,12 @@ async function submit() {
           ><span class="directory-result-name"
             ><strong>{{ candidate.server_name }}</strong
             ><small>{{ candidate.broker_name }}</small
-            ><span class="directory-result-meta">{{
+            ><span v-if="'endpoints' in candidate" class="directory-result-meta">{{
               candidate.endpoints.length
                 ? t('directoryPicker.candidateEndpoints', { value1: candidate.endpoints.length })
                 : t('directoryPicker.noAvailableEndpointsReturnedByTheDirectory')
             }}</span></span
-          ><span
+          ><span v-if="'demo' in candidate"
             class="badge"
             :class="candidate.demo ? 'badge-info' : 'badge-neutral'"
             >{{ candidate.demo ? t('directoryPicker.demo') : t('directoryPicker.live') }}</span
@@ -172,12 +184,12 @@ async function submit() {
         </button>
       </div>
       <div v-else-if="searched && !error" class="directory-empty">
-        <Search :size="24" /><strong>{{ t('directoryPicker.noMatchingMtServers') }}</strong>
+        <Search :size="24" /><strong>{{ t('directoryPicker.noMatchingMtServers', { platform: platform.toUpperCase() }) }}</strong>
         <p>{{ t('directoryPicker.tryABrokerAbbreviationFormerNameOrFull') }}</p>
       </div>
       <div v-else-if="!error" class="directory-empty">
         <ServerIcon :size="26" /><strong>{{ t('directoryPicker.chooseABrokerAndServerToBegin') }}</strong>
-        <p>{{ t('directoryPicker.candidateEndpointsAreRetrievedAndTheirSourceRecorded') }}</p>
+        <p v-if="platform === 'mt4'">{{ t('directoryPicker.candidateEndpointsAreRetrievedAndTheirSourceRecorded') }}</p>
       </div>
     </template>
 

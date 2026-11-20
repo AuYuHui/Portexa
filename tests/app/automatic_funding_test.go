@@ -49,12 +49,12 @@ func TestFundingAutomaticallyClassifiesExplicitCommentsAndOnlyRequestsExceptions
 	if err != nil {
 		t.Fatal(err)
 	}
-	byTicket := map[int32]accounts.FundEntry{}
+	byTicket := map[int64]accounts.FundEntry{}
 	for _, entry := range page.Items {
 		byTicket[entry.Ticket] = entry
 	}
 	for i, test := range cases {
-		entry := byTicket[int32(200+i)]
+		entry := byTicket[int64(200+i)]
 		if test.category == "" {
 			if entry.Classification != nil {
 				t.Fatal("ambiguous comment guessed", test.comment)

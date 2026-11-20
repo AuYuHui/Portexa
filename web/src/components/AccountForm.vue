@@ -46,6 +46,7 @@ const error = ref<string | (() => string)>("");
 const server = computed(() =>
   servers.value?.find((s) => s.id === serverID.value),
 );
+const isMT5 = computed(() => (server.value?.protocol ?? props.account?.protocol) === "mt5");
 const endpoints = computed(
   () =>
     server.value?.endpoints.filter(
@@ -57,11 +58,14 @@ function selectServer() {
 }
 async function submit() {
   error.value = "";
-  if (
-    (!props.account || password.value) &&
-    (new TextEncoder().encode(password.value).length > 16 || !password.value)
-  ) {
-    error.value = () => t('accountForm.theInvestorPasswordMustContainToUtfBytes');
+  const passwordLength = isMT5.value ? password.value.length : new TextEncoder().encode(password.value).length;
+  if ((!props.account || password.value) && (passwordLength === 0 || passwordLength > (isMT5.value ? 32 : 16))) {
+    error.value = () => isMT5.value ? t('mt5.passwordLength') : t('accountForm.theInvestorPasswordMustContainToUtfBytes');
+    return;
+  }
+  const loginNumber = Number(login.value);
+  if (!props.account && (!Number.isSafeInteger(loginNumber) || loginNumber < 1 || (!isMT5.value && loginNumber > 4294967295))) {
+    error.value = () => t('mt5.invalidTradingLogin');
     return;
   }
   busy.value = true;
@@ -95,7 +99,7 @@ async function submit() {
       await api("/accounts", "POST", {
         ...values,
         server_id: serverID.value,
-        login: Number(login.value),
+        login: loginNumber,
         password: password.value,
       });
     }
@@ -135,11 +139,11 @@ async function submit() {
         >
           <option disabled value="">{{ t('accountForm.selectARegisteredServer') }}</option>
           <option v-for="s in servers" :key="s.id" :value="s.id">
-            {{ s.broker_name }} / {{ s.server_name }}
+            {{ s.broker_name }} / {{ s.server_name }}{{ s.protocol === "mt5" ? " · MT5" : "" }}
           </option>
         </select></label
       ><label class="field"
-        >{{ t('accountForm.mtLogin') }}<input
+        >{{ isMT5 ? t('mt5.login') : t('accountForm.mtLogin') }}<input
           v-model="login"
           inputmode="numeric"
           pattern="[0-9]+"
@@ -161,7 +165,7 @@ async function submit() {
           {{ t('accountForm.thePreviousEndpointIsRetiredRebindTheAccount') }}
         </option>
         <option v-for="e in endpoints" :key="e.id" :value="e.id">
-          {{ t('accountForm.revision') }} {{ e.revision }} · {{ e.ip_address }}:{{ e.port }}
+          {{ t('accountForm.revision') }} {{ e.revision }} · {{ e.ip_address }}:{{ e.port }}{{ e.web_hostname ? ` · ${e.web_hostname}` : "" }}
         </option></select
       ><small
         >{{ t('accountForm.onlyVerifiedRevisionsWithAcceptedRiskAreAllowed') }}</small
@@ -174,10 +178,10 @@ async function submit() {
         type="password"
         :required="!account"
         autocomplete="new-password"
-        maxlength="16"
+        :maxlength="isMT5 ? 32 : 16"
         :placeholder="t('accountForm.useOnlyAReadOnlyInvestorPassword')"
       /><small
-        >{{ t('accountForm.differentFromYourPortexaLoginPasswordLimitedTo') }}</small
+        >{{ isMT5 ? t('mt5.passwordLength') : t('accountForm.differentFromYourPortexaLoginPasswordLimitedTo') }}</small
       ></label
     >
     <div class="field">

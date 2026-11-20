@@ -14,7 +14,7 @@ import {
   wallTime,
   positive,
   fundingLabel,
-  fundCategories,
+  fundCategoryLabel,
   failureLabel,
 } from "../format";
 import Modal from "./Modal.vue";
@@ -210,9 +210,7 @@ async function sync() {
                     ? t('fundingSummary.creditSeparate')
                     : entry.needs_review
                       ? t('fundingSummary.needsReconfirmation')
-                      : fundCategories[
-                          entry.classification?.category || "unclassified"
-                        ]
+                      : fundCategoryLabel(entry.classification?.category || "unclassified")
                 }}</span
               >
               <small

@@ -13,10 +13,10 @@ import (
 
 type TransferInput struct {
 	OutAccountID string `json:"out_account_id"`
-	OutTicket    int32  `json:"out_ticket"`
+	OutTicket    int64  `json:"out_ticket"`
 	OutRevision  int64  `json:"out_revision"`
 	InAccountID  string `json:"in_account_id"`
-	InTicket     int32  `json:"in_ticket"`
+	InTicket     int64  `json:"in_ticket"`
 	InRevision   int64  `json:"in_revision"`
 	Reason       string `json:"reason"`
 }
@@ -26,7 +26,7 @@ type transferEvidence struct {
 	key, ruleset string
 }
 
-func (s *Service) transferEndpoint(ctx context.Context, tx *gorm.DB, id string, ticket int32, revision int64) (*transferEvidence, error) {
+func (s *Service) transferEndpoint(ctx context.Context, tx *gorm.DB, id string, ticket int64, revision int64) (*transferEvidence, error) {
 	tx = tx.WithContext(ctx)
 	var account storage.Account
 	if err := tx.First(&account, "id=?", id).Error; err != nil {
@@ -73,7 +73,7 @@ func (s *Service) transferEndpoint(ctx context.Context, tx *gorm.DB, id string, 
 	if err != nil {
 		return nil, err
 	}
-	stamp, ok := trendEventUTC(order.EventTimeWall, entries)
+	stamp, ok := historyOrderUTC(order, entries)
 	if !ok {
 		return nil, nil
 	}

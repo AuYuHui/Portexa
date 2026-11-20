@@ -86,7 +86,7 @@ func seedAnalytics(ctx context.Context, s *accounts.Service) error {
 			fee := decimal.RequireFromString("-0.50").Mul(scale)
 			profit := net.Sub(fee)
 			hash := sha256.Sum256([]byte(fmt.Sprintf("synthetic:%d:%d:%s", index, n, net)))
-			orders = append(orders, storage.HistoryOrder{AccountID: account.ID, Ticket: int32(700000 + index*10000 + n), Revision: 1, SourceRunID: run.ID, SourceHash: hash[:], UnitRevision: account.UnitRevision,
+			orders = append(orders, storage.HistoryOrder{AccountID: account.ID, Ticket: int64(700000 + index*10000 + n), Revision: 1, SourceRunID: run.ID, SourceHash: hash[:], UnitRevision: account.UnitRevision,
 				NativeCurrency: *account.Currency, Command: 0, Symbol: "EURUSD", OpenTimeWall: uint32(at.Add(-time.Hour).Unix()), CloseTimeWall: uint32(at.Unix()), EventTimeWall: uint32(at.Unix()),
 				Profit: profit, Commission: fee, NetProfit: net, VolumeHundredths: 10, Comment: "Synthetic closed trade"})
 		}
@@ -113,7 +113,7 @@ func seedAnalytics(ctx context.Context, s *accounts.Service) error {
 			}{{from.Add(8*24*time.Hour + 30*time.Second), 1000, "deposit", "Deposit"}, {from.Add(21*24*time.Hour + 30*time.Second), -500, "withdrawal", "Withdrawal"}} {
 				amount := decimal.NewFromInt(event.amount)
 				hash := sha256.Sum256([]byte(fmt.Sprintf("synthetic-cash:%d", j)))
-				orders = append(orders, storage.HistoryOrder{AccountID: account.ID, Ticket: int32(799000 + j), Revision: 1, SourceRunID: run.ID, SourceHash: hash[:], UnitRevision: account.UnitRevision,
+				orders = append(orders, storage.HistoryOrder{AccountID: account.ID, Ticket: int64(799000 + j), Revision: 1, SourceRunID: run.ID, SourceHash: hash[:], UnitRevision: account.UnitRevision,
 					NativeCurrency: *account.Currency, Command: 6, OpenTimeWall: uint32(event.at.Unix()), EventTimeWall: uint32(event.at.Unix()), Profit: amount, NetProfit: amount,
 					Comment: event.comment, AutomaticCategory: event.kind, AutomaticRuleVersion: accounts.FundingRuleVersion, AutomaticReason: "synthetic explicit cash flow"})
 			}

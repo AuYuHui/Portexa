@@ -68,12 +68,12 @@ func TestDPrimeFundingSeparatesExternalFlowsFromCopyTradingProfitShares(t *testi
 	if err != nil || len(page.Items) != len(trades) {
 		t.Fatal("missing DPrime funding records", err, len(page.Items))
 	}
-	entries := map[int32]accounts.FundEntry{}
+	entries := map[int64]accounts.FundEntry{}
 	for _, entry := range page.Items {
 		entries[entry.Ticket] = entry
 	}
 	for i, test := range cases {
-		entry := entries[int32(100+i)]
+		entry := entries[int64(100+i)]
 		if test.category == "" {
 			if entry.Classification != nil {
 				t.Fatal("ambiguous DPrime annotation classified", test.comment)
@@ -86,7 +86,7 @@ func TestDPrimeFundingSeparatesExternalFlowsFromCopyTradingProfitShares(t *testi
 		}
 	}
 	for _, ticket := range []int32{201, 202, 203, 204} {
-		if entries[ticket].Classification != nil {
+		if entries[int64(ticket)].Classification != nil {
 			t.Fatal("credit or mixed DPrime flow was classified", ticket)
 		}
 	}
@@ -162,7 +162,7 @@ func TestDPrimeFundingReevaluatesV2CacheAndPreservesManualCorrections(t *testing
 	cursor := ""
 	for i, ticket := range []int32{106, 104} {
 		unknown, err := f.Accounts.Funds(t.Context(), account.ID, cursor, 1, true)
-		if err != nil || len(unknown.Items) != 1 || unknown.Items[0].Ticket != ticket {
+		if err != nil || len(unknown.Items) != 1 || unknown.Items[0].Ticket != int64(ticket) {
 			t.Fatal("DPrime pending page included automatically recognized records", unknown, err)
 		}
 		if (unknown.NextCursor == "") != (i == 1) {

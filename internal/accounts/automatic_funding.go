@@ -6,6 +6,7 @@ import (
 
 	"github.com/shopspring/decimal"
 	"portexa/internal/storage"
+	"portexa/mt5"
 )
 
 const FundingRuleVersion = "balance-comment-v3"
@@ -85,6 +86,25 @@ func automaticFundCategory(comment string, net, commission, swap, taxes decimal.
 func currentAutomaticFundResult(order storage.HistoryOrder) (string, string, string) {
 	if order.AutomaticRuleVersion == FundingRuleVersion {
 		return order.AutomaticCategory, order.AutomaticReason, order.AutomaticRuleVersion
+	}
+	if order.MT5DealType != nil {
+		switch *order.MT5DealType {
+		case mt5.DealCharge, mt5.DealCommission, mt5.DealCommissionDaily, mt5.DealCommissionMonthly,
+			mt5.DealCommissionAgentDaily, mt5.DealCommissionAgentMonthly, mt5.DealTax:
+			return "fee", "MT5 成交类型为费用", FundingRuleVersion
+		case mt5.DealInterest:
+			return "interest", "MT5 成交类型为利息", FundingRuleVersion
+		case mt5.DealDividend, mt5.DealDividendFranked:
+			return "dividend", "MT5 成交类型为股息", FundingRuleVersion
+		case mt5.DealBonus:
+			return "adjustment", "MT5 成交类型为赠金", FundingRuleVersion
+		case mt5.DealBalance:
+			if order.Fee != nil && !order.Fee.IsZero() {
+				return "", "", FundingRuleVersion
+			}
+		default:
+			return "", "", FundingRuleVersion
+		}
 	}
 	category, reason := automaticFundCategory(order.Comment, order.NetProfit, order.Commission, order.Swap, order.Taxes)
 	return category, reason, FundingRuleVersion

@@ -16,7 +16,7 @@ type ClassificationInput struct {
 	Reason                 string `json:"reason"`
 }
 
-func (s *Service) ClassifyFund(ctx context.Context, id string, ticket int32, input ClassificationInput) (storage.CashFlowClassification, error) {
+func (s *Service) ClassifyFund(ctx context.Context, id string, ticket int64, input ClassificationInput) (storage.CashFlowClassification, error) {
 	var result storage.CashFlowClassification
 	reason := strings.TrimSpace(strings.ReplaceAll(input.Reason, "\r\n", "\n"))
 	if ticket <= 0 || input.TradeRevision <= 0 || input.ClassificationRevision < 0 || reason == "" || !utf8.ValidString(reason) ||
@@ -27,6 +27,13 @@ func (s *Service) ClassifyFund(ctx context.Context, id string, ticket int32, inp
 		var account storage.Account
 		if err := tx.First(&account, "id=? AND removed_at_ms IS NULL", id).Error; err != nil {
 			return err
+		}
+		supported, err := historyTicketSupported(tx, account.ServerID, ticket)
+		if err != nil {
+			return err
+		}
+		if !supported {
+			return &InputError{"流水订单号无效"}
 		}
 		if account.CurrentSnapshotID == nil {
 			return storage.ErrConflict

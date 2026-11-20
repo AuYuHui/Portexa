@@ -40,6 +40,7 @@ type Endpoint struct {
 	ServerID         string  `gorm:"column:server_id" json:"server_id"`
 	Revision         int64   `gorm:"column:revision" json:"revision"`
 	IPAddress        string  `gorm:"column:ip_address" json:"ip_address"`
+	WebHostname      string  `gorm:"column:web_hostname" json:"web_hostname,omitempty"`
 	Port             int     `gorm:"column:port" json:"port"`
 	State            string  `gorm:"column:state" json:"state"`
 	EvidenceRef      *string `gorm:"column:evidence_ref" json:"evidence_ref"`
@@ -61,7 +62,7 @@ type Account struct {
 	ID                       string           `gorm:"column:id;primaryKey" json:"-"`
 	ServerID                 string           `gorm:"column:server_id" json:"-"`
 	PinnedEndpointID         string           `gorm:"column:pinned_endpoint_id" json:"-"`
-	Login                    uint32           `gorm:"column:login" json:"-"`
+	Login                    uint64           `gorm:"column:login" json:"-"`
 	Label                    string           `gorm:"column:label" json:"-"`
 	Currency                 *string          `gorm:"column:currency" json:"-"`
 	USDScale                 *decimal.Decimal `gorm:"column:usd_scale;type:text" json:"-"`
@@ -139,26 +140,35 @@ type Snapshot struct {
 func (Snapshot) TableName() string { return "account_snapshots" }
 
 type Position struct {
-	AccountID        string          `gorm:"column:account_id;primaryKey" json:"-"`
-	Ticket           int32           `gorm:"column:ticket;primaryKey" json:"ticket"`
-	SnapshotID       string          `gorm:"column:snapshot_id" json:"-"`
-	Symbol           string          `gorm:"column:symbol" json:"symbol"`
-	Command          int32           `gorm:"column:command" json:"command"`
-	Digits           int32           `gorm:"column:digits" json:"digits"`
-	VolumeHundredths int32           `gorm:"column:volume_hundredths" json:"volume_hundredths"`
-	OpenTimeWall     uint32          `gorm:"column:open_time_wall" json:"open_time_wall"`
-	CloseTimeWall    uint32          `gorm:"column:close_time_wall" json:"close_time_wall"`
-	OpenPrice        decimal.Decimal `gorm:"column:open_price;type:text" json:"open_price"`
-	CurrentPrice     decimal.Decimal `gorm:"column:current_price;type:text" json:"current_price"`
-	SL               decimal.Decimal `gorm:"column:sl;type:text" json:"sl"`
-	TP               decimal.Decimal `gorm:"column:tp;type:text" json:"tp"`
-	Profit           decimal.Decimal `gorm:"column:profit;type:text" json:"profit"`
-	Commission       decimal.Decimal `gorm:"column:commission;type:text" json:"commission"`
-	Swap             decimal.Decimal `gorm:"column:swap;type:text" json:"swap"`
-	Taxes            decimal.Decimal `gorm:"column:taxes;type:text" json:"taxes"`
+	AccountID        string           `gorm:"column:account_id;primaryKey" json:"-"`
+	Ticket           int64            `gorm:"column:ticket;primaryKey" json:"ticket"`
+	SnapshotID       string           `gorm:"column:snapshot_id" json:"-"`
+	Symbol           string           `gorm:"column:symbol" json:"symbol"`
+	Command          int32            `gorm:"column:command;primaryKey" json:"command"`
+	Digits           int32            `gorm:"column:digits" json:"digits"`
+	ExactLots        *decimal.Decimal `gorm:"column:exact_lots;type:text" json:"-"`
+	VolumeHundredths int32            `gorm:"column:volume_hundredths" json:"volume_hundredths"`
+	OpenTimeWall     uint32           `gorm:"column:open_time_wall" json:"open_time_wall"`
+	CloseTimeWall    uint32           `gorm:"column:close_time_wall" json:"close_time_wall"`
+	OpenPrice        decimal.Decimal  `gorm:"column:open_price;type:text" json:"open_price"`
+	CurrentPrice     decimal.Decimal  `gorm:"column:current_price;type:text" json:"current_price"`
+	TriggerPrice     *decimal.Decimal `gorm:"type:text" json:"trigger_price,omitempty"`
+	SL               decimal.Decimal  `gorm:"column:sl;type:text" json:"sl"`
+	TP               decimal.Decimal  `gorm:"column:tp;type:text" json:"tp"`
+	Profit           decimal.Decimal  `gorm:"column:profit;type:text" json:"profit"`
+	Commission       decimal.Decimal  `gorm:"column:commission;type:text" json:"commission"`
+	Swap             decimal.Decimal  `gorm:"column:swap;type:text" json:"swap"`
+	Taxes            decimal.Decimal  `gorm:"column:taxes;type:text" json:"taxes"`
 }
 
 func (Position) TableName() string { return "positions" }
+
+func (p Position) Lots() decimal.Decimal {
+	if p.ExactLots != nil {
+		return *p.ExactLots
+	}
+	return decimal.New(int64(p.VolumeHundredths), -2)
+}
 
 func (p Position) NetProfit() decimal.Decimal {
 	return p.Profit.Add(p.Commission).Add(p.Swap).Add(p.Taxes)

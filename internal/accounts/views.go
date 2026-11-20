@@ -36,7 +36,8 @@ type AccountView struct {
 	BrokerName                         string            `json:"broker_name"`
 	EndpointID                         string            `json:"endpoint_id"`
 	EndpointApproved                   bool              `json:"endpoint_approved"`
-	Login                              uint32            `json:"login"`
+	Protocol                           string            `json:"protocol"`
+	Login                              uint64            `json:"login"`
 	Label                              string            `json:"label"`
 	ConfirmedCurrency                  *string           `json:"confirmed_currency"`
 	UnitConfirmed                      bool              `json:"unit_confirmed"`
@@ -177,7 +178,7 @@ func readView(tx *gorm.DB, account storage.Account, now int64, settings storage.
 	if err := tx.First(&server, "id = ?", account.ServerID).Error; err != nil {
 		return view, err
 	}
-	view.ServerName, view.BrokerName = server.ServerName, server.BrokerName
+	view.ServerName, view.BrokerName, view.Protocol = server.ServerName, server.BrokerName, server.Protocol
 	var endpoint storage.Endpoint
 	if err := tx.First(&endpoint, "id = ?", account.PinnedEndpointID).Error; err != nil {
 		return view, err
@@ -290,12 +291,16 @@ func (s *Service) Detail(ctx context.Context, id, order string) (AccountDetail, 
 			return err
 		}
 		var positions []storage.Position
-		if err = tx.Where("account_id = ? AND snapshot_id = ?", id, *account.CurrentSnapshotID).Order(order + " ASC").Find(&positions).Error; err != nil {
+		sortOrder := "ticket ASC, command ASC"
+		if order == "open_time_wall" {
+			sortOrder = "open_time_wall ASC, " + sortOrder
+		}
+		if err = tx.Where("account_id = ? AND snapshot_id = ?", id, *account.CurrentSnapshotID).Order(sortOrder).Find(&positions).Error; err != nil {
 			return err
 		}
 		for _, position := range positions {
 			detail.Positions = append(detail.Positions, PositionView{Position: position,
-				NetProfit: position.NetProfit(), Lots: decimal.NewFromInt(int64(position.VolumeHundredths)).Div(decimal.NewFromInt(100))})
+				NetProfit: position.NetProfit(), Lots: position.Lots()})
 		}
 		return nil
 	})

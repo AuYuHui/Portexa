@@ -23,10 +23,10 @@ func (s *Service) historyRevisions(ctx context.Context, job HistoryJob, orders [
 		return nil, &InputError{"历史窗口超过发布预算"}
 	}
 	changed := make([]storage.HistoryOrder, 0, len(orders))
-	seen := make(map[int32]bool, len(orders))
+	seen := make(map[int64]bool, len(orders))
 	for start := 0; start < len(orders); start += 500 {
 		batch := orders[start:min(start+500, len(orders))]
-		tickets := make([]int32, 0, len(batch))
+		tickets := make([]int64, 0, len(batch))
 		for _, order := range batch {
 			tickets = append(tickets, order.Ticket)
 		}
@@ -35,7 +35,7 @@ func (s *Service) historyRevisions(ctx context.Context, job HistoryJob, orders [
 			Select("o.*").Scan(&previous).Error; err != nil {
 			return nil, err
 		}
-		byTicket := make(map[int32]int, len(previous))
+		byTicket := make(map[int64]int, len(previous))
 		for i, order := range previous {
 			byTicket[order.Ticket] = i
 		}
@@ -49,14 +49,13 @@ func (s *Service) historyRevisions(ctx context.Context, job HistoryJob, orders [
 			order.Revision = 1
 			if index, ok := byTicket[order.Ticket]; ok {
 				old := previous[index]
-				if bytes.Equal(old.SourceHash, order.SourceHash) || old.Comment == "" && order.Comment == "" && sameHistoryFields(old, order) {
+				if bytes.Equal(old.SourceHash, order.SourceHash) || old.MT5DealType == nil && order.MT5DealType == nil && old.Comment == "" && order.Comment == "" && sameHistoryFields(old, order) {
 					continue
 				}
 				order.Revision = old.Revision + 1
 			}
 			if order.Command == 6 {
-				order.AutomaticCategory, order.AutomaticReason = automaticFundCategory(order.Comment, order.NetProfit, order.Commission, order.Swap, order.Taxes)
-				order.AutomaticRuleVersion = FundingRuleVersion
+				order.AutomaticCategory, order.AutomaticReason, order.AutomaticRuleVersion = currentAutomaticFundResult(order)
 			}
 			changed = append(changed, order)
 		}

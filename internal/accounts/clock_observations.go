@@ -19,7 +19,7 @@ const clockBatchLimit = 128
 // Read outside the high-priority writer. The pointer/configuration are checked
 // again at publication, so a concurrent settings change cannot seed evidence.
 func (s *Service) clockDisappearances(ctx context.Context, job Job, snapshot storage.Snapshot, positions []storage.Position) ([]storage.ClockObservation, error) {
-	if job.Account.CurrentSnapshotID == nil {
+	if job.MT5Config != nil || job.Account.CurrentSnapshotID == nil {
 		return nil, nil
 	}
 	db := s.Store.Read.WithContext(ctx)
@@ -45,7 +45,7 @@ func (s *Service) clockDisappearances(ctx context.Context, job Job, snapshot sto
 		Where("account_id = ? AND snapshot_id = ? AND command IN (0, 1)", job.Account.ID, previous.ID).Order("ticket").Find(&old).Error; err != nil {
 		return nil, err
 	}
-	present := make(map[int32]bool, len(positions))
+	present := make(map[int64]bool, len(positions))
 	for _, position := range positions {
 		present[position.Ticket] = true
 	}
@@ -57,7 +57,7 @@ func (s *Service) clockDisappearances(ctx context.Context, job Job, snapshot sto
 		observations = append(observations, storage.ClockObservation{ID: storage.NewID(),
 			AccountID: job.Account.ID, ServerID: job.Account.ServerID, EndpointID: job.Run.EndpointID,
 			ConfigVersion: job.Account.ConfigVersion, BeforeSnapshotID: previous.ID, AfterSnapshotID: snapshot.ID,
-			Ticket: position.Ticket, Command: position.Command, Symbol: position.Symbol, OpenTimeWall: position.OpenTimeWall,
+			Ticket: int32(position.Ticket), Command: position.Command, Symbol: position.Symbol, OpenTimeWall: position.OpenTimeWall,
 			WindowFromMS: previous.ObservedFromMS, WindowToMS: snapshot.ObservedToMS, State: "pending"})
 		if len(observations) == clockBatchLimit {
 			break

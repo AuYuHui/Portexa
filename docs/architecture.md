@@ -2,7 +2,7 @@
 
 [English README](../README.md) · [中文 README](../README.zh-CN.md) · [文档索引](README.md)
 
-Portexa 使用一个主工程和一个可独立提取的 MT4 Go 模块。模块路径按项目命名，不绑定个人托管账户。`go.work` 方便编辑器同时加载模块；主工程的本地 `replace` 让关闭 workspace 后也能构建。
+Portexa 使用一个主工程和可独立使用的 MT4、MT5 Go 模块。模块路径按项目命名，不绑定个人托管账户。`go.work` 方便编辑器同时加载模块；主工程的本地 `replace` 让关闭 workspace 后也能构建。
 
 ```text
 Portexa/
@@ -30,6 +30,7 @@ Portexa/
 │   ├── internal/verification/    # 离线样本核对，不进入 SDK 运行依赖
 │   └── tests/                    # 协议测试、公开接口测试和合成服务端
 │       └── cmd/verify/           # 离线验证命令
+├── packages/mt5/                 # 独立模块 portexa/mt5，MT5 Web 终端只读采集
 ├── tests/                        # 主工程接口、同步、CLI、浏览器与性能验收
 │   └── e2e/screenshots.py        # 独立合成服务生成公开桌面截图
 ├── tools/mt4-capture/            # 本地采集脚本
@@ -48,6 +49,8 @@ Portexa/
 `cmd/mt4probe → internal/cli → portexa/mt4 → internal/protocol`。协议模块不依赖主工程或业务代码，不读配置文件，不打印日志，也不落库。调用方传入凭据和上下文，取得类型化结果；命令行层只输出脱敏检查结果。
 
 产品入口为 `cmd/portexa → internal/appcli`；HTTP 调用 auth/accounts，syncer 通过注入的 Fetcher 调用冻结 SDK。accounts 管理存储事务，storage 管理 GORM、SQLite 连接与写队列。网络等待在事务之外，快照发布前重新检查配置版本。前端仅接收脱敏 DTO，不接触投资者凭据密文或系统密码哈希。
+
+快照调度根据已核验服务器的协议调用对应采集器。MT5 Web 终端客户端位于 `packages/mt5`，经固定 IP 直连并按已登记域名校验 TLS。快照适配和净值估算由主工程负责。MT5 挂单与持仓共享快照，成交复用日结调度、覆盖窗口和历史版本发布链路，并独立保留成交类型、入场方式及毫秒时间。[MT5 模块说明](../packages/mt5/README.md)
 
 离线验证路径是 `packages/mt4/tests/cmd/verify → internal/verification → internal/protocol`。它读取私有样本且不联网，不能被当作运行中的连接器。`research/mt4-wire` 保留早期上游行为实验，有独立模块及测试，不作为原生协议依赖。
 

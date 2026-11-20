@@ -57,7 +57,7 @@ func (s *Service) trendFundEvents(ctx context.Context, accounts []storage.Accoun
 				entry.Classification.Category != "deposit" && entry.Classification.Category != "withdrawal" {
 				continue
 			}
-			stamp, confirmed := trendEventUTC(order.EventTimeWall, entries)
+			stamp, confirmed := historyOrderUTC(order, entries)
 			if !confirmed {
 				if wallCouldAffect(order.EventTimeWall, eventWallRanges(entries, input.FromMS, input.ToMS)) {
 					view.UnplacedEvents++
@@ -128,7 +128,11 @@ func trendTimeEntries(rules []serverTimeRule, from, to int64) []timeRuleEntry {
 // Try the actual offsets around the wall date, then require a unique inverse
 // under a rule effective at that UTC instant. DST repeated/nonexistent times
 // and expired observed offsets cannot become supposedly confirmed markers.
-func trendEventUTC(wall uint32, entries []timeRuleEntry) (int64, bool) {
+func historyOrderUTC(order storage.HistoryOrder, entries []timeRuleEntry) (int64, bool) {
+	wall := int64(order.EventTimeWall) * 1000
+	if order.MT5WallTimeMS != nil {
+		wall = *order.MT5WallTimeMS
+	}
 	candidates := map[int64]bool{}
 	for _, entry := range entries {
 		if entry.Kind != "iana" && entry.Kind != "broker_us_dst" && (entry.Kind != "observed_offset" || entry.UntilUTCMS == nil) {
@@ -136,7 +140,7 @@ func trendEventUTC(wall uint32, entries []timeRuleEntry) (int64, bool) {
 		}
 		offsets := map[int]bool{}
 		for hours := -36; hours <= 36; hours += 6 {
-			probe := time.Unix(int64(wall)+int64(hours)*3600, 0)
+			probe := time.UnixMilli(wall + int64(hours)*time.Hour.Milliseconds())
 			zone, _, err := serverLocation(entry, probe)
 			if err == nil {
 				_, offset := probe.In(zone).Zone()
@@ -144,7 +148,7 @@ func trendEventUTC(wall uint32, entries []timeRuleEntry) (int64, bool) {
 			}
 		}
 		for offset := range offsets {
-			instant := time.Unix(int64(wall)-int64(offset), 0)
+			instant := time.UnixMilli(wall - int64(offset)*1000)
 			stamp := instant.UnixMilli()
 			if stamp < entry.FromUTCMS || entry.UntilUTCMS != nil && stamp >= *entry.UntilUTCMS {
 				continue

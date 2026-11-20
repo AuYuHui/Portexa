@@ -18,7 +18,8 @@ The check includes all Go modules with `GOWORK=off`, Python capture-tool tests, 
 
 - Keep native MT4 production protocol code in `packages/mt4`. Its API is `Probe`, `Fetch`, and protocol types; do not add dependencies on the main application, storage, CLI input/output, or research tools.
 - Keep application behavior in `internal/` and command entry points in `cmd/`. `internal/cli` handles probe input and redacted output; `internal/appcli` handles product administration.
-- Put SDK tests in `packages/mt4/tests`, application and capture-tool tests in root `tests`, and historical experiment tests in the relevant `research/*/tests` directory.
+- Keep MT5 Web Terminal protocol code in `packages/mt5`. Keep main application and storage dependencies outside the protocol module.
+- Put SDK tests in `packages/mt4/tests` and `packages/mt5/tests`, application and capture-tool tests in root `tests`, and historical experiment tests in the relevant `research/*/tests` directory.
 - Keep source, test, script, and documentation files at or below 1,000 lines. `make structure` checks the limit and module boundaries.
 - Use `gofmt` for changed Go files. Update related documentation when behavior, configuration, or supported scope changes.
 

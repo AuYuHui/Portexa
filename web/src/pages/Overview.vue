@@ -87,6 +87,9 @@ const healthy = computed(
           :size="18"
         />{{ t('overview.theCredentialKeyIsUnavailableExistingDataRemains') }}
       </div>
+      <p v-if="data.accounts.some((account) => account.protocol === 'mt5' && account.snapshot)" class="notice notice-subtle">
+        {{ t('mt5.overviewEstimate') }}
+      </p>
       <section class="summary-grid" :aria-label="t('overview.fundsOverview')">
         <article class="summary-card summary-featured">
           <div class="card-label">{{ t('overview.latestKnownEquitySubtotal') }} <Wallet :size="19" /></div>

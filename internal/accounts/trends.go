@@ -44,7 +44,7 @@ type TrendEvent struct {
 	TimeMS    int64            `json:"time_ms"`
 	Kind      string           `json:"kind"`
 	AccountID string           `json:"account_id"`
-	Ticket    int32            `json:"ticket,omitempty"`
+	Ticket    int64            `json:"ticket,omitempty"`
 	Amount    *decimal.Decimal `json:"amount"`
 	Currency  string           `json:"currency"`
 }

@@ -9,6 +9,7 @@ import (
 	"portexa/internal/accounts"
 	"portexa/internal/storage"
 	"portexa/mt4"
+	"portexa/mt5"
 )
 
 func (e *Engine) scheduleDaily(ctx context.Context) {
@@ -71,15 +72,35 @@ func (e *Engine) runDaily(ctx context.Context, id string) {
 	defer cancel()
 	logger := e.logger.With("account_id", id, "run_id", job.Run.ID, "kind", "daily")
 	logger.Info("daily_sync_started")
-	result, err := e.fetch(fetchCtx, job.Config, mt4.Options{History: &mt4.HistoryRange{Start: job.Day.Start, End: job.Day.End}})
-	job.Config.Password = ""
+	var report storage.DailyReport
+	var result mt4.Result
+	var orders []storage.HistoryOrder
+	if job.MT5Config != nil {
+		orders, err = e.readMT5Deals(fetchCtx, job.MT5Config, mt5.HistoryRange{Start: job.Day.Start, End: job.Day.End}, job.NativeCurrency, 0)
+	} else {
+		result, err = e.fetch(fetchCtx, job.Config, mt4.Options{History: &mt4.HistoryRange{Start: job.Day.Start, End: job.Day.End}})
+		job.Config.Password = ""
+	}
 	finished := time.Now()
 	if err == nil {
 		err = fetchCtx.Err()
 	}
+	failure := classify(err)
+	if err != nil && job.MT5Config != nil {
+		failure = classifyMT5(err)
+	}
 	if err == nil {
-		var report storage.DailyReport
-		report, err = ConvertDaily(job, result, finished.UnixMilli())
+		if job.MT5Config == nil {
+			report, err = ConvertDaily(job, result, finished.UnixMilli())
+		} else if finished.UnixMilli() < job.Run.StartedAtMS {
+			err = ErrIncomplete
+		} else {
+			var totals dailyTotals
+			for _, order := range orders {
+				totals.add(order.Command, order.NetProfit, order.ClosingTrade())
+			}
+			report = totals.report(job.Run, job.NativeCurrency, finished.UnixMilli())
+		}
 		if err == nil {
 			next := finished.Add(e.historyInterval)
 			if job.Day.NextDayUTC.Before(next) {
@@ -87,10 +108,10 @@ func (e *Engine) runDaily(ctx context.Context, id string) {
 			}
 			err = e.accounts.PublishDaily(fetchCtx, job, report, next.UnixMilli())
 		}
+		failure = classify(err)
 	}
 	if err != nil {
-		failure := classify(err)
-		if failure.Operation == "snapshot" {
+		if failure.Operation == "snapshot" || failure.Operation == "mt5_snapshot" {
 			failure.Operation = "history"
 		}
 		e.mu.Lock()

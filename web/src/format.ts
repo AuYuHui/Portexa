@@ -74,6 +74,11 @@ export const fundCategories = computed<Record<string, string>>(() => ({
   capital_adjustment: t('analytics.capitalAdjustment'),
   unclassified: t('format.unclassified'),
 }));
+export function fundCategoryLabel(category: string): string {
+  if (category === "interest") return t("mt5.interest");
+  if (category === "dividend") return t("mt5.dividend");
+  return fundCategories.value[category] || t("format.unclassified");
+}
 export function signedMoney(
   value: string | null | undefined,
   places = 2,
@@ -106,9 +111,9 @@ export function date(value: number | null | undefined, seconds = true): string {
     hour12: false,
   }).format(value);
 }
-export function wallTime(seconds: number): string {
+export function wallTime(seconds: number, milliseconds = 0): string {
   return seconds
-    ? new Date(seconds * 1000).toISOString().slice(0, 19).replace("T", " ") +
+    ? new Date(seconds * 1000 + milliseconds).toISOString().slice(0, milliseconds ? 23 : 19).replace("T", " ") +
         t('format.serverWallClock')
     : "—";
 }
@@ -147,6 +152,8 @@ export function failureLabel(code: string | null | undefined) {
         history_window_too_large: t('format.largeHistoryWindowSplittingCollection'),
         configuration_changed: t('format.configurationChangedPreviousJobCanceled'),
         invalid_config: t('format.unsupportedConfigurationPleaseCheckIt'),
+        mt5_server_mismatch: t('mt5.serverMismatch'),
+        mt5_tls_verification_failed: t('mt5.tlsVerificationFailed'),
         read_only_required: t('format.investorPasswordRequired'),
         invalid_response: t('format.responseCouldNotBeFullyParsed'),
         credential_unavailable: t('format.credentialKeyUnavailableOrMismatchedCollectionPaused'),

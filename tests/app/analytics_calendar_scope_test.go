@@ -48,11 +48,11 @@ func TestAnalyticsCalendarScopesUnresolvedTimesToEachDay(t *testing.T) {
 		}
 		for _, trade := range trades {
 			hash := sha256.Sum256([]byte("synthetic-calendar-trade"))
-			order := storage.HistoryOrder{AccountID: a.ID, Ticket: trade.Ticket, Revision: 1, SourceRunID: run.ID, SourceHash: hash[:], UnitRevision: a.UnitRevision, NativeCurrency: "USD", Command: 0, OpenTimeWall: trade.OpenTime, CloseTimeWall: trade.CloseTime, EventTimeWall: trade.CloseTime, Profit: decimal.NewFromFloat(trade.Profit), NetProfit: decimal.NewFromFloat(trade.Profit)}
+			order := storage.HistoryOrder{AccountID: a.ID, Ticket: int64(trade.Ticket), Revision: 1, SourceRunID: run.ID, SourceHash: hash[:], UnitRevision: a.UnitRevision, NativeCurrency: "USD", Command: 0, OpenTimeWall: trade.OpenTime, CloseTimeWall: trade.CloseTime, EventTimeWall: trade.CloseTime, Profit: decimal.NewFromFloat(trade.Profit), NetProfit: decimal.NewFromFloat(trade.Profit)}
 			if err := tx.Create(&order).Error; err != nil {
 				return err
 			}
-			if err := tx.Create(&storage.HistoryOrderHead{AccountID: a.ID, Ticket: trade.Ticket, Revision: 1}).Error; err != nil {
+			if err := tx.Create(&storage.HistoryOrderHead{AccountID: a.ID, Ticket: int64(trade.Ticket), Revision: 1}).Error; err != nil {
 				return err
 			}
 		}

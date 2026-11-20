@@ -25,6 +25,7 @@ export interface Run {
 }
 export interface Account {
   id: string;
+  protocol: "mt4" | "mt5";
   server_id: string;
   server_name: string;
   broker_name: string;
@@ -162,6 +163,7 @@ export interface Endpoint {
   id: string;
   revision: number;
   ip_address: string;
+  web_hostname?: string;
   port: number;
   state: string;
   evidence_ref: string | null;
@@ -170,6 +172,7 @@ export interface Endpoint {
 }
 export interface Server {
   id: string;
+  protocol: "mt4" | "mt5";
   broker_name: string;
   server_name: string;
   endpoints: Endpoint[];
@@ -191,6 +194,28 @@ export interface Server {
     expires_at_ms?: number | null;
   };
 }
+export interface Deal {
+  ticket: number;
+  mt5_deal_type: number;
+  mt5_entry: number;
+  mt5_order_ticket: number;
+  mt5_wall_time_ms: number;
+  event_time_wall: number;
+  symbol: string;
+  comment: string;
+  exact_lots: string;
+  digits: number;
+  close_price: string;
+  commission: string;
+  swap: string;
+  fee: string;
+  net_profit: string;
+  native_currency: string;
+}
+export interface DealsPage {
+  items: Deal[];
+  next_cursor: string;
+}
 export interface Position {
   ticket: number;
   symbol: string;
@@ -200,6 +225,7 @@ export interface Position {
   open_time_wall: number;
   open_price: string;
   current_price: string;
+  trigger_price?: string;
   profit: string;
   commission: string;
   swap: string;
@@ -214,10 +240,13 @@ export interface Detail {
   server_time_status: string;
 }
 
-export interface DirectoryCandidate {
-  id: string;
+export interface DirectoryServerName {
   broker_name: string;
   server_name: string;
+}
+
+export interface DirectoryCandidate extends DirectoryServerName {
+  id: string;
   demo: boolean;
   endpoints: { ip_address: string; port: number }[];
   source_name: string;

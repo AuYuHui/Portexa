@@ -222,5 +222,8 @@ async function refresh() {
     <p v-if="error" class="daily-note warning-text small" role="alert">
       {{ localizeMessage(error) }}
     </p>
+    <p v-if="account.protocol === 'mt5' && account.daily.report" class="muted small">
+      {{ t("mt5.dailyBasis") }}
+    </p>
   </section>
 </template>

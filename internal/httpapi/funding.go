@@ -44,7 +44,7 @@ func (s *Server) funds(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) classifyFund(w http.ResponseWriter, r *http.Request) {
-	ticket, err := strconv.ParseInt(r.PathValue("ticket"), 10, 32)
+	ticket, err := strconv.ParseInt(r.PathValue("ticket"), 10, 64)
 	if err != nil || ticket <= 0 {
 		fail(w, &accounts.InputError{Message: "流水订单号无效"})
 		return
@@ -53,10 +53,29 @@ func (s *Server) classifyFund(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &input) {
 		return
 	}
-	result, err := s.accounts.ClassifyFund(r.Context(), r.PathValue("id"), int32(ticket), input)
+	result, err := s.accounts.ClassifyFund(r.Context(), r.PathValue("id"), ticket, input)
 	if err != nil {
 		fail(w, err)
 		return
 	}
 	writeJSON(w, 200, result)
+}
+
+func (s *Server) deals(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	limit := 50
+	if raw := query.Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			fail(w, &accounts.InputError{Message: "查询条数无效"})
+			return
+		}
+		limit = parsed
+	}
+	page, err := s.accounts.Deals(r.Context(), r.PathValue("id"), query.Get("cursor"), limit)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, 200, page)
 }

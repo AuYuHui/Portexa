@@ -111,6 +111,7 @@ function openDay(day: PerformanceDay) {
         <span class="eyebrow">PORTEXA ANALYTICS</span>
         <h1>{{ t("analytics.title") }}<span class="title-dot">.</span></h1>
         <p>{{ t("analytics.subtitle") }}</p>
+        <p v-if="account ? currentAccount?.protocol === 'mt5' : accounts?.some((item) => item.protocol === 'mt5')" class="muted small">{{ t("mt5.analyticsEstimate") }}</p>
       </div>
       <button class="btn" :disabled="isFetching || invalid" @click="refetch()">
         <RefreshCw :size="15" :class="{ spin: isFetching }" />{{

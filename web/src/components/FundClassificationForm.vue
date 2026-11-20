@@ -11,10 +11,9 @@ const { t } = useI18n();
 
 const props = defineProps<{ accountId: string; entry: FundEntry }>();
 const emit = defineEmits<{ saved: [] }>();
+const currentCategory = props.entry.classification?.category || "unclassified";
 const category = ref(
-  props.entry.needs_review
-    ? "unclassified"
-    : props.entry.classification?.category || "unclassified",
+  props.entry.needs_review || !fundCategories.value[currentCategory] ? "unclassified" : currentCategory,
 );
 const reason = ref("");
 const busy = ref(false);

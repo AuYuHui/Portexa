@@ -45,7 +45,9 @@ func totalEvents(events []Event) totals {
 		case "trade":
 			sum.realized = sum.realized.Add(event.Amount)
 			sum.trades++
-		case "rebate", "profit_share_income":
+		case "trade_booking":
+			sum.realized = sum.realized.Add(event.Amount)
+		case "rebate", "profit_share_income", "interest", "dividend":
 			sum.income = sum.income.Add(event.Amount)
 		case "fee", "profit_share_expense":
 			sum.costs = sum.costs.Add(event.Amount)

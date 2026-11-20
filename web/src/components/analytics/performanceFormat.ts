@@ -1,5 +1,5 @@
 import { t } from "../../i18n";
-import { fundCategories } from "../../format";
+import { fundCategoryLabel } from "../../format";
 import type { PerformanceDay } from "../../types/analytics";
 
 export function calendarRealizedReason(day: PerformanceDay): string {
@@ -52,8 +52,9 @@ export function performanceReasons(reasons: string[]): string {
 }
 export function performanceEvent(kind: string): string {
   if (kind === "trade") return t("analytics.trade");
+  if (kind === "trade_booking") return t("mt5.tradeBooking");
   if (kind === "credit") return t("trend.credit");
   if (kind === "membership_in") return t("trend.accountIncluded");
   if (kind === "membership_out") return t("trend.accountRemoved");
-  return fundCategories.value[kind] || t("format.unclassified");
+  return fundCategoryLabel(kind);
 }

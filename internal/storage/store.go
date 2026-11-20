@@ -64,7 +64,7 @@ var ErrDenied = errors.New("operation denied")
 var ErrClosed = errors.New("store closed")
 
 const ApplicationID = 0x50545841
-const SchemaVersion = 12
+const SchemaVersion = 14
 
 type Priority int
 
@@ -213,7 +213,7 @@ func SupportedVersion(version string) bool {
 	return major > 3 || (major == 3 && (minor > 51 || (minor == 51 && patch >= 3)))
 }
 
-func migrate(db *sql.DB) error {
+func migrate(db *sql.DB) (result error) {
 	var application, version int
 	if err := db.QueryRow("PRAGMA application_id").Scan(&application); err != nil {
 		return err
@@ -233,7 +233,21 @@ func migrate(db *sql.DB) error {
 			return errors.New("refusing to initialize a nonempty database")
 		}
 	}
-	tx, err := db.Begin()
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	// SQLite checks foreign keys explicitly after rebuilding the parent tables.
+	if _, err = conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF; PRAGMA legacy_alter_table=ON"); err != nil {
+		return err
+	}
+	defer func() {
+		_, restoreErr := conn.ExecContext(ctx, "PRAGMA legacy_alter_table=OFF; PRAGMA foreign_keys=ON")
+		result = errors.Join(result, restoreErr)
+	}()
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -297,6 +311,17 @@ func migrate(db *sql.DB) error {
 		if _, err = tx.Exec(restLearningSchema); err != nil {
 			return err
 		}
+	}
+	if version < 13 {
+		if err = migrateMT5(tx); err != nil {
+			return err
+		}
+	}
+	if _, err = tx.Exec(mt5HistorySchema); err != nil {
+		return err
+	}
+	if err = checkForeignKeys(tx); err != nil {
+		return err
 	}
 	if _, err = tx.Exec(fmt.Sprintf("PRAGMA application_id=%d", ApplicationID)); err != nil {
 		return err

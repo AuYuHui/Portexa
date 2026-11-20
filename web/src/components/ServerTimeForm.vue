@@ -13,7 +13,9 @@ const { t } = useI18n();
 const props = defineProps<{ server: Server }>();
 const emit = defineEmits<{ cancel: []; saved: [] }>();
 const automatic = computed(() => props.server.automatic_time_zone);
+const isMT5 = computed(() => props.server.protocol === "mt5");
 const zone = ref(props.server.time_mode === "manual" || !props.server.time_mode ? props.server.time_zone || "" : "");
+const effectiveDate = ref("");
 const busy = ref(false);
 const error = ref("");
 
@@ -23,7 +25,8 @@ async function save(mode: "automatic" | "manual") {
   try {
     const previous = { previous_ruleset_id: props.server.time_ruleset_id };
     const body = automatic.value
-      ? { ...previous, mode, time_zone: mode === "manual" ? zone.value : undefined }
+      ? { ...previous, mode, time_zone: mode === "manual" ? zone.value : undefined,
+          effective_date: isMT5.value && !props.server.time_zone_verified ? effectiveDate.value || undefined : undefined }
       : { ...previous, time_zone: zone.value, evidence_ref: "用户通过服务器时间设置手动校正", confirm: true };
     await api(`/servers/${props.server.id}/time-zone`, "PUT", body);
     await refreshAccounts();
@@ -40,7 +43,8 @@ async function save(mode: "automatic" | "manual") {
   <div class="form-stack">
     <p class="muted small">{{ server.broker_name }} / {{ server.server_name }}</p>
     <p v-if="server.time_mode === 'manual'" class="muted small">{{ t('serverTimeForm.currentManualZone', { zone: server.time_zone }) }}</p>
-    <div v-if="automatic?.available" class="server-time-result">
+    <p v-if="isMT5" class="muted small">{{ t("mt5.timeRequired") }}</p>
+    <div v-else-if="automatic?.available" class="server-time-result">
       <span class="icon-box subtle"><Clock :size="20" /></span>
       <div>
         <strong>{{ automatic.source === "events" ? t('serverTimeForm.tradeTimeCalibrated') : t('settings.automaticDetection') }} · {{ automatic.time_zone }}</strong>
@@ -68,7 +72,7 @@ async function save(mode: "automatic" | "manual") {
         <p class="muted small">{{ t('serverTimeForm.roundProgress', { count: Math.min(automatic?.event_window_count || 0, 2) }) }}</p>
       </div>
     </div>
-    <details class="server-time-advanced">
+    <details class="server-time-advanced" :open="isMT5">
       <summary>{{ t('serverTimeForm.advancedManualCorrection') }}</summary>
       <form class="form-stack" @submit.prevent="save('manual')">
         <label class="field">
@@ -77,7 +81,12 @@ async function save(mode: "automatic" | "manual") {
             v-model="zone" required maxlength="64" list="server-time-zones"
             :placeholder="t('serverTimeForm.exampleUtcOrEuropeHelsinki')"
           />
-          <small>{{ t('serverTimeForm.useBrokerProvidedRulesOnlyWhenAutomaticDetection') }}</small>
+          <small>{{ isMT5 ? t('mt5.brokerTimeZone') : t('serverTimeForm.useBrokerProvidedRulesOnlyWhenAutomaticDetection') }}</small>
+        </label>
+        <label v-if="isMT5 && !server.time_zone_verified" class="field">
+          {{ t("mt5.timeEffectiveDate") }}
+          <input v-model="effectiveDate" type="date" />
+          <small>{{ t("mt5.timeEffectiveHelp") }}</small>
         </label>
         <datalist id="server-time-zones">
           <option value="Europe/Helsinki" />
@@ -95,7 +104,7 @@ async function save(mode: "automatic" | "manual") {
     <div class="dialog-actions">
       <button type="button" class="btn" :disabled="busy" @click="emit('cancel')">{{ t('modal.close') }}</button>
       <button
-        v-if="automatic && server.time_mode === 'manual'"
+        v-if="!isMT5 && automatic && server.time_mode === 'manual'"
         type="button" class="btn btn-primary" :disabled="busy"
         @click="save('automatic')"
       >

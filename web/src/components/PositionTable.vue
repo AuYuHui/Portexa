@@ -20,6 +20,8 @@ const commands = [
   "sell limit",
   "buy stop",
   "sell stop",
+  "buy stop limit",
+  "sell stop limit",
 ];
 </script>
 <template>
@@ -50,7 +52,12 @@ const commands = [
             >
           </td>
           <td class="text-right num">{{ p.lots }}</td>
-          <td class="text-right num">{{ price(p.open_price, p.digits) }}</td>
+          <td class="text-right num">
+            {{ price(p.open_price, p.digits) }}
+            <small v-if="p.trigger_price" class="cell-note muted">
+              {{ t("mt5.triggerPrice", { price: price(p.trigger_price, p.digits) }) }}
+            </small>
+          </td>
           <td class="text-right num">{{ price(p.current_price, p.digits) }}</td>
           <td class="text-right num">
             <strong :class="positive(p.net_profit) ? 'positive' : 'negative'">{{

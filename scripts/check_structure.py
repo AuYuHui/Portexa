@@ -46,9 +46,10 @@ def main() -> int:
             match = re.search(r"^module\s+(\S+)", text, re.MULTILINE)
             if not match or not (match[1] == "portexa" or match[1].startswith("portexa/")):
                 failures.append(f"{relative}: module must use a project-scoped name")
-        if relative.parts[:2] == ("packages", "mt4") and path.suffix == ".go":
+        if relative.parts[:2] in (("packages", "mt4"), ("packages", "mt5")) and path.suffix == ".go":
+            module = f"portexa/{relative.parts[1]}"
             imports = re.findall(r'"(portexa(?:/[^"\s]+)?)"', text)
-            if any(name != "portexa/mt4" and not name.startswith("portexa/mt4/") for name in imports):
+            if any(name != module and not name.startswith(f"{module}/") for name in imports):
                 failures.append(f"{relative}: protocol module cannot import the host project")
     if failures:
         print("\n".join(failures), file=sys.stderr)

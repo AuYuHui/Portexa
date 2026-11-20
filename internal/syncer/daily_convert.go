@@ -23,10 +23,7 @@ func ConvertDaily(job accounts.DailyJob, result mt4.Result, finished int64) (sto
 	if currency == "" || currency != job.NativeCurrency {
 		return report, ErrIncomplete
 	}
-	profit, adjustment, credit := decimal.Zero, decimal.Zero, decimal.Zero
-	grossProfit, grossLoss := decimal.Zero, decimal.Zero
-	wins, losses, breakeven := 0, 0, 0
-	report.ClosedTrades = 0
+	var totals dailyTotals
 	seen := map[int32]bool{}
 	for _, trade := range result.History {
 		if trade.Ticket <= 0 || seen[trade.Ticket] || trade.Command < 0 || trade.Command > 7 {
@@ -50,32 +47,49 @@ func ConvertDaily(job accounts.DailyJob, result mt4.Result, finished int64) (sto
 		}
 		net := decimal.NewFromFloat(trade.Profit).Add(decimal.NewFromFloat(trade.Commission)).
 			Add(decimal.NewFromFloat(trade.Swap)).Add(decimal.NewFromFloat(trade.Taxes))
-		switch trade.Command {
-		case 0, 1:
-			profit = profit.Add(net)
-			report.ClosedTrades++
-			switch net.Sign() {
-			case 1:
-				wins++
-				grossProfit = grossProfit.Add(net)
-			case -1:
-				losses++
-				grossLoss = grossLoss.Add(net.Abs())
-			default:
-				breakeven++
-			}
-		case 6:
-			adjustment = adjustment.Add(net)
-		case 7:
-			credit = credit.Add(net)
-		}
+		totals.add(trade.Command, net, trade.Command <= 1)
 	}
-	change := profit.Add(adjustment)
+	return totals.report(report, currency, finished), nil
+}
+
+type dailyTotals struct {
+	profit, adjustment, credit decimal.Decimal
+	grossProfit, grossLoss     decimal.Decimal
+	wins, losses, breakeven    int
+}
+
+func (t *dailyTotals) add(command int32, net decimal.Decimal, closed bool) {
+	switch command {
+	case 0, 1:
+		t.profit = t.profit.Add(net)
+		if !closed {
+			return
+		}
+		switch net.Sign() {
+		case 1:
+			t.wins++
+			t.grossProfit = t.grossProfit.Add(net)
+		case -1:
+			t.losses++
+			t.grossLoss = t.grossLoss.Add(net.Abs())
+		default:
+			t.breakeven++
+		}
+	case 6:
+		t.adjustment = t.adjustment.Add(net)
+	case 7:
+		t.credit = t.credit.Add(net)
+	}
+}
+
+func (t dailyTotals) report(report storage.DailyReport, currency string, finished int64) storage.DailyReport {
+	change := t.profit.Add(t.adjustment)
 	report.State, report.FinishedAtMS, report.NativeCurrency = "succeeded", &finished, currency
-	report.NetProfit, report.BalanceAdjustment, report.BalanceChange, report.CreditChange = &profit, &adjustment, &change, &credit
-	report.WinningTrades, report.LosingTrades, report.BreakevenTrades = &wins, &losses, &breakeven
-	report.GrossProfit, report.GrossLoss = &grossProfit, &grossLoss
-	return report, nil
+	report.NetProfit, report.BalanceAdjustment, report.BalanceChange, report.CreditChange = &t.profit, &t.adjustment, &change, &t.credit
+	report.ClosedTrades = t.wins + t.losses + t.breakeven
+	report.WinningTrades, report.LosingTrades, report.BreakevenTrades = &t.wins, &t.losses, &t.breakeven
+	report.GrossProfit, report.GrossLoss = &t.grossProfit, &t.grossLoss
+	return report
 }
 
 func coversDay(covered []mt4.HistoryRange, start, end uint32) bool {

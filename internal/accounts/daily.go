@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 	"portexa/internal/storage"
 	"portexa/mt4"
+	"portexa/mt5"
 )
 
 const DailyAdmissionLead = 25 * time.Second
@@ -18,6 +19,7 @@ type DailyJob struct {
 	Account        storage.Account
 	Run            storage.DailyReport
 	Config         mt4.Config
+	MT5Config      *mt5.Config
 	Day            ServerDay
 	NativeCurrency string
 }
@@ -112,10 +114,11 @@ func (s *Service) ClaimDaily(ctx context.Context, id string) (DailyJob, error) {
 			return err
 		}
 		job.NativeCurrency = snapshot.NativeCurrency
-		job.Config, err = s.fetchConfig(tx, a)
+		cfg, err := s.collectionConfig(tx, a)
 		if err != nil {
 			return err
 		}
+		job.Config, job.MT5Config = cfg.mt4, cfg.mt5
 		job.Run = storage.DailyReport{ID: storage.NewID(), AccountID: id, ServerID: a.ServerID, EndpointID: a.PinnedEndpointID,
 			ConfigVersion: a.ConfigVersion, UnitRevision: a.UnitRevision, TimeRulesetID: job.Day.TimeRulesetID,
 			ReportDate: job.Day.Date, TimeZone: job.Day.TimeZone, WindowStart: job.Day.Start, WindowEnd: job.Day.End,

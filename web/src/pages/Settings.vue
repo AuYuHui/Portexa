@@ -163,7 +163,9 @@ onMounted(() => {
           <div>
             <h3>{{ server.server_name }}</h3>
             <p class="muted small">
-              {{ server.broker_name }} · MT4 <span class="divider-dot">·</span>
+              {{ server.broker_name }} · {{ server.protocol.toUpperCase() }}
+              <template v-if="server.protocol === 'mt4'">
+              <span class="divider-dot">·</span>
               {{ t('settings.serverTimeMode', {
                 zone: server.time_zone_verified ? server.time_zone : t('settings.calibratingTime'),
                 mode: server.time_mode === "automatic"
@@ -171,6 +173,8 @@ onMounted(() => {
                   : server.time_mode === "calibrated" ? t('settings.tradeTimeCalibration')
                   : server.time_zone_verified ? t('settings.manualCorrection') : t('settings.automatic'),
               }) }}
+              </template>
+              <template v-else> · {{ server.time_zone_verified ? server.time_zone : t("mt5.timeZoneNeeded") }}</template>
             </p>
           </div>
           <div class="server-card-actions">
@@ -198,7 +202,7 @@ onMounted(() => {
           <span class="revision">v{{ endpoint.revision }}</span>
           <div class="endpoint-address">
             <strong class="mono"
-              >{{ endpoint.ip_address }}:{{ endpoint.port }}</strong
+              >{{ endpoint.ip_address }}:{{ endpoint.port }}{{ endpoint.web_hostname ? ` · ${endpoint.web_hostname}` : "" }}</strong
             ><small>{{
               endpoint.state === "retired"
                 ? t('settings.retiredCredentialsCanNoLongerBeSent')

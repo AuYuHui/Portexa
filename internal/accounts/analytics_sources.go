@@ -192,7 +192,7 @@ func classificationKey(order analyticsOrder) (string, string) {
 func (s *Service) analyticsEvents(ctx context.Context, source *analyticsSource, from, to int64, unit string) error {
 	const batchSize = 1000
 	var stamp uint32
-	var ticket int32
+	var ticket int64
 	for count := 0; ; {
 		var orders []analyticsOrder
 		query := withClassification(currentHistory(s.Store.Read.WithContext(ctx), source.account.ID)).
@@ -213,7 +213,7 @@ func (s *Service) analyticsEvents(ctx context.Context, source *analyticsSource, 
 			}
 			category, classification := classificationKey(order)
 			fmt.Fprintf(source.hash, "order:%d:%d:%x:%s:%s|", order.Ticket, order.Revision, order.SourceHash, category, classification)
-			instant, ok := trendEventUTC(order.EventTimeWall, source.entries)
+			instant, ok := historyOrderUTC(order.HistoryOrder, source.entries)
 			if !ok {
 				source.unresolvedWalls = append(source.unresolvedWalls, order.EventTimeWall)
 				continue
@@ -233,6 +233,9 @@ func (s *Service) analyticsEvents(ctx context.Context, source *analyticsSource, 
 				amount = amount.Mul(*source.account.USDScale)
 			}
 			kind, key := "trade", ""
+			if order.Command <= 1 && !order.ClosingTrade() {
+				kind = "trade_booking"
+			}
 			if order.Command == 7 {
 				kind = "credit"
 			}

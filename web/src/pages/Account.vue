@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { localizeMessage } from "../i18n";
 import { useI18n } from "vue-i18n";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { useQuery } from "@tanstack/vue-query";
 import {
@@ -30,6 +30,7 @@ import AccountForm from "../components/AccountForm.vue";
 import PositionTable from "../components/PositionTable.vue";
 import DailySummary from "../components/DailySummary.vue";
 import FundingSummary from "../components/FundingSummary.vue";
+import DealHistory from "../components/DealHistory.vue";
 import EquityTrend from "../components/charts/EquityTrend.vue";
 
 const { t } = useI18n();
@@ -47,6 +48,7 @@ const { data: snapshots, error: snapshotsError } = useQuery({
   refetchInterval: 10_000,
 });
 const tab = ref("positions");
+watch(id, () => { tab.value = "positions"; });
 const open = ref(false);
 const busy = ref(false);
 const actionError = ref("");
@@ -107,7 +109,7 @@ async function toggleSync() {
           <p class="muted num">
             {{ data.account.login }} <span class="divider-dot">/</span>
             {{ data.account.broker_name }} <span class="divider-dot">/</span>
-            {{ data.account.server_name }}
+            {{ data.account.server_name }} · {{ data.account.protocol.toUpperCase() }}
           </p>
         </div>
         <div class="page-actions">
@@ -173,7 +175,7 @@ async function toggleSync() {
       <section class="summary-grid detail-metrics">
         <article class="summary-card">
           <div class="card-label">
-            {{ t('account.accountEquity') }}
+            {{ data.account.protocol === 'mt5' ? t('mt5.estimatedEquity') : t('account.accountEquity') }}
             <span class="badge badge-neutral">{{
               current?.native_currency || t('account.nativeCurrency')
             }}</span>
@@ -184,7 +186,7 @@ async function toggleSync() {
               current.native_currency
             }}</small>
           </div>
-          <p class="metric-note">{{ t('account.includesCreditFollowingTheSdkDefinition') }}</p>
+          <p class="metric-note">{{ data.account.protocol === 'mt5' ? t('mt5.estimatedEquityBasis') : t('account.includesCreditFollowingTheSdkDefinition') }}</p>
         </article>
         <article class="summary-card">
           <div class="card-label">{{ t('account.balanceCredit') }}</div>
@@ -232,6 +234,10 @@ async function toggleSync() {
         </article>
       </section>
       <EquityTrend :account-id="id" />
+      <p v-if="data.account.protocol === 'mt5' && data.account.daily.state === 'time_zone_unconfirmed'" class="notice notice-subtle">
+        {{ t("mt5.timeRequired") }}
+        <RouterLink to="/settings" class="text-button">{{ t("settings.connectionsSettings") }}</RouterLink>
+      </p>
       <DailySummary v-if="data.account.daily" :account="data.account" />
       <FundingSummary v-if="data.account.funding" :account="data.account" />
       <section class="panel">
@@ -280,6 +286,7 @@ async function toggleSync() {
           ><span>{{ t('account.amountsShownInNativeCurrency') }}</span>
         </div>
       </section>
+      <DealHistory v-if="data.account.protocol === 'mt5'" :account-id="id" :has-snapshot="!!current" />
       <section class="panel snapshot-panel">
         <div class="panel-heading">
           <div>
@@ -300,7 +307,7 @@ async function toggleSync() {
                 <th>{{ t('account.sampleStarted') }}</th>
                 <th>{{ t('account.sampleCompleted') }}</th>
                 <th class="text-right">{{ t('account.balance') }}</th>
-                <th class="text-right">{{ t('account.equity') }}</th>
+                <th class="text-right">{{ data.account.protocol === 'mt5' ? t('mt5.estimatedEquity') : t('account.equity') }}</th>
                 <th class="text-right">{{ t('account.floatingNetPL') }}</th>
                 <th>{{ t('account.unit') }}</th>
               </tr>
