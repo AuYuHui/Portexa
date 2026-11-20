@@ -274,7 +274,7 @@
     "dailyHistoryCollectionQueuedFundsAndPositionsAre": "当日历史采集已加入队列，资金与持仓优先刷新。",
     "todaySProfitAndBalanceChange": "当日利润与结余",
     "todaySTradingStatistics": "当日交易统计",
-    "byMtServerDate": "按 MT4 服务器日期统计",
+    "byMtServerDate": "按交易服务器日期统计",
     "refreshToday": "刷新当日",
     "serverTimeIsBeingCalibratedFromNewlyClosed": "系统正在通过新平仓交易自动校准时间，就绪后显示当日利润与结余，无需选择时区。",
     "viewServerTimeSettings": "查看服务器时间设置",

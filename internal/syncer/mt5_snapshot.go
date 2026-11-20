@@ -20,10 +20,15 @@ func convertMT5(job accounts.Job, result mt5.Result, from, to int64) (storage.Sn
 		!finite(a.Balance) || !finite(a.Credit) {
 		return storage.Snapshot{}, nil, ErrIncomplete
 	}
+	isUSC := job.Account.Currency != nil && *job.Account.Currency == "USC" && (currency == "USD" || currency == "USC")
+	nativeCurrency := currency
+	if isUSC {
+		nativeCurrency = "USC"
+	}
 	snapshot := storage.Snapshot{ID: storage.NewID(), AccountID: job.Account.ID, SyncRunID: job.Run.ID,
-		ObservedFromMS: from, ObservedToMS: to, NativeCurrency: currency, UnitRevision: job.Account.UnitRevision,
+		ObservedFromMS: from, ObservedToMS: to, NativeCurrency: nativeCurrency, UnitRevision: job.Account.UnitRevision,
 		Balance: decimal.NewFromFloat(a.Balance), Credit: decimal.NewFromFloat(a.Credit), Leverage: a.Leverage}
-	if job.Account.Currency != nil && *job.Account.Currency == currency && job.Account.UnitVerifiedAtMS != nil {
+	if job.Account.Currency != nil && (*job.Account.Currency == currency || isUSC) && job.Account.UnitVerifiedAtMS != nil {
 		snapshot.USDScale = job.Account.USDScale
 	}
 	positions := make([]storage.Position, 0, len(result.Positions)+len(result.Orders))

@@ -317,32 +317,97 @@ func ParseSyncPayload(payload []byte, login uint64) (*SyncResult, error) {
 }
 
 func parseEmbeddedRecords(payload []byte, res *SyncResult) {
-	// Embedded records are preceded by tags 0x1F (orders) and 0x20 (positions)
-	// Each record is 793 bytes in modern MT5 wire
-	recSize := 793
-	for i := 0; i+recSize <= len(payload); i++ {
-		tag := payload[i]
-		if (tag == 0x1F || tag == 0x20) && i+5 <= len(payload) {
-			count := binary.LittleEndian.Uint32(payload[i+1 : i+5])
-			if count == 1 && i+recSize <= len(payload) {
-				rec := payload[i : i+recSize]
-				symbol := decodeUTF16String(rec[240:272])
-				if len(symbol) >= 2 {
-					ticket := binary.LittleEndian.Uint64(rec[4:12])
-					if tag == 0x20 {
-						pos := PositionSnapshot{
-							Ticket: ticket,
-							Symbol: symbol,
+	loginBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(loginBytes, res.Account.Login)
+
+	seenTickets := make(map[uint64]bool)
+
+	// 1. Scan for standard MT5 native 672-byte position/order records
+	const rec672 = 672
+	for i := 0; i+rec672 <= len(payload); i++ {
+		if bytes.Equal(payload[i:i+8], loginBytes) {
+			rec := payload[i : i+rec672]
+			symbol := decodeUTF16String(rec[48:112])
+			ticket := binary.LittleEndian.Uint64(rec[216:224])
+			if ticket == 0 {
+				ticket = binary.LittleEndian.Uint64(rec[208:216])
+			}
+			if len(symbol) >= 2 && ticket > 0 && !seenTickets[ticket] {
+				seenTickets[ticket] = true
+				openTime := binary.LittleEndian.Uint32(rec[32:36])
+				side := int(binary.LittleEndian.Uint32(rec[16:20]))
+				openPrice := math.Float64frombits(binary.LittleEndian.Uint64(rec[120:128]))
+				currPrice := math.Float64frombits(binary.LittleEndian.Uint64(rec[128:136]))
+				sl := math.Float64frombits(binary.LittleEndian.Uint64(rec[136:144]))
+				tp := math.Float64frombits(binary.LittleEndian.Uint64(rec[144:152]))
+				volumeUnits := binary.LittleEndian.Uint64(rec[152:160])
+				lots := float64(volumeUnits) / 100_000_000.0
+				if lots <= 0 {
+					lots = math.Float64frombits(binary.LittleEndian.Uint64(rec[288:296]))
+				}
+				profit := math.Float64frombits(binary.LittleEndian.Uint64(rec[160:168]))
+				comment := decodeUTF16String(rec[224:])
+
+				if side <= 1 {
+					res.Positions = append(res.Positions, PositionSnapshot{
+						Ticket:       ticket,
+						Symbol:       symbol,
+						Type:         side,
+						Lots:         lots,
+						OpenPrice:    openPrice,
+						CurrentPrice: currPrice,
+						SL:           sl,
+						TP:           tp,
+						Profit:       profit,
+						OpenTime:     openTime,
+						Comment:      comment,
+					})
+				} else if side <= 7 {
+					res.Orders = append(res.Orders, OrderSnapshot{
+						Ticket:   ticket,
+						Symbol:   symbol,
+						Type:     side,
+						Lots:     lots,
+						Price:    openPrice,
+						SL:       sl,
+						TP:       tp,
+						OpenTime: openTime,
+						Comment:  comment,
+					})
+				}
+				i += rec672 - 1
+			}
+		}
+	}
+
+	// 2. Fallback to 793-byte tagged records if no 672-byte records found
+	if len(res.Positions) == 0 && len(res.Orders) == 0 {
+		recSize := 793
+		for i := 0; i+recSize <= len(payload); i++ {
+			tag := payload[i]
+			if (tag == 0x1F || tag == 0x20) && i+5 <= len(payload) {
+				count := binary.LittleEndian.Uint32(payload[i+1 : i+5])
+				if count == 1 && i+recSize <= len(payload) {
+					rec := payload[i : i+recSize]
+					symbol := decodeUTF16String(rec[240:272])
+					if len(symbol) >= 2 {
+						ticket := binary.LittleEndian.Uint64(rec[4:12])
+						if !seenTickets[ticket] {
+							seenTickets[ticket] = true
+							if tag == 0x20 {
+								res.Positions = append(res.Positions, PositionSnapshot{
+									Ticket: ticket,
+									Symbol: symbol,
+								})
+							} else {
+								res.Orders = append(res.Orders, OrderSnapshot{
+									Ticket: ticket,
+									Symbol: symbol,
+								})
+							}
+							i += recSize - 1
 						}
-						res.Positions = append(res.Positions, pos)
-					} else {
-						ord := OrderSnapshot{
-							Ticket: ticket,
-							Symbol: symbol,
-						}
-						res.Orders = append(res.Orders, ord)
 					}
-					i += recSize - 1
 				}
 			}
 		}

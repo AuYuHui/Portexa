@@ -274,7 +274,7 @@
     "dailyHistoryCollectionQueuedFundsAndPositionsAre": "Daily history collection queued. Funds and positions are refreshed first.",
     "todaySProfitAndBalanceChange": "Today's profit and balance change",
     "todaySTradingStatistics": "Today's trading statistics",
-    "byMtServerDate": "By MT4 server date",
+    "byMtServerDate": "By trading server date",
     "refreshToday": "Refresh today",
     "serverTimeIsBeingCalibratedFromNewlyClosed": "Server time is being calibrated from newly closed trades. Daily profit and balance change will appear when ready; no time-zone selection is needed.",
     "viewServerTimeSettings": "View server time settings",
