@@ -156,6 +156,7 @@ type ServerDay struct {
 	TimeZone      string
 	TimeRulesetID string
 	Start, End    uint32 // Raw trade server wall-clock seconds, not UTC instants.
+	CurrentWall   uint32
 	NextDayUTC    time.Time
 }
 
@@ -208,7 +209,8 @@ func serverDay(tx *gorm.DB, server storage.Server, now time.Time) (ServerDay, er
 		}
 		return ServerDay{Date: start.Format("2006-01-02"), TimeZone: label, TimeRulesetID: rule.ID,
 			Start: uint32(start.Unix()), End: uint32(end.Unix()),
-			NextDayUTC: nextDay}, nil
+			CurrentWall: uint32(start.Unix()) + uint32(local.Hour()*3600+local.Minute()*60+local.Second()),
+			NextDayUTC:  nextDay}, nil
 	}
 	return ServerDay{}, ErrServerTime
 }

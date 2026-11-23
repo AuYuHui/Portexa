@@ -52,6 +52,65 @@ func TestHistoryUnknownEmptyAndOfflineGapRemainDistinct(t *testing.T) {
 	}
 }
 
+func TestHistoryRecheckPrioritizesRecentWithdrawalsAndKeepsProgress(t *testing.T) {
+	now := time.Date(2026, 11, 11, 15, 53, 0, 0, time.UTC)
+	f, account := dailyFixture(t, &now, "Etc/GMT-2")
+	ctx := t.Context()
+	job, err := f.Accounts.ClaimHistory(ctx, account.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	day := job.Day
+	checked := now.Add(-time.Hour).UnixMilli()
+	window := func(from, to uint32) storage.HistoryCoverage {
+		return storage.HistoryCoverage{ID: storage.NewID(), AccountID: account.ID,
+			UnitRevision: account.UnitRevision, TimeRulesetID: day.TimeRulesetID, ParentID: &job.Coverage.ID,
+			StartWall: day.Start + from, EndWall: day.Start + to, State: "complete", CheckedAtMS: &checked}
+	}
+	earlier := window(0, 17*3600+15*60+1)
+	withdrawal := window(17*3600+15*60, 17*3600+26*60+1)
+	latest := window(17*3600+26*60, 18*3600+1)
+	future := window(18*3600, 24*3600)
+	if err := f.Accounts.FailHistory(ctx, job, accounts.Failure{Code: "timeout", Operation: "history"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
+		if err := tx.Model(&job.Coverage).Update("state", "split").Error; err != nil {
+			return err
+		}
+		return tx.Create(&[]storage.HistoryCoverage{earlier, withdrawal, latest, future}).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Accounts.RequestHistory(ctx, account.ID); err != nil {
+		t.Fatal(err)
+	}
+	job, err = f.Accounts.ClaimHistory(ctx, account.ID)
+	if err != nil || job.Coverage.ID != latest.ID {
+		t.Fatalf("the next fetch did not cover the current server time: %v", err)
+	}
+	publishHistory(t, f, job, nil, now)
+
+	now = now.Add(2 * time.Second)
+	if err := f.Accounts.RequestHistory(ctx, account.ID); err != nil {
+		t.Fatal(err)
+	}
+	job, err = f.Accounts.ClaimHistory(ctx, account.ID)
+	if err != nil || job.Coverage.ID != withdrawal.ID {
+		t.Fatalf("repeat refresh pushed the recent withdrawal behind other intervals: %v", err)
+	}
+	publishHistory(t, f, job, []mt4.Trade{{Ticket: 654321, Command: 6, OpenTime: withdrawal.StartWall + 60,
+		Profit: -42.75, Comment: "W(DOUT12345)"}}, now)
+	view := fundingView(t, f, account.ID)
+	if view.Withdrawals == nil || view.Withdrawals.String() != "42.75" {
+		t.Fatalf("recent withdrawal was not published while historical recheck continued: %+v", view)
+	}
+	var older storage.HistoryCoverage
+	if err := f.Store.Read.First(&older, "id=?", earlier.ID).Error; err != nil || older.State != "pending" {
+		t.Fatalf("older history recheck did not stay queued: %v", err)
+	}
+}
+
 func TestHistorySplitOverlapBlockedAndSnapshotYield(t *testing.T) {
 	now := time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
 	f, a := dailyFixture(t, &now, "UTC")

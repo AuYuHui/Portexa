@@ -12,6 +12,7 @@ import (
 )
 
 const HistoryPublishLimit = 10000
+const historyRecentWindowSeconds = 2 * 60 * 60
 
 // HistoryJob contains a credential capability and must not be logged/serialized.
 type HistoryJob struct {
@@ -93,10 +94,20 @@ func (s *Service) RequestHistory(ctx context.Context, id string) error {
 		if err := prepareHistory(tx, account, day); err != nil {
 			return err
 		}
-		if err := historyScope(tx, account, day).Where("state!='split' AND state!='running'").Updates(map[string]any{
-			"state": "pending", "next_attempt_at_ms": 0, "failure_count": 0,
-		}).Error; err != nil {
+		// A pending, previously checked window has already been queued for
+		// recheck. Keep the progress of the current sweep on repeated clicks.
+		var queued int64
+		if err := historyScope(tx, account, day).
+			Where("start_wall>=? AND state='pending' AND next_attempt_at_ms=0 AND checked_at_ms IS NOT NULL", day.Start).
+			Count(&queued).Error; err != nil {
 			return err
+		}
+		if queued == 0 || account.HistorySyncPaused {
+			if err := historyScope(tx, account, day).Where("state!='split' AND state!='running'").Updates(map[string]any{
+				"state": "pending", "next_attempt_at_ms": 0, "failure_count": 0,
+			}).Error; err != nil {
+				return err
+			}
 		}
 		return tx.Model(&account).Updates(map[string]any{"next_history_sync_at_ms": 0, "history_sync_paused": false}).Error
 	})
@@ -144,8 +155,18 @@ func (s *Service) ClaimHistory(ctx context.Context, id string) (HistoryJob, erro
 		if err = prepareHistory(tx, a, job.Day); err != nil {
 			return err
 		}
-		found := historyScope(tx, a, job.Day).Where("state NOT IN ('split','blocked','running') AND next_attempt_at_ms<=?", now.UnixMilli()).
-			Order(clause.OrderBy{Expression: clause.Expr{SQL: "CASE WHEN start_wall>=? THEN 0 WHEN checked_at_ms IS NULL THEN 1 ELSE 2 END, next_attempt_at_ms,start_wall,id", Vars: []any{job.Day.Start}}}).
+		day := job.Day
+		recentStart := day.CurrentWall - min(day.CurrentWall-day.Start, historyRecentWindowSeconds)
+		const recent = "start_wall>=? AND start_wall<=? AND end_wall>?"
+		// Read the latest activity before replaying older split windows.
+		// Scheduled retries in a priority group still run in due-time order.
+		priority := clause.Expr{
+			SQL: "CASE WHEN " + recent + " THEN 0 WHEN start_wall>=? THEN 1 WHEN checked_at_ms IS NULL THEN 2 ELSE 3 END, " +
+				"next_attempt_at_ms, CASE WHEN " + recent + " THEN -start_wall ELSE start_wall END, id",
+			Vars: []any{day.Start, day.CurrentWall, recentStart, day.Start, day.Start, day.CurrentWall, recentStart},
+		}
+		found := historyScope(tx, a, day).Where("state NOT IN ('split','blocked','running') AND next_attempt_at_ms<=?", now.UnixMilli()).
+			Order(clause.OrderBy{Expression: priority}).
 			Limit(1).Find(&job.Coverage)
 		if found.Error != nil {
 			return found.Error
