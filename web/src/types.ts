@@ -30,6 +30,8 @@ export interface Account {
   server_name: string;
   broker_name: string;
   endpoint_id: string;
+  backup_endpoint_ids: string[];
+  last_collection_revision: number | null;
   endpoint_approved: boolean;
   login: number;
   label: string;

@@ -23,7 +23,7 @@ const platform = ref<Server["protocol"]>(props.server?.protocol ?? props.initial
 const query = ref(props.server?.server_name || "");
 const results = shallowRef<(DirectoryCandidate | DirectoryServerName)[]>([]);
 const selected = shallowRef<DirectoryCandidate>();
-const endpoint = ref(0);
+const endpointIndices = ref<number[]>([]);
 const risk = ref(false);
 const loading = ref(false);
 const searched = ref(false);
@@ -34,7 +34,8 @@ const shown = computed(() =>
     ? results.value.filter(
         (s) =>
           s.server_name.toLowerCase() ===
-          props.server?.server_name.toLowerCase(),
+          props.server?.server_name.toLowerCase() &&
+          s.broker_name.toLowerCase() === props.server?.broker_name.toLowerCase(),
       )
     : results.value,
 );
@@ -80,19 +81,26 @@ watch(
   { immediate: true },
 );
 
+function registered(access: DirectoryCandidate["endpoints"][number]) {
+  return props.server?.endpoints.some(
+    (e) => e.state !== "retired" && e.ip_address === access.ip_address && e.port === access.port,
+  ) ?? false;
+}
+
 function choose(candidate: DirectoryCandidate | DirectoryServerName) {
   if (!("endpoints" in candidate) || !candidate.endpoints.length) {
     emit("selectMt5", candidate);
     return;
   }
   selected.value = candidate;
-  endpoint.value = 0;
+  const first = candidate.endpoints.findIndex((access) => !registered(access));
+  endpointIndices.value = first < 0 ? [] : [first];
   risk.value = false;
   error.value = "";
 }
 
 async function submit() {
-  if (!selected.value || !risk.value || saving.value) return;
+  if (!selected.value || !endpointIndices.value.length || !risk.value || saving.value) return;
   saving.value = true;
   error.value = "";
   try {
@@ -101,7 +109,7 @@ async function submit() {
       : "/servers/discovered";
     await api(path, "POST", {
       candidate_id: selected.value.id,
-      endpoint_index: endpoint.value,
+      endpoint_indices: [...endpointIndices.value].sort((a, b) => a - b),
       accept_risk: risk.value,
     });
     await refreshAccounts();
@@ -116,8 +124,8 @@ async function submit() {
 
 <template>
   <form class="form-stack directory-form" @submit.prevent="submit">
-    <p v-if="server" class="notice notice-warning">
-      {{ t('directoryPicker.revisionWarning', { server: server.server_name }) }}
+    <p v-if="server" class="muted small">
+      {{ t('directoryPicker.addEndpointsHelp', { server: server.server_name }) }}
     </p>
     <div v-else class="field">
       <label for="directory-platform">{{ t('mt5.platform') }}</label>
@@ -221,26 +229,19 @@ async function submit() {
           </p>
         </div>
       </div>
+      <div class="field">
+        <strong>{{ t('directoryPicker.selectEndpoints') }}</strong>
+        <label v-for="(access, index) in selected.endpoints" :key="index" class="checkbox-row">
+          <input v-model="endpointIndices" type="checkbox" :value="index" :disabled="saving || registered(access)" />
+          <span>
+            {{ t('directoryPicker.endpointOption', { number: index + 1, address: access.ip_address, port: access.port }) }}
+            <small v-if="registered(access)">{{ t('directoryPicker.alreadyRegistered') }}</small>
+          </span>
+        </label>
+      </div>
       <details class="directory-details">
         <summary>{{ t('directoryPicker.viewEndpointAndSource') }}</summary>
-        <label class="field"
-          >{{ t('accountForm.fixedEndpoint') }}<select
-            v-model.number="endpoint"
-            :aria-label="t('directoryPicker.directoryCandidateEndpoint')"
-          >
-            <option
-              v-for="(access, index) in selected.endpoints"
-              :key="`${access.ip_address}:${access.port}`"
-              :value="index"
-            >
-              {{ t('directoryPicker.endpointOption', { number: index + 1, address: access.ip_address, port: access.port }) }}
-            </option>
-          </select></label
-        >
         <p class="small muted">{{ selected.source_url }}</p>
-        <p class="small muted">
-          {{ t('directoryPicker.thisConnectionIsPinnedToTheSelectedAddress') }}
-        </p>
       </details>
       <label class="checkbox-row"
         ><input
@@ -266,14 +267,14 @@ async function submit() {
         <button
           type="submit"
           class="btn btn-primary"
-          :disabled="!risk || saving"
+          :disabled="!risk || !endpointIndices.length || saving"
         >
           <LoaderCircle v-if="saving" class="spin" :size="16" />
           {{
             saving
               ? t('accountForm.saving')
               : server
-                ? t('directoryPicker.confirmNewRevisionAndPauseAccounts')
+                ? t('directoryPicker.confirmAddEndpoints')
                 : t('directoryPicker.registerAndConfirmConnection')
           }}
         </button>

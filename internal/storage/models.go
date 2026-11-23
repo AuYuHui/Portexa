@@ -61,6 +61,8 @@ type Account struct {
 	ID                       string           `gorm:"column:id;primaryKey" json:"-"`
 	ServerID                 string           `gorm:"column:server_id" json:"-"`
 	PinnedEndpointID         string           `gorm:"column:pinned_endpoint_id" json:"-"`
+	BackupEndpointIDs        string           `gorm:"column:backup_endpoint_ids;default:'[]'" json:"-"`
+	LastCollectionEndpointID string           `gorm:"column:last_collection_endpoint_id" json:"-"`
 	Login                    uint64           `gorm:"column:login" json:"-"`
 	Label                    string           `gorm:"column:label" json:"-"`
 	Currency                 *string          `gorm:"column:currency" json:"-"`

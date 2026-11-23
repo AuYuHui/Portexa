@@ -20,6 +20,7 @@ type DailyJob struct {
 	Run            storage.DailyReport
 	Config         mt4.Config
 	MT5Config      *mt5.Config
+	Backups        []string
 	Day            ServerDay
 	NativeCurrency string
 	PositionExits  []DailyPositionExit
@@ -61,7 +62,7 @@ func (s *Service) RequestDaily(ctx context.Context, id string) error {
 		if _, err := serverDay(tx, server, s.Now()); err != nil {
 			return err
 		}
-		if _, err := s.validEndpoint(tx, account.PinnedEndpointID, account.ServerID); err != nil {
+		if _, err := s.collectionEndpoints(tx, account); err != nil {
 			return err
 		}
 		return tx.Model(&account).Updates(map[string]any{"next_daily_sync_at_ms": 0, "daily_sync_paused": false, "daily_failure_count": 0}).Error
@@ -119,8 +120,8 @@ func (s *Service) ClaimDaily(ctx context.Context, id string) (DailyJob, error) {
 		if err != nil {
 			return err
 		}
-		job.Config, job.MT5Config = cfg.mt4, cfg.mt5
-		job.Run = storage.DailyReport{ID: storage.NewID(), AccountID: id, ServerID: a.ServerID, EndpointID: a.PinnedEndpointID,
+		job.Config, job.MT5Config, job.Backups = cfg.MT4, cfg.MT5, cfg.backups
+		job.Run = storage.DailyReport{ID: storage.NewID(), AccountID: id, ServerID: a.ServerID, EndpointID: cfg.ID,
 			ConfigVersion: a.ConfigVersion, UnitRevision: a.UnitRevision, TimeRulesetID: job.Day.TimeRulesetID,
 			ReportDate: job.Day.Date, TimeZone: job.Day.TimeZone, WindowStart: job.Day.Start, WindowEnd: job.Day.End,
 			State: "running", StartedAtMS: now.UnixMilli()}
@@ -159,7 +160,7 @@ func (s *Service) PublishDaily(ctx context.Context, job DailyJob, report storage
 		if job.MT5Config != nil {
 			reason = mt5HistoryComplete
 		}
-		result := tx.Model(&storage.DailyReport{}).Where("id = ? AND state = 'running'", job.Run.ID).Updates(map[string]any{
+		result := tx.Model(&storage.DailyReport{}).Where("id = ? AND endpoint_id = ? AND state = 'running'", job.Run.ID, job.Run.EndpointID).Updates(map[string]any{
 			"state": "succeeded", "finished_at_ms": report.FinishedAtMS, "native_currency": report.NativeCurrency,
 			"net_profit": report.NetProfit, "balance_adjustment": report.BalanceAdjustment, "balance_change": report.BalanceChange,
 			"credit_change": report.CreditChange, "closed_trades": report.ClosedTrades, "completion_reason": reason,

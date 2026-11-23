@@ -29,7 +29,7 @@ func historicalTimeEntries(ctx context.Context, tx *gorm.DB, server storage.Serv
 	if measured {
 		var observations []storage.ClockObservation
 		if err := tx.WithContext(ctx).Table("trade_clock_observations AS o").Select("o.*").
-			Joins("JOIN accounts AS a ON a.id=o.account_id AND a.server_id=o.server_id AND a.config_version=o.config_version AND a.pinned_endpoint_id=o.endpoint_id").
+			Joins("JOIN accounts AS a ON a.id=o.account_id AND a.server_id=o.server_id AND a.config_version=o.config_version AND COALESCE(NULLIF(a.last_collection_endpoint_id, ''), a.pinned_endpoint_id)=o.endpoint_id").
 			Joins("JOIN server_endpoints AS e ON e.id=o.endpoint_id AND e.state='reviewed'").
 			Where("o.server_id=? AND o.state='accepted' AND a.removed_at_ms IS NULL AND o.window_to_ms>? AND o.checked_at_ms<?",
 				server.ID, from-clockEvidenceLookback.Milliseconds(), to+clockEvidenceLookback.Milliseconds()).

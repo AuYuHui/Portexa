@@ -20,6 +20,7 @@ type Job struct {
 	Run       storage.SyncRun
 	Config    mt4.Config
 	MT5Config *mt5.Config
+	Backups   []string
 }
 
 func (s *Service) Due(ctx context.Context, now int64, limit int) ([]string, error) {
@@ -39,7 +40,7 @@ func (s *Service) RequestSync(ctx context.Context, id string) error {
 		if !account.SyncEnabled {
 			return ErrPaused
 		}
-		if _, err := s.validEndpoint(tx, account.PinnedEndpointID, account.ServerID); err != nil {
+		if _, err := s.collectionEndpoints(tx, account); err != nil {
 			return err
 		}
 		return tx.Model(&account).Update("next_sync_at_ms", s.Now().UnixMilli()).Error
@@ -100,10 +101,10 @@ func (s *Service) Claim(ctx context.Context, id string) (Job, error) {
 		if err != nil {
 			return err
 		}
-		job.Config, job.MT5Config = cfg.mt4, cfg.mt5
+		job.Config, job.MT5Config, job.Backups = cfg.MT4, cfg.MT5, cfg.backups
 		now := s.Now().UnixMilli()
 		job.Run = storage.SyncRun{ID: storage.NewID(), AccountID: account.ID, ServerID: account.ServerID,
-			EndpointID: account.PinnedEndpointID, CredentialVersion: account.CredentialVersion, ConfigVersion: account.ConfigVersion,
+			EndpointID: cfg.ID, CredentialVersion: account.CredentialVersion, ConfigVersion: account.ConfigVersion,
 			Kind: "snapshot", State: "running", DueAtMS: account.NextSyncAtMS, NotBeforeMS: now, StartedAtMS: &now, Attempt: account.FailureCount + 1}
 		return tx.Create(&job.Run).Error
 	})
@@ -122,7 +123,7 @@ func (s *Service) DisableBrokenGate(ctx context.Context, id string, version int6
 		}
 		now := s.Now().UnixMilli()
 		code := "credential_unavailable"
-		if _, err := s.validEndpoint(tx, account.PinnedEndpointID, account.ServerID); err != nil {
+		if _, err := s.collectionEndpoints(tx, account); err != nil {
 			code = "endpoint_untrusted"
 		}
 		run := storage.SyncRun{ID: storage.NewID(), AccountID: id, ServerID: account.ServerID, EndpointID: account.PinnedEndpointID,
@@ -162,7 +163,7 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 			return err
 		}
 		var run storage.SyncRun
-		if err := tx.First(&run, "id = ? AND state = 'running'", job.Run.ID).Error; err != nil {
+		if err := tx.First(&run, "id = ? AND endpoint_id = ? AND state = 'running'", job.Run.ID, job.Run.EndpointID).Error; err != nil {
 			return err
 		}
 		settings, err := readCollectionSettings(tx)
@@ -171,6 +172,8 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 		}
 		interval := time.Duration(settings.SnapshotIntervalSeconds) * time.Second
 		var blockedUntil int64
+		endpointChanged := collectionEndpointID(current) != run.EndpointID
+		current.LastCollectionEndpointID = run.EndpointID
 		if job.MT5Config == nil {
 			interval, blockedUntil, err = restSchedule(tx, current, &snapshot, positions, settings)
 			if err != nil {
@@ -213,7 +216,8 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 				return err
 			}
 		}
-		updates := map[string]any{"current_snapshot_id": snapshot.ID, "next_sync_at_ms": nextAt, "failure_count": 0}
+		updates := map[string]any{"current_snapshot_id": snapshot.ID, "next_sync_at_ms": nextAt, "failure_count": 0,
+			"last_collection_endpoint_id": run.EndpointID}
 		if blockedUntil > 0 {
 			updates["rest_blocked_until_ms"] = blockedUntil
 			if current.DailyFailureCount == 0 && !current.DailySyncPaused {
@@ -231,8 +235,15 @@ func (s *Service) publish(ctx context.Context, job Job, snapshot storage.Snapsho
 			return err
 		}
 		var server storage.Server
-		if err := tx.First(&server, "id = ?", current.ServerID).Error; err == nil && server.ActiveTimeRulesetID == nil {
-			_ = ensureAutomaticTime(tx, &server, s.Now())
+		if err := tx.First(&server, "id = ?", current.ServerID).Error; err == nil {
+			if server.ActiveTimeRulesetID == nil {
+				_ = ensureAutomaticTime(tx, &server, s.Now())
+			}
+			if endpointChanged && job.MT5Config == nil {
+				if err := refreshClockCalibration(tx, &server, s.Now()); err != nil {
+					return err
+				}
+			}
 		}
 		return tx.Model(&run).Updates(map[string]any{"state": "succeeded", "finished_at_ms": snapshot.ObservedToMS, "completion_reason": "complete"}).Error
 	})

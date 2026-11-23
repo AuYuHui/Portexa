@@ -81,3 +81,44 @@ func TestAuthenticatedDirectoryRegistrationAndRevision(t *testing.T) {
 		t.Fatal("cross-server directory revision accepted", w.Code)
 	}
 }
+
+func TestDirectoryRegistersMultipleEndpointsWithoutReplacing(t *testing.T) {
+	f := testutil.New(t, true)
+	catalog := discovery.New(discovery.Options{AllowTarget: f.Accounts.AllowTarget, Fetch: func(context.Context, string) ([]byte, error) {
+		return []byte(directoryBody), nil
+	}})
+	candidates, err := catalog.Search(t.Context(), "Synthetic")
+	if err != nil || len(candidates) != 1 {
+		t.Fatalf("could not prepare directory selection: %v", err)
+	}
+	s, err := httpapi.New(f.Auth, f.Accounts, noopScheduler{}, httpapi.Config{Origin: "https://portexa.test", Directory: catalog})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie, csrf := loginHTTP(t, s)
+	body := fmt.Sprintf(`{"candidate_id":%q,"endpoint_indices":[0,1],"accept_risk":true}`, candidates[0].ID)
+	w := request(s, "POST", "/api/servers/discovered", body, cookie, csrf, "https://portexa.test")
+	var registered struct {
+		Server   storage.Server   `json:"server"`
+		Endpoint storage.Endpoint `json:"endpoint"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &registered); err != nil || w.Code != 201 {
+		t.Fatalf("could not register the selected endpoints: %d %v", w.Code, err)
+	}
+	account := f.Account(t, registered.Server, registered.Endpoint, 8801, "USD")
+	path := fmt.Sprintf("/api/servers/%s/discovered-endpoints", registered.Server.ID)
+	w = request(s, "POST", path, body, cookie, csrf, "https://portexa.test")
+	if w.Code != 201 {
+		t.Fatalf("adding an already registered selection: %d", w.Code)
+	}
+	var endpoints []storage.Endpoint
+	if err := f.Store.Read.Where("server_id = ?", registered.Server.ID).Order("revision").Find(&endpoints).Error; err != nil ||
+		len(endpoints) != 2 || !endpoints[0].Approved() || !endpoints[1].Approved() || endpoints[0].ID != registered.Endpoint.ID {
+		t.Fatalf("directory registration lost approval or duplicated endpoints: %v", err)
+	}
+	var persisted storage.Account
+	if err := f.Store.Read.First(&persisted, "id = ?", account.ID).Error; err != nil ||
+		!persisted.SyncEnabled || persisted.ConfigVersion != account.ConfigVersion || persisted.PinnedEndpointID != account.PinnedEndpointID {
+		t.Fatalf("additive registration disturbed an existing account: %v", err)
+	}
+}

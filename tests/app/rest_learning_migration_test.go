@@ -10,6 +10,7 @@ import (
 
 func stripMT5Schema(t *testing.T, db *sql.DB) {
 	t.Helper()
+	stripCollectionEndpointSchema(t, db)
 	for _, statement := range []string{
 		"DROP INDEX history_mt5_deal_page",
 		"ALTER TABLE history_order_revisions DROP COLUMN mt5_deal_type",

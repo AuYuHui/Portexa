@@ -88,7 +88,7 @@ func inferClockOffset(observation storage.ClockObservation, closeWall uint32) (i
 func refreshClockCalibration(tx *gorm.DB, server *storage.Server, now time.Time) error {
 	var observations []storage.ClockObservation
 	if err := tx.Table("trade_clock_observations AS o").Select("o.*").
-		Joins("JOIN accounts AS a ON a.id = o.account_id AND a.server_id = o.server_id AND a.config_version = o.config_version AND a.pinned_endpoint_id = o.endpoint_id").
+		Joins("JOIN accounts AS a ON a.id = o.account_id AND a.server_id = o.server_id AND a.config_version = o.config_version AND COALESCE(NULLIF(a.last_collection_endpoint_id, ''), a.pinned_endpoint_id) = o.endpoint_id").
 		Joins("JOIN server_endpoints AS e ON e.id = o.endpoint_id AND e.state = 'reviewed'").
 		Where("o.server_id = ? AND o.state = 'accepted' AND a.removed_at_ms IS NULL AND o.window_to_ms > ? AND o.window_to_ms <= ?",
 			server.ID, now.Add(-clockEvidenceLookback).UnixMilli(), now.UnixMilli()).

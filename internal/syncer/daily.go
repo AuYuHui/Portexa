@@ -75,12 +75,18 @@ func (e *Engine) runDaily(ctx context.Context, id string) {
 	var report storage.DailyReport
 	var result mt4.Result
 	var orders []storage.HistoryOrder
-	if job.MT5Config != nil {
-		orders, err = e.readMT5Deals(fetchCtx, job.MT5Config, mt5.HistoryRange{Start: job.Day.Start, End: job.Day.End}, job.NativeCurrency, 0)
-	} else {
-		result, err = e.fetch(fetchCtx, job.Config, mt4.Options{History: &mt4.HistoryRange{Start: job.Day.Start, End: job.Day.End}})
-		job.Config.Password = ""
-	}
+	target := accounts.CollectionTarget{ID: job.Run.EndpointID, MT4: job.Config, MT5: job.MT5Config}
+	job.Run.EndpointID, err = e.collect(fetchCtx, job.Account, &storage.DailyReport{}, job.Run.ID, target, job.Backups,
+		func(attempt context.Context, target accounts.CollectionTarget) error {
+			var err error
+			if target.MT5 != nil {
+				orders, err = e.readMT5Deals(attempt, target.MT5, mt5.HistoryRange{Start: job.Day.Start, End: job.Day.End}, job.NativeCurrency, 0)
+			} else {
+				result, err = e.fetch(attempt, target.MT4, mt4.Options{History: &mt4.HistoryRange{Start: job.Day.Start, End: job.Day.End}})
+			}
+			return err
+		})
+	job.Config.Password = ""
 	finished := time.Now()
 	if err == nil {
 		err = fetchCtx.Err()

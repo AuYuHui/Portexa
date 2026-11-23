@@ -31,6 +31,7 @@ var (
 	ErrConfig        = errors.New("invalid MT5 connection configuration")
 	ErrReadOnly      = errors.New("MT5 investor password required")
 	ErrProtocol      = errors.New("unexpected MT5 protocol response")
+	ErrConnection    = errors.New("MT5 connection lost")
 	ErrRejected      = errors.New("MT5 server rejected the request")
 	ErrResourceLimit = errors.New("MT5 response exceeded the message limit")
 )
@@ -102,7 +103,7 @@ func fetchSnapshot(ctx context.Context, cfg Config, fullCatalog bool) (Result, e
 
 	session, err := protocol.HandshakeAndAuthenticate(conn, conn, cfg.Login, cfg.Password)
 	if err != nil {
-		return Result{}, mapProtocolError(err)
+		return Result{}, sessionProtocolError(ctx, err)
 	}
 
 	syncOpts := protocol.SyncOptions{
@@ -179,6 +180,10 @@ func mapProtocolError(err error) error {
 	}
 	if errors.Is(err, protocol.ErrFrameTooLarge) {
 		return ErrResourceLimit
+	}
+	var socket *net.OpError
+	if errors.Is(err, protocol.ErrPeerClosed) || errors.Is(err, net.ErrClosed) || errors.As(err, &socket) {
+		return errors.Join(ErrConnection, ErrProtocol)
 	}
 	return ErrProtocol
 }

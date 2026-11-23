@@ -134,7 +134,7 @@ func (s *Service) PublishHistory(ctx context.Context, job HistoryJob, orders []s
 			return storage.ErrConflict
 		}
 		var run storage.HistoryRun
-		if err = tx.First(&run, "id=? AND state='running'", job.Run.ID).Error; err != nil {
+		if err = tx.First(&run, "id=? AND endpoint_id=? AND state='running'", job.Run.ID, job.Run.EndpointID).Error; err != nil {
 			return err
 		}
 		if len(changed) > 0 {

@@ -21,7 +21,7 @@ func restDigest(value any) string {
 	return hex.EncodeToString(sum[:])
 }
 func learningGroupID(account storage.Account, symbol string, epoch int64) string {
-	return restDigest([]any{account.ServerID, account.PinnedEndpointID, symbol, epoch})
+	return restDigest([]any{account.ServerID, collectionEndpointID(account), symbol, epoch})
 }
 func normalizeRestSymbol(symbol string) string { return strings.ToUpper(strings.TrimSpace(symbol)) }
 func quotePositions(items []storage.Position) map[string][]storage.Position {
@@ -76,7 +76,7 @@ func captureRestActivity(tx *gorm.DB, account storage.Account, snapshot storage.
 	}
 	for symbol, current := range after {
 		id := learningGroupID(account, symbol, policy.LearningEpochMS)
-		group := storage.MarketLearningGroup{ID: id, ServerID: account.ServerID, EndpointID: account.PinnedEndpointID, Symbol: symbol, EpochMS: policy.LearningEpochMS, LastObservedMS: snapshot.ObservedToMS, State: "learning", Reason: "collecting"}
+		group := storage.MarketLearningGroup{ID: id, ServerID: account.ServerID, EndpointID: collectionEndpointID(account), Symbol: symbol, EpochMS: policy.LearningEpochMS, LastObservedMS: snapshot.ObservedToMS, State: "learning", Reason: "collecting"}
 		if err = tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoUpdates: clause.Assignments(map[string]any{"last_observed_ms": snapshot.ObservedToMS})}).Create(&group).Error; err != nil {
 			return err
 		}
@@ -92,7 +92,7 @@ func captureRestActivity(tx *gorm.DB, account storage.Account, snapshot storage.
 				return err
 			}
 		}
-		reliable := previous.ID != "" && previousRun.State == "succeeded" && previousRun.EndpointID == account.PinnedEndpointID && previousRun.ServerID == account.ServerID && previousRun.ConfigVersion == account.ConfigVersion && previous.UnitRevision == snapshot.UnitRevision && previous.NativeCurrency == snapshot.NativeCurrency && previous.ObservedToMS >= policy.LearningEpochMS && snapshot.ObservedFromMS >= previous.ObservedToMS && snapshot.ObservedFromMS <= snapshot.ObservedToMS && snapshot.ObservedToMS-snapshot.ObservedFromMS <= marketrest.Grace.Milliseconds()
+		reliable := previous.ID != "" && previousRun.State == "succeeded" && previousRun.EndpointID == collectionEndpointID(account) && previousRun.ServerID == account.ServerID && previousRun.ConfigVersion == account.ConfigVersion && previous.UnitRevision == snapshot.UnitRevision && previous.NativeCurrency == snapshot.NativeCurrency && previous.ObservedToMS >= policy.LearningEpochMS && snapshot.ObservedFromMS >= previous.ObservedToMS && snapshot.ObservedFromMS <= snapshot.ObservedToMS && snapshot.ObservedToMS-snapshot.ObservedFromMS <= marketrest.Grace.Milliseconds()
 		row.Healthy = reliable && account.FailureCount == 0 && snapshot.ObservedToMS-previous.ObservedToMS <= gap
 		for _, p := range current {
 			for _, b := range before[symbol] {

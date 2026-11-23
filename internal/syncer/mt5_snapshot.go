@@ -105,7 +105,7 @@ func classifyMT5(err error) accounts.Failure {
 	var network net.Error
 	failure := accounts.Failure{Code: "connection", Operation: "mt5_snapshot"}
 	switch {
-	case errors.Is(err, context.Canceled):
+	case errors.Is(err, context.Canceled), errors.Is(err, storage.ErrConflict), errors.Is(err, accounts.ErrEndpoint):
 		failure.Code, failure.Canceled = "configuration_changed", true
 	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &network) && network.Timeout():
 		failure.Code = "timeout"
@@ -117,6 +117,8 @@ func classifyMT5(err error) accounts.Failure {
 		failure.Code, failure.Permanent = "invalid_config", true
 	case errors.Is(err, mt5.ErrResourceLimit):
 		failure.Code, failure.Permanent = "resource_limit", true
+	case errors.Is(err, mt5.ErrConnection):
+		failure.Code = "connection"
 	case errors.Is(err, mt5.ErrProtocol):
 		failure.Code = "invalid_response"
 	case errors.Is(err, ErrIncomplete):

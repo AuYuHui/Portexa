@@ -87,8 +87,8 @@ func normalizeMT5Deal(deal mt5.Deal) (storage.HistoryOrder, error) {
 	return order, nil
 }
 
-func (e *Engine) convertMT5History(ctx context.Context, job accounts.HistoryJob) ([]storage.HistoryOrder, error) {
-	orders, err := e.readMT5Deals(ctx, job.MT5Config, mt5.HistoryRange{Start: job.Coverage.StartWall, End: job.Coverage.EndWall},
+func (e *Engine) convertMT5History(ctx context.Context, job accounts.HistoryJob, config *mt5.Config) ([]storage.HistoryOrder, error) {
+	orders, err := e.readMT5Deals(ctx, config, mt5.HistoryRange{Start: job.Coverage.StartWall, End: job.Coverage.EndWall},
 		job.Run.NativeCurrency, accounts.HistoryPublishLimit)
 	if err != nil {
 		return nil, err

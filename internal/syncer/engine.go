@@ -234,26 +234,31 @@ func (e *Engine) runOne(ctx context.Context, id string) {
 }
 
 func (e *Engine) readSnapshot(ctx context.Context, job *accounts.Job, from time.Time) (storage.Snapshot, []storage.Position, error) {
-	if job.MT5Config != nil {
-		result, err := e.fetchMT5(ctx, *job.MT5Config)
-		job.MT5Config.Password = ""
-		if err == nil {
-			err = ctx.Err()
-		}
-		if err != nil {
-			return storage.Snapshot{}, nil, err
-		}
-		return convertMT5(*job, result, from.UnixMilli(), time.Now().UnixMilli())
-	}
-	result, err := e.fetch(ctx, job.Config, mt4.Options{})
+	var mt4Result mt4.Result
+	var mt5Result mt5.Result
+	started := from
+	target := accounts.CollectionTarget{ID: job.Run.EndpointID, MT4: job.Config, MT5: job.MT5Config}
+	endpoint, err := e.collect(ctx, job.Account, &storage.SyncRun{}, job.Run.ID, target, job.Backups,
+		func(attempt context.Context, target accounts.CollectionTarget) error {
+			started = time.Now()
+			var err error
+			if target.MT5 != nil {
+				mt5Result, err = e.fetchMT5(attempt, *target.MT5)
+				target.MT5.Password = ""
+			} else {
+				mt4Result, err = e.fetch(attempt, target.MT4, mt4.Options{})
+			}
+			return err
+		})
+	job.Run.EndpointID = endpoint
 	job.Config.Password = ""
-	if err == nil {
-		err = ctx.Err()
-	}
 	if err != nil {
 		return storage.Snapshot{}, nil, err
 	}
-	return Convert(*job, result, from.UnixMilli(), time.Now().UnixMilli())
+	if job.MT5Config != nil {
+		return convertMT5(*job, mt5Result, started.UnixMilli(), time.Now().UnixMilli())
+	}
+	return Convert(*job, mt4Result, started.UnixMilli(), time.Now().UnixMilli())
 }
 
 func (e *Engine) stopForStorageFailure() {

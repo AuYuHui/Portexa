@@ -26,7 +26,7 @@ type ClosedClockTrade struct {
 
 func pendingClock(tx *gorm.DB, account storage.Account, now int64) *gorm.DB {
 	return tx.Where("account_id = ? AND config_version = ? AND endpoint_id = ? AND state = 'pending' AND window_to_ms > ? AND window_to_ms <= ?",
-		account.ID, account.ConfigVersion, account.PinnedEndpointID, now-clockPendingTTL.Milliseconds(), now)
+		account.ID, account.ConfigVersion, collectionEndpointID(account), now-clockPendingTTL.Milliseconds(), now)
 }
 
 func (s *Service) ClockDue(ctx context.Context, now int64, limit int) ([]string, error) {
@@ -35,7 +35,7 @@ func (s *Service) ClockDue(ctx context.Context, now int64, limit int) ([]string,
 		Where("a.sync_enabled = 1 AND a.clock_sync_paused = 0 AND a.removed_at_ms IS NULL AND a.next_clock_sync_at_ms <= ? AND a.next_sync_at_ms >= ?",
 			now, now+DailyAdmissionLead.Milliseconds()).
 		Where(`EXISTS (SELECT 1 FROM trade_clock_observations AS o WHERE o.account_id = a.id
-			AND o.config_version = a.config_version AND o.endpoint_id = a.pinned_endpoint_id
+			AND o.config_version = a.config_version AND o.endpoint_id = COALESCE(NULLIF(a.last_collection_endpoint_id, ''), a.pinned_endpoint_id)
 			AND o.state = 'pending' AND o.window_to_ms > ? AND o.window_to_ms <= ?)`, now-clockPendingTTL.Milliseconds(), now).
 		Order("a.next_clock_sync_at_ms, a.id").Limit(limit).Pluck("a.id", &ids).Error
 	return ids, err
@@ -79,7 +79,7 @@ func (s *Service) ClaimClock(ctx context.Context, id string) (ClockJob, error) {
 			return err
 		}
 		job.Run = storage.ClockRun{ID: storage.NewID(), AccountID: a.ID, ServerID: a.ServerID,
-			EndpointID: a.PinnedEndpointID, ConfigVersion: a.ConfigVersion, WindowStart: uint32(start), WindowEnd: uint32(end),
+			EndpointID: collectionEndpointID(a), ConfigVersion: a.ConfigVersion, WindowStart: uint32(start), WindowEnd: uint32(end),
 			State: "running", StartedAtMS: now.UnixMilli()}
 		return tx.Create(&job.Run).Error
 	})
@@ -93,7 +93,7 @@ func (s *Service) PublishClock(ctx context.Context, job ClockJob, trades []Close
 			return err
 		}
 		if !current.SyncEnabled || current.RemovedAtMS != nil || current.ConfigVersion != job.Account.ConfigVersion ||
-			current.PinnedEndpointID != job.Run.EndpointID || finished < job.Run.StartedAtMS {
+			collectionEndpointID(current) != job.Run.EndpointID || finished < job.Run.StartedAtMS {
 			return storage.ErrConflict
 		}
 		if _, err := s.validEndpoint(tx, job.Run.EndpointID, job.Run.ServerID); err != nil {
@@ -142,7 +142,7 @@ func (s *Service) FailClock(ctx context.Context, job ClockJob, failure Failure) 
 		if err := tx.First(&current, "id = ?", job.Account.ID).Error; err != nil {
 			return err
 		}
-		valid := current.ConfigVersion == job.Account.ConfigVersion && current.PinnedEndpointID == job.Run.EndpointID
+		valid := current.ConfigVersion == job.Account.ConfigVersion && collectionEndpointID(current) == job.Run.EndpointID
 		state := "failed"
 		if failure.Canceled || !valid {
 			state = "canceled"

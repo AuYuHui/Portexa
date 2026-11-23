@@ -185,7 +185,11 @@ async function deleteAccount() {
             ? t('account.latestSample', { value1: date(current.observed_from_ms), value2: date(current.observed_to_ms) })
             : t('account.noCompleteSnapshotYetFundsAndPositionsAre')
         }}</span
-        ><span class="unit-label"
+        >
+        <span v-if="data.account.last_collection_revision" class="muted small">
+          {{ t('account.lastCollectionEndpoint', { revision: data.account.last_collection_revision }) }}
+        </span>
+        <span class="unit-label"
           >{{
             current?.native_currency ||
             data.account.confirmed_currency ||

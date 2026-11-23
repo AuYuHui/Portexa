@@ -17,6 +17,7 @@ const protocol = ref<Server["protocol"]>(props.mt5Selection ? "mt5" : "mt4");
 const port = ref(protocol.value === "mt5" ? 2085 : 443);
 const isMT5 = computed(() => (props.server?.protocol ?? protocol.value) === "mt5");
 const busy = ref(false);
+const replaceAll = ref(false);
 const error = ref("");
 
 watch(protocol, (p) => {
@@ -35,6 +36,7 @@ async function submit() {
       await api(`/servers/${props.server.id}/endpoints`, "POST", {
         ip_address: address.value,
         port: port.value,
+        keep_existing: !replaceAll.value,
       });
     } else {
       await api("/servers", "POST", {
@@ -79,9 +81,6 @@ async function submit() {
         /><small>{{ isMT5 ? t('mt5.exactServerNameHelp') : t('manualServerForm.theServerNameIsUsedForProtocolConfiguration') }}</small></label
       ></template
     >
-    <p v-else class="notice notice-warning">
-      {{ t('manualServerForm.aNewRevisionRetiresThePreviousAddressAnd') }}
-    </p>
     <p v-if="isMT5 && mt5Selection" class="muted small">{{ t('directoryPicker.mt5SelectionHelp') }}</p>
     <div class="form-grid">
       <label class="field"
@@ -101,6 +100,10 @@ async function submit() {
     <p class="muted small">
       {{ t('manualServerForm.savingRegistersConfigurationWithoutSendingCredentialsNextRecord') }}
     </p>
+    <label v-if="server" class="checkbox-row">
+      <input v-model="replaceAll" type="checkbox" :disabled="busy" />
+      <span>{{ t('manualServerForm.replaceAllEndpoints') }}<small>{{ t('manualServerForm.aNewRevisionRetiresThePreviousAddressAnd') }}</small></span>
+    </label>
     <p v-if="error" role="alert" class="error-message">{{ localizeMessage(error) }}</p>
     <div class="dialog-actions">
       <button
@@ -117,7 +120,7 @@ async function submit() {
           busy
             ? t('manualServerForm.registering')
             : server
-              ? t('manualServerForm.createRevisionAndPauseAccounts')
+              ? replaceAll ? t('manualServerForm.createRevisionAndPauseAccounts') : t('settings.addEndpoint')
               : t('manualServerForm.registerServerAndContinueVerification')
         }}
       </button>

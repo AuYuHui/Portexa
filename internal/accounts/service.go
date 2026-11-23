@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 	_ "time/tzdata"
@@ -50,8 +51,9 @@ type ServerInput struct {
 }
 
 type EndpointInput struct {
-	IPAddress string `json:"ip_address"`
-	Port      int    `json:"port"`
+	IPAddress    string `json:"ip_address"`
+	Port         int    `json:"port"`
+	KeepExisting bool   `json:"keep_existing"`
 }
 
 type ReviewInput struct {
@@ -61,31 +63,33 @@ type ReviewInput struct {
 }
 
 type AccountInput struct {
-	ServerID          string `json:"server_id"`
-	EndpointID        string `json:"endpoint_id"`
-	Login             uint64 `json:"login"`
-	Label             string `json:"label"`
-	Password          string `json:"password"`
-	ConfirmedCurrency string `json:"confirmed_currency"`
-	ConfirmUnit       bool   `json:"confirm_unit"`
-	SyncEnabled       bool   `json:"sync_enabled"`
+	ServerID          string   `json:"server_id"`
+	EndpointID        string   `json:"endpoint_id"`
+	BackupEndpointIDs []string `json:"backup_endpoint_ids"`
+	Login             uint64   `json:"login"`
+	Label             string   `json:"label"`
+	Password          string   `json:"password"`
+	ConfirmedCurrency string   `json:"confirmed_currency"`
+	ConfirmUnit       bool     `json:"confirm_unit"`
+	SyncEnabled       bool     `json:"sync_enabled"`
 }
 
 type AccountPatch struct {
-	ConfigVersion     *int64  `json:"config_version"`
-	Label             *string `json:"label"`
-	EndpointID        *string `json:"endpoint_id"`
-	Password          *string `json:"password"`
-	ConfirmedCurrency *string `json:"confirmed_currency"`
-	ConfirmUnit       *bool   `json:"confirm_unit"`
-	SyncEnabled       *bool   `json:"sync_enabled"`
+	ConfigVersion     *int64    `json:"config_version"`
+	Label             *string   `json:"label"`
+	EndpointID        *string   `json:"endpoint_id"`
+	BackupEndpointIDs *[]string `json:"backup_endpoint_ids"`
+	Password          *string   `json:"password"`
+	ConfirmedCurrency *string   `json:"confirmed_currency"`
+	ConfirmUnit       *bool     `json:"confirm_unit"`
+	SyncEnabled       *bool     `json:"sync_enabled"`
 }
 
 func (s *Service) CreateServer(ctx context.Context, input ServerInput) (storage.Server, storage.Endpoint, error) {
 	return s.createServer(ctx, input, nil)
 }
 
-func (s *Service) createServer(ctx context.Context, input ServerInput, approval *endpointApproval) (storage.Server, storage.Endpoint, error) {
+func (s *Service) createServer(ctx context.Context, input ServerInput, approval *endpointApproval, additional ...EndpointInput) (storage.Server, storage.Endpoint, error) {
 	if !clean(input.BrokerName, 1, 128) || !clean(input.ServerName, 1, 128) {
 		return storage.Server{}, storage.Endpoint{}, &InputError{"请填写经纪商和准确的服务器名称"}
 	}
@@ -117,6 +121,15 @@ func (s *Service) createServer(ctx context.Context, input ServerInput, approval 
 		if err := tx.Create(&endpoint).Error; err != nil {
 			return err
 		}
+		for i, candidate := range additional {
+			backup, err := s.buildEndpoint(tx, server.ID, candidate, int64(i+2), approval, now)
+			if err != nil {
+				return err
+			}
+			if err = tx.Create(&backup).Error; err != nil {
+				return err
+			}
+		}
 		if input.TimeZone != "" {
 			rules, _ := json.Marshal([]map[string]any{{"from_utc_ms": now, "until_utc_ms": nil, "kind": "iana", "zone": input.TimeZone, "source_ref": "用户登记，尚未核验"}})
 			if err := tx.Exec("INSERT INTO server_time_rule_sets (id, server_id, revision, rules_json, created_at_ms) VALUES (?, ?, 1, ?, ?)", storage.NewID(), server.ID, string(rules), now).Error; err != nil {
@@ -129,6 +142,13 @@ func (s *Service) createServer(ctx context.Context, input ServerInput, approval 
 }
 
 func (s *Service) NewEndpoint(ctx context.Context, serverID string, input EndpointInput) (storage.Endpoint, []string, error) {
+	if input.KeepExisting {
+		endpoints, err := s.addEndpoints(ctx, serverID, []EndpointInput{input}, nil)
+		if err != nil {
+			return storage.Endpoint{}, nil, err
+		}
+		return endpoints[0], nil, nil
+	}
 	return s.newEndpoint(ctx, serverID, input, nil)
 }
 
@@ -144,7 +164,7 @@ func (s *Service) newEndpoint(ctx context.Context, serverID string, input Endpoi
 			return err
 		}
 		if !approval.matchesServer(server) {
-			return &InputError{"新接入点必须属于当前 MT4 服务器"}
+			return &InputError{"新接入点必须属于当前服务器及交易平台"}
 		}
 		if err := approval.apply(tx, &endpoint, s.Now().UnixMilli()); err != nil {
 			return err
@@ -265,7 +285,7 @@ func (s *Service) CreateAccount(ctx context.Context, input AccountInput) (storag
 		return account, err
 	}
 	err := s.Store.Write(ctx, storage.High, func(tx *gorm.DB) error {
-		if _, err := s.validEndpoint(tx, input.EndpointID, input.ServerID); err != nil {
+		if err := s.setBackupEndpoints(tx, &account, input.BackupEndpointIDs); err != nil {
 			return err
 		}
 		var server storage.Server
@@ -278,7 +298,7 @@ func (s *Service) CreateAccount(ctx context.Context, input AccountInput) (storag
 		if err := checkProtocolPassword(server.Protocol, input.Password); err != nil {
 			return err
 		}
-		envelope, err := s.Vault.Seal(input.Password, vault.AAD(account.ID, account.ServerID, account.PinnedEndpointID, 1))
+		envelope, err := s.Vault.Seal(input.Password, credentialAAD(account))
 		if err != nil {
 			return err
 		}
@@ -310,12 +330,25 @@ func (s *Service) UpdateAccount(ctx context.Context, id string, patch AccountPat
 		if err := tx.First(&server, "id = ?", account.ServerID).Error; err != nil {
 			return err
 		}
-		oldEndpoint := account.PinnedEndpointID
+		oldAAD := credentialAAD(account)
+		oldEndpoint, oldBackups := account.PinnedEndpointID, account.BackupEndpointIDs
 		oldUnitRevision, wasEnabled := account.UnitRevision, account.SyncEnabled
 		if patch.EndpointID != nil {
 			account.PinnedEndpointID = *patch.EndpointID
 		}
-		if patch.Password != nil || account.PinnedEndpointID != oldEndpoint {
+		if patch.BackupEndpointIDs != nil || account.PinnedEndpointID != oldEndpoint {
+			ids := backupIDs(account)
+			if patch.BackupEndpointIDs != nil {
+				ids = *patch.BackupEndpointIDs
+			} else {
+				ids = slices.DeleteFunc(ids, func(id string) bool { return id == account.PinnedEndpointID })
+			}
+			if err := s.setBackupEndpoints(tx, &account, ids); err != nil {
+				return err
+			}
+		}
+		endpointsChanged := account.PinnedEndpointID != oldEndpoint || account.BackupEndpointIDs != oldBackups
+		if patch.Password != nil || endpointsChanged {
 			if !s.Vault.Ready() {
 				return vault.ErrUnavailable
 			}
@@ -324,7 +357,7 @@ func (s *Service) UpdateAccount(ctx context.Context, id string, patch AccountPat
 				password = *patch.Password
 			} else {
 				var err error
-				password, err = s.Vault.Open(account.CredentialEnvelope, account.CredentialKeyID, vault.AAD(account.ID, account.ServerID, oldEndpoint, account.CredentialVersion))
+				password, err = s.Vault.Open(account.CredentialEnvelope, account.CredentialKeyID, oldAAD)
 				if err != nil {
 					return err
 				}
@@ -334,11 +367,12 @@ func (s *Service) UpdateAccount(ctx context.Context, id string, patch AccountPat
 			}
 			account.CredentialVersion++
 			var err error
-			account.CredentialEnvelope, err = s.Vault.Seal(password, vault.AAD(account.ID, account.ServerID, account.PinnedEndpointID, account.CredentialVersion))
+			account.CredentialEnvelope, err = s.Vault.Seal(password, credentialAAD(account))
 			if err != nil {
 				return err
 			}
 			account.CredentialKeyID = s.Vault.ID()
+			account.LastCollectionEndpointID = ""
 		}
 		now := s.Now().UnixMilli()
 		if patch.ConfirmedCurrency != nil || patch.ConfirmUnit != nil {
@@ -367,8 +401,8 @@ func (s *Service) UpdateAccount(ctx context.Context, id string, patch AccountPat
 		if patch.SyncEnabled != nil {
 			account.SyncEnabled = *patch.SyncEnabled
 		}
-		if account.SyncEnabled || account.PinnedEndpointID != oldEndpoint {
-			if _, err := s.validEndpoint(tx, account.PinnedEndpointID, account.ServerID); err != nil {
+		if account.SyncEnabled {
+			if _, err := s.collectionEndpoints(tx, account); err != nil {
 				return err
 			}
 		}
@@ -381,13 +415,14 @@ func (s *Service) UpdateAccount(ctx context.Context, id string, patch AccountPat
 		dailyPaused, dailyFailures := account.DailySyncPaused, account.DailyFailureCount
 		clockPaused, clockFailures := account.ClockSyncPaused, account.ClockFailureCount
 		historyPaused := account.HistorySyncPaused
-		if patch.Password != nil || account.PinnedEndpointID != oldEndpoint || account.UnitRevision != oldUnitRevision || (!wasEnabled && account.SyncEnabled) {
+		if patch.Password != nil || endpointsChanged || account.UnitRevision != oldUnitRevision || (!wasEnabled && account.SyncEnabled) {
 			dailyPaused, dailyFailures = false, 0
 			clockPaused, clockFailures = false, 0
 			historyPaused = false
 		}
 		if err := tx.Model(&storage.Account{}).Where("id = ?", id).Updates(map[string]any{
 			"label": account.Label, "pinned_endpoint_id": account.PinnedEndpointID, "credential_envelope": account.CredentialEnvelope,
+			"backup_endpoint_ids": account.BackupEndpointIDs, "last_collection_endpoint_id": account.LastCollectionEndpointID,
 			"credential_key_id": account.CredentialKeyID, "credential_version": account.CredentialVersion, "config_version": account.ConfigVersion,
 			"currency": account.Currency, "usd_scale": account.USDScale, "unit_revision": account.UnitRevision, "unit_verified_at_ms": account.UnitVerifiedAtMS,
 			"sync_enabled": account.SyncEnabled, "next_sync_at_ms": now, "failure_count": 0,

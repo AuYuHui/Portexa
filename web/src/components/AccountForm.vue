@@ -17,6 +17,10 @@ const { data: servers, error: loadError } = useQuery({
 });
 const serverID = ref(props.account?.server_id || "");
 const endpointID = ref(props.account?.endpoint_id || "");
+const backupEndpointIDs = ref([
+  props.account?.backup_endpoint_ids?.[0] ?? "",
+  props.account?.backup_endpoint_ids?.[1] ?? "",
+]);
 const label = ref(props.account?.label || "");
 const login = ref(props.account?.login?.toString() || "");
 const password = ref("");
@@ -53,8 +57,18 @@ const endpoints = computed(
       (e) => e.state === "reviewed" && e.risk_accepted_at_ms !== null,
     ) || [],
 );
+const configuredEndpointsValid = computed(() =>
+  [endpointID.value, ...backupEndpointIDs.value.filter(Boolean)].every((id) =>
+    endpoints.value.some((endpoint) => endpoint.id === id),
+  ),
+);
 function selectServer() {
   endpointID.value = endpoints.value[0]?.id || "";
+  backupEndpointIDs.value = ["", ""];
+}
+function normalizeBackups() {
+  const ids = backupEndpointIDs.value.filter((id) => id && id !== endpointID.value);
+  backupEndpointIDs.value = [ids[0] ?? "", ids[1] ?? ""];
 }
 async function submit() {
   error.value = "";
@@ -85,6 +99,7 @@ async function submit() {
     const values = {
       label: label.value,
       endpoint_id: endpointID.value,
+      backup_endpoint_ids: backupEndpointIDs.value.filter(Boolean),
       confirmed_currency: finalCurrency,
       confirm_unit: confirmed.value,
       sync_enabled: enabled.value,
@@ -153,7 +168,7 @@ async function submit() {
       /></label>
     </div>
     <label class="field"
-      >{{ t('accountForm.fixedEndpoint') }}<select v-model="endpointID" required :aria-label="t('accountForm.fixedEndpoint')">
+      >{{ t('accountForm.fixedEndpoint') }}<select v-model="endpointID" required :aria-label="t('accountForm.fixedEndpoint')" @change="normalizeBackups">
         <option disabled value="">{{ t('accountForm.selectAVerifiedRevisionWithAcceptedRisk') }}</option>
         <option
           v-if="
@@ -171,6 +186,32 @@ async function submit() {
         >{{ t('accountForm.onlyVerifiedRevisionsWithAcceptedRiskAreAllowed') }}</small
       ></label
     >
+    <div v-if="endpoints.length > 1 || backupEndpointIDs.some(Boolean)" class="field">
+      <div class="form-grid">
+        <label v-for="index in 2" :key="index" class="field">
+          {{ t('accountForm.backupEndpoint', { number: index }) }}
+          <select
+            v-model="backupEndpointIDs[index - 1]"
+            :aria-label="t('accountForm.backupEndpoint', { number: index })"
+            :disabled="index === 2 && !backupEndpointIDs[0]"
+            @change="normalizeBackups"
+          >
+            <option value="">{{ t('accountForm.noBackupEndpoint') }}</option>
+            <option
+              v-if="backupEndpointIDs[index - 1] && !endpoints.some((e) => e.id === backupEndpointIDs[index - 1])"
+              :value="backupEndpointIDs[index - 1]"
+              disabled
+            >{{ t('accountForm.thePreviousEndpointIsRetiredRebindTheAccount') }}</option>
+            <option
+              v-for="e in endpoints.filter((candidate) => candidate.id !== endpointID && candidate.id !== backupEndpointIDs[2 - index])"
+              :key="e.id"
+              :value="e.id"
+            >{{ t('accountForm.revision') }} {{ e.revision }} · {{ e.ip_address }}:{{ e.port }}</option>
+          </select>
+        </label>
+      </div>
+      <small>{{ t('accountForm.backupEndpointsHelp') }}</small>
+    </div>
     <label class="field"
       >{{ t('accountForm.investorPassword') }} {{ account ? t('accountForm.leaveBlankToKeepTheCurrentPassword') : ""
       }}<input
@@ -266,7 +307,7 @@ async function submit() {
         type="submit"
         class="btn btn-primary"
         :disabled="
-          busy || !endpointID || !endpoints.some((e) => e.id === endpointID)
+          busy || !configuredEndpointsValid
         "
       >
         <LoaderCircle v-if="busy" class="spin" :size="16" />

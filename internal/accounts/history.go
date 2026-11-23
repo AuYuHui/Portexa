@@ -20,6 +20,7 @@ type HistoryJob struct {
 	Run       storage.HistoryRun
 	Config    mt4.Config
 	MT5Config *mt5.Config
+	Backups   []string
 	Day       ServerDay
 }
 
@@ -77,7 +78,7 @@ func (s *Service) RequestHistory(ctx context.Context, id string) error {
 		if !account.SyncEnabled {
 			return ErrPaused
 		}
-		if _, err := s.validEndpoint(tx, account.PinnedEndpointID, account.ServerID); err != nil {
+		if _, err := s.collectionEndpoints(tx, account); err != nil {
 			return err
 		}
 		var server storage.Server
@@ -130,7 +131,7 @@ func (s *Service) ClaimHistory(ctx context.Context, id string) (HistoryJob, erro
 		if err != nil {
 			return err
 		}
-		job.Config, job.MT5Config = cfg.mt4, cfg.mt5
+		job.Config, job.MT5Config, job.Backups = cfg.MT4, cfg.MT5, cfg.backups
 		var snapshot storage.Snapshot
 		if err = tx.First(&snapshot, "id=? AND account_id=?", *a.CurrentSnapshotID, id).Error; err != nil {
 			return err
@@ -154,7 +155,7 @@ func (s *Service) ClaimHistory(ctx context.Context, id string) (HistoryJob, erro
 			}
 			return tx.Model(&a).Update("next_history_sync_at_ms", next.UnixMilli()).Error
 		}
-		job.Run = storage.HistoryRun{ID: storage.NewID(), AccountID: id, ServerID: a.ServerID, EndpointID: a.PinnedEndpointID,
+		job.Run = storage.HistoryRun{ID: storage.NewID(), AccountID: id, ServerID: a.ServerID, EndpointID: cfg.ID,
 			CoverageID: job.Coverage.ID, ConfigVersion: a.ConfigVersion, UnitRevision: a.UnitRevision,
 			NativeCurrency: snapshot.NativeCurrency, State: "running", StartedAtMS: now.UnixMilli()}
 		if err = tx.Create(&job.Run).Error; err != nil {

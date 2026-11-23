@@ -189,7 +189,7 @@ onMounted(() => {
               <span v-if="!server.time_zone_verified" class="badge-dot-warning" :title="t('account.timeZoneUnverified')" />
             </button>
             <button class="btn btn-small" @click="newRevision(server)">
-              {{ t('settings.newEndpointRevision') }}
+              {{ t('settings.addEndpoint') }}
               <ArrowUpRight :size="14" />
             </button>
           </div>
@@ -272,8 +272,8 @@ onMounted(() => {
           <div class="feature-item">
             <div class="feature-icon"><Radio :size="16" /></div>
             <div>
-              <strong>{{ t('settings.endpointChangesPauseCollection') }}</strong>
-              <p>{{ t('settings.changingAnEndpointStopsPreviousConnectionsAndPauses') }}</p>
+              <strong>{{ t('settings.endpointFailover') }}</strong>
+              <p>{{ t('settings.endpointFailoverHelp') }}</p>
             </div>
           </div>
           <div class="feature-item">
@@ -306,7 +306,7 @@ onMounted(() => {
     <!-- 弹窗：登记服务器 -->
     <Modal
       v-model:open="serverOpen"
-      :title="editServer ? t('settings.createEndpointRevision') : t('settings.registerMtServer')"
+      :title="editServer ? t('settings.addEndpoint') : t('settings.registerMtServer')"
       :description="t('settings.registeringConfigurationDoesNotSendAccountCredentials')"
     >
       <ServerForm

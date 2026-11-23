@@ -33,9 +33,10 @@ func (s *Server) searchDirectory(w http.ResponseWriter, r *http.Request) {
 }
 
 type directorySelection struct {
-	CandidateID   string `json:"candidate_id"`
-	EndpointIndex int    `json:"endpoint_index"`
-	AcceptRisk    bool   `json:"accept_risk"`
+	CandidateID     string `json:"candidate_id"`
+	EndpointIndex   int    `json:"endpoint_index"`
+	EndpointIndices []int  `json:"endpoint_indices"`
+	AcceptRisk      bool   `json:"accept_risk"`
 }
 
 func (s *Server) createDiscovered(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +49,11 @@ func (s *Server) createDiscovered(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	server, endpoint, err := s.accounts.CreateDiscovered(r.Context(), candidate, input.EndpointIndex, input.AcceptRisk)
+	indices := input.EndpointIndices
+	if indices == nil {
+		indices = []int{input.EndpointIndex}
+	}
+	server, endpoint, err := s.accounts.CreateDiscoveredServer(r.Context(), candidate, indices, input.AcceptRisk)
 	if err != nil {
 		fail(w, err)
 		return
@@ -64,6 +69,15 @@ func (s *Server) newDiscoveredEndpoint(w http.ResponseWriter, r *http.Request) {
 	candidate, err := s.config.Directory.Candidate(input.CandidateID)
 	if err != nil {
 		fail(w, err)
+		return
+	}
+	if input.EndpointIndices != nil {
+		endpoints, err := s.accounts.AddDiscoveredEndpoints(r.Context(), r.PathValue("id"), candidate, input.EndpointIndices, input.AcceptRisk)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, 201, map[string]any{"endpoints": endpoints})
 		return
 	}
 	endpoint, paused, err := s.accounts.NewDiscoveredEndpoint(r.Context(), r.PathValue("id"), candidate, input.EndpointIndex, input.AcceptRisk)

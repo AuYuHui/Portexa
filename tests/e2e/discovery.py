@@ -48,19 +48,38 @@ def main():
         expect(server.get_by_text("已核验", exact=True)).to_be_visible()
         expect(server.get_by_role("button", name="核验接入点")).to_have_count(0)
 
-        # A new revision also discovers candidates and records a fresh explicit confirmation.
-        server.get_by_role("button", name="新建接入修订").click()
+        # Adding a directory endpoint preserves the previously approved address.
+        server.get_by_role("button", name="添加采集点").click()
         dialog = page.get_by_role("dialog")
         expect(dialog.get_by_label("搜索经纪商或服务器", exact=True)).to_have_value("Synthetic-DirectoryLive")
         dialog.get_by_role("button", name="选择服务器 Synthetic-DirectoryLive", exact=True).click()
-        expect(dialog.get_by_role("checkbox")).not_to_be_checked()
-        dialog.get_by_text("查看接入地址与来源", exact=True).click()
-        dialog.get_by_label("目录候选接入点").select_option("1")
-        dialog.get_by_role("checkbox").check()
-        dialog.get_by_role("button", name="确认新接入修订并暂停账户").click()
+        risk = dialog.get_by_role("checkbox", name=re.compile("我已核对经纪商和服务器"))
+        expect(risk).not_to_be_checked()
+        expect(dialog.get_by_role("checkbox", name=re.compile(r"203\.0\.113\.9"))).to_be_disabled()
+        expect(dialog.get_by_role("checkbox", name=re.compile(r"203\.0\.113\.10"))).to_be_checked()
+        risk.check()
+        dialog.get_by_role("button", name="确认添加采集点").click()
         expect(dialog).not_to_be_visible()
-        expect(server.get_by_text("已停用", exact=True)).to_be_visible()
+        expect(server.get_by_text("已核验", exact=True)).to_have_count(2)
+        expect(server.get_by_text("已停用", exact=True)).to_have_count(0)
         expect(server.get_by_text("203.0.113.10:443", exact=True)).to_be_visible()
+
+        page.get_by_role("button", name="接入账户", exact=True).click()
+        dialog.get_by_label("账户名称", exact=True).fill("合成备用采集账户")
+        dialog.get_by_label("服务器", exact=True).select_option(label="Synthetic Directory Broker / Synthetic-DirectoryLive")
+        dialog.get_by_label("MT4 账号", exact=True).fill("888002")
+        dialog.get_by_label("投资者密码").fill("investor-demo")
+        dialog.get_by_label("主采集点", exact=True).select_option(label="修订 1 · 203.0.113.9:443")
+        dialog.get_by_label("备用采集点 1", exact=True).select_option(label="修订 2 · 203.0.113.10:443")
+        dialog.get_by_role("button", name="保存并接入账户").click()
+        expect(dialog).not_to_be_visible()
+        page.get_by_role("link", name="账户总览", exact=True).click()
+        page.get_by_role("link", name=re.compile("合成备用采集账户 888002")).click()
+        expect(page.get_by_text("上次成功采集点 v1", exact=True)).to_be_visible()
+        page.get_by_role("button", name="账户配置").click()
+        expect(dialog.get_by_label("备用采集点 1", exact=True).locator("option:checked")).to_have_text("修订 2 · 203.0.113.10:443")
+        dialog.get_by_role("button", name="取消", exact=True).click()
+        page.get_by_role("link", name="接入与设置", exact=True).click()
 
         # Manual configuration is an explicit advanced path; discovery is the default.
         page.set_viewport_size({"width": 390, "height": 844})
@@ -89,7 +108,7 @@ def main():
         expect(mt5_server.get_by_text("Synthetic MT5 Directory", exact=False)).to_be_visible()
         assert not errors, errors
         browser.close()
-        print("PASS: MT4 candidate confirmation and revision, MT5 native directory search and candidate confirmation, mobile layout and manual entry; no browser errors")
+        print("PASS: MT4 additive endpoint registration and backup binding, MT5 directory confirmation, mobile layout and manual entry")
 
 
 if __name__ == "__main__":

@@ -44,6 +44,7 @@ func TestMT5NativeMigrationRetiresLegacyEndpoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer old.Close()
+	stripCollectionEndpointSchema(t, old)
 	if _, err := old.Exec("UPDATE account_snapshots SET leverage=100, margin='64', margin_available=1 WHERE account_id=?", legacy.ID); err != nil {
 		t.Fatal(err)
 	}

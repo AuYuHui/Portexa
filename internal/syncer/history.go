@@ -72,12 +72,18 @@ func (e *Engine) runHistory(ctx context.Context, id string) {
 	logger.Info("history_sync_started")
 	var orders []storage.HistoryOrder
 	var result mt4.Result
-	if job.MT5Config != nil {
-		orders, err = e.convertMT5History(fetchCtx, job)
-	} else {
-		result, err = e.fetch(fetchCtx, job.Config, mt4.Options{History: &mt4.HistoryRange{Start: job.Coverage.StartWall, End: job.Coverage.EndWall}})
-		job.Config.Password = ""
-	}
+	target := accounts.CollectionTarget{ID: job.Run.EndpointID, MT4: job.Config, MT5: job.MT5Config}
+	job.Run.EndpointID, err = e.collect(fetchCtx, job.Account, &storage.HistoryRun{}, job.Run.ID, target, job.Backups,
+		func(attempt context.Context, target accounts.CollectionTarget) error {
+			var err error
+			if target.MT5 != nil {
+				orders, err = e.convertMT5History(attempt, job, target.MT5)
+			} else {
+				result, err = e.fetch(attempt, target.MT4, mt4.Options{History: &mt4.HistoryRange{Start: job.Coverage.StartWall, End: job.Coverage.EndWall}})
+			}
+			return err
+		})
+	job.Config.Password = ""
 	finished := time.Now()
 	if err == nil {
 		err = fetchCtx.Err()

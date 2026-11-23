@@ -35,6 +35,8 @@ type AccountView struct {
 	ServerName                         string            `json:"server_name"`
 	BrokerName                         string            `json:"broker_name"`
 	EndpointID                         string            `json:"endpoint_id"`
+	BackupEndpointIDs                  []string          `json:"backup_endpoint_ids"`
+	LastCollectionRevision             *int64            `json:"last_collection_revision"`
 	EndpointApproved                   bool              `json:"endpoint_approved"`
 	Protocol                           string            `json:"protocol"`
 	Login                              uint64            `json:"login"`
@@ -166,10 +168,11 @@ func (s *Service) Servers(ctx context.Context) ([]ServerView, error) {
 	return views, err
 }
 
-func readView(tx *gorm.DB, account storage.Account, now int64, settings storage.CollectionSettings) (AccountView, error) {
+func (s *Service) readView(tx *gorm.DB, account storage.Account, now int64, settings storage.CollectionSettings) (AccountView, error) {
 	staleAfter := snapshotStaleAfter(settings)
 	view := AccountView{ID: account.ID, ServerID: account.ServerID, EndpointID: account.PinnedEndpointID,
-		Login: account.Login, Label: account.Label, ConfirmedCurrency: account.Currency, UnitConfirmed: account.UnitVerifiedAtMS != nil,
+		BackupEndpointIDs: backupIDs(account),
+		Login:             account.Login, Label: account.Label, ConfirmedCurrency: account.Currency, UnitConfirmed: account.UnitVerifiedAtMS != nil,
 		ConfiguredUnitConfirmed: account.UnitVerifiedAtMS != nil,
 		ConfigVersion:           account.ConfigVersion, SyncEnabled: account.SyncEnabled, NextSyncAtMS: account.NextSyncAtMS,
 		CreatedAtMS: account.CreatedAtMS, SyncState: "idle"}
@@ -179,11 +182,17 @@ func readView(tx *gorm.DB, account storage.Account, now int64, settings storage.
 		return view, err
 	}
 	view.ServerName, view.BrokerName, view.Protocol = server.ServerName, server.BrokerName, server.Protocol
-	var endpoint storage.Endpoint
-	if err := tx.First(&endpoint, "id = ?", account.PinnedEndpointID).Error; err != nil {
+	endpoints, err := s.collectionEndpoints(tx, account)
+	if err != nil && !errors.Is(err, ErrEndpoint) && !errors.Is(err, ErrTarget) {
 		return view, err
 	}
-	view.EndpointApproved = endpoint.Approved()
+	view.EndpointApproved = len(endpoints) > 0
+	for _, endpoint := range endpoints {
+		if endpoint.ID == account.LastCollectionEndpointID {
+			view.LastCollectionRevision = &endpoint.Revision
+			break
+		}
+	}
 	if account.CurrentSnapshotID != nil {
 		var snapshot storage.Snapshot
 		if err := tx.First(&snapshot, "id = ? AND account_id = ?", *account.CurrentSnapshotID, account.ID).Error; err != nil {
@@ -217,7 +226,7 @@ func readView(tx *gorm.DB, account storage.Account, now int64, settings storage.
 		view.Snapshot = &snapshot
 	}
 	var run storage.SyncRun
-	err := tx.Where("account_id = ?", account.ID).Order("started_at_ms DESC, id DESC").First(&run).Error
+	err = tx.Where("account_id = ?", account.ID).Order("started_at_ms DESC, id DESC").First(&run).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return view, err
 	}
@@ -257,7 +266,7 @@ func (s *Service) list(ctx context.Context) ([]AccountView, storage.CollectionSe
 		}
 		now := s.Now().UnixMilli()
 		for _, account := range list {
-			view, err := readView(tx, account, now, settings)
+			view, err := s.readView(tx, account, now, settings)
 			if err != nil {
 				return err
 			}
@@ -285,7 +294,7 @@ func (s *Service) Detail(ctx context.Context, id, order string) (AccountDetail, 
 		if err != nil {
 			return err
 		}
-		detail.Account, err = readView(tx, account, s.Now().UnixMilli(), settings)
+		detail.Account, err = s.readView(tx, account, s.Now().UnixMilli(), settings)
 		if detail.Account.Daily.TimeZone != "" {
 			detail.ServerTimeStatus = "verified"
 		}
