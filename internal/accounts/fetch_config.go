@@ -32,9 +32,10 @@ func (s *Service) collectionConfig(tx *gorm.DB, account storage.Account) (collec
 
 // CollectionTarget is an internal, endpoint-specific credential capability.
 type CollectionTarget struct {
-	ID  string
-	MT4 mt4.Config
-	MT5 *mt5.Config
+	ID       string
+	Revision int64
+	MT4      mt4.Config
+	MT5      *mt5.Config
 }
 
 func (s *Service) targetConfig(tx *gorm.DB, account storage.Account, endpoint storage.Endpoint) (CollectionTarget, error) {
@@ -47,11 +48,11 @@ func (s *Service) targetConfig(tx *gorm.DB, account storage.Account, endpoint st
 		return CollectionTarget{}, err
 	}
 	if server.Protocol == "mt5" {
-		return CollectionTarget{ID: endpoint.ID, MT5: &mt5.Config{IPAddress: endpoint.IPAddress, Port: endpoint.Port,
+		return CollectionTarget{ID: endpoint.ID, Revision: endpoint.Revision, MT5: &mt5.Config{IPAddress: endpoint.IPAddress, Port: endpoint.Port,
 			Server: server.ServerName, Login: account.Login, Password: password}}, nil
 	}
 	address := net.JoinHostPort(endpoint.IPAddress, strconv.Itoa(endpoint.Port))
-	return CollectionTarget{ID: endpoint.ID, MT4: mt4.Config{Address: address, Server: server.ServerName,
+	return CollectionTarget{ID: endpoint.ID, Revision: endpoint.Revision, MT4: mt4.Config{Address: address, Server: server.ServerName,
 		Login: uint32(account.Login), Password: password, PasswordType: mt4.InvestorPassword}}, nil
 }
 

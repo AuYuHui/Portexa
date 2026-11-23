@@ -2,7 +2,9 @@ package syncer
 
 import (
 	"context"
+	"log/slog"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/shopspring/decimal"
@@ -11,9 +13,22 @@ import (
 	"portexa/mt5"
 )
 
-func (e *Engine) readMT5Deals(ctx context.Context, cfg *mt5.Config, window mt5.HistoryRange, currency string, limit int) ([]storage.HistoryOrder, error) {
-	result, err := e.fetchMT5History(ctx, *cfg, window)
-	cfg.Password = ""
+func (e *Engine) readMT5Deals(ctx context.Context, target endpointAttempt, window mt5.HistoryRange, currency string, limit int, logger *slog.Logger) ([]storage.HistoryOrder, error) {
+	logger = logger.With("attempt", target.number, "endpoint_revision", target.Revision,
+		"setup_budget_ms", target.setupTimeout.Milliseconds())
+	result, err := e.fetchMT5History(ctx, *target.MT5, window, mt5.HistoryOptions{
+		SetupTimeout: target.setupTimeout,
+		OnPhase: func(phase mt5.HistoryPhase, duration time.Duration, err error) {
+			if err != nil {
+				failure := classifyMT5(err)
+				logger.Log(ctx, slog.LevelInfo, "mt5_history_phase", "phase", string(phase), "duration_ms", duration.Milliseconds(),
+					"state", "failed", "code", failure.Code)
+				return
+			}
+			logger.Info("mt5_history_phase", "phase", string(phase), "duration_ms", duration.Milliseconds(), "state", "succeeded")
+		},
+	})
+	target.MT5.Password = ""
 	if err != nil {
 		return nil, err
 	}
@@ -87,9 +102,9 @@ func normalizeMT5Deal(deal mt5.Deal) (storage.HistoryOrder, error) {
 	return order, nil
 }
 
-func (e *Engine) convertMT5History(ctx context.Context, job accounts.HistoryJob, config *mt5.Config) ([]storage.HistoryOrder, error) {
-	orders, err := e.readMT5Deals(ctx, config, mt5.HistoryRange{Start: job.Coverage.StartWall, End: job.Coverage.EndWall},
-		job.Run.NativeCurrency, accounts.HistoryPublishLimit)
+func (e *Engine) convertMT5History(ctx context.Context, job accounts.HistoryJob, target endpointAttempt, logger *slog.Logger) ([]storage.HistoryOrder, error) {
+	orders, err := e.readMT5Deals(ctx, target, mt5.HistoryRange{Start: job.Coverage.StartWall, End: job.Coverage.EndWall},
+		job.Run.NativeCurrency, accounts.HistoryPublishLimit, logger)
 	if err != nil {
 		return nil, err
 	}

@@ -15,13 +15,14 @@ const HistoryPublishLimit = 10000
 
 // HistoryJob contains a credential capability and must not be logged/serialized.
 type HistoryJob struct {
-	Account   storage.Account
-	Coverage  storage.HistoryCoverage
-	Run       storage.HistoryRun
-	Config    mt4.Config
-	MT5Config *mt5.Config
-	Backups   []string
-	Day       ServerDay
+	Account          storage.Account
+	Coverage         storage.HistoryCoverage
+	Run              storage.HistoryRun
+	Config           mt4.Config
+	MT5Config        *mt5.Config
+	Backups          []string
+	EndpointRevision int64
+	Day              ServerDay
 }
 
 func (s *Service) HistoryDue(ctx context.Context, now int64, limit int) ([]string, error) {
@@ -132,6 +133,7 @@ func (s *Service) ClaimHistory(ctx context.Context, id string) (HistoryJob, erro
 			return err
 		}
 		job.Config, job.MT5Config, job.Backups = cfg.MT4, cfg.MT5, cfg.backups
+		job.EndpointRevision = cfg.Revision
 		var snapshot storage.Snapshot
 		if err = tx.First(&snapshot, "id=? AND account_id=?", *a.CurrentSnapshotID, id).Error; err != nil {
 			return err

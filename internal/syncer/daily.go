@@ -75,12 +75,12 @@ func (e *Engine) runDaily(ctx context.Context, id string) {
 	var report storage.DailyReport
 	var result mt4.Result
 	var orders []storage.HistoryOrder
-	target := accounts.CollectionTarget{ID: job.Run.EndpointID, MT4: job.Config, MT5: job.MT5Config}
-	job.Run.EndpointID, err = e.collect(fetchCtx, job.Account, &storage.DailyReport{}, job.Run.ID, target, job.Backups,
-		func(attempt context.Context, target accounts.CollectionTarget) error {
+	target := accounts.CollectionTarget{ID: job.Run.EndpointID, Revision: job.EndpointRevision, MT4: job.Config, MT5: job.MT5Config}
+	job.Run.EndpointID, err = e.collect(fetchCtx, job.Account, &storage.DailyReport{}, job.Run.ID, target, job.Backups, job.MT5Config != nil,
+		func(attempt context.Context, target endpointAttempt) error {
 			var err error
 			if target.MT5 != nil {
-				orders, err = e.readMT5Deals(attempt, target.MT5, mt5.HistoryRange{Start: job.Day.Start, End: job.Day.End}, job.NativeCurrency, 0)
+				orders, err = e.readMT5Deals(attempt, target, mt5.HistoryRange{Start: job.Day.Start, End: job.Day.End}, job.NativeCurrency, 0, logger)
 			} else {
 				result, err = e.fetch(attempt, target.MT4, mt4.Options{History: &mt4.HistoryRange{Start: job.Day.Start, End: job.Day.End}})
 			}
@@ -135,7 +135,7 @@ func (e *Engine) runDaily(ctx context.Context, id string) {
 		if failure.Canceled {
 			level = slog.LevelInfo
 		}
-		logger.Log(ctx, level, "daily_sync_failed", "code", failure.Code, "duration_ms", finished.UnixMilli()-job.Run.StartedAtMS)
+		logger.Log(ctx, level, "daily_sync_failed", "code", failure.Code, "operation", failure.Operation, "duration_ms", finished.UnixMilli()-job.Run.StartedAtMS)
 		endCtx, endCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer endCancel()
 		if err = e.accounts.FailDaily(endCtx, job, failure); err != nil {

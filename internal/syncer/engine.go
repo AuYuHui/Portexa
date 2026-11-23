@@ -29,7 +29,7 @@ type Engine struct {
 	accounts           *accounts.Service
 	fetch              Fetcher
 	fetchMT5           func(context.Context, mt5.Config) (mt5.Result, error)
-	fetchMT5History    func(context.Context, mt5.Config, mt5.HistoryRange) (mt5.HistoryResult, error)
+	fetchMT5History    func(context.Context, mt5.Config, mt5.HistoryRange, mt5.HistoryOptions) (mt5.HistoryResult, error)
 	interval, timeout  time.Duration
 	sem                chan struct{}
 	wake               chan struct{}
@@ -54,8 +54,11 @@ func New(service *accounts.Service, fetch Fetcher, options Options) *Engine {
 	if options.FetchMT5 == nil {
 		options.FetchMT5 = mt5.Fetch
 	}
-	if options.FetchMT5History == nil {
-		options.FetchMT5History = mt5.FetchHistory
+	fetchMT5History := mt5.FetchHistoryWithOptions
+	if options.FetchMT5History != nil {
+		fetchMT5History = func(ctx context.Context, cfg mt5.Config, window mt5.HistoryRange, _ mt5.HistoryOptions) (mt5.HistoryResult, error) {
+			return options.FetchMT5History(ctx, cfg, window)
+		}
 	}
 	if options.Timeout <= 0 {
 		options.Timeout = 20 * time.Second
@@ -69,7 +72,7 @@ func New(service *accounts.Service, fetch Fetcher, options Options) *Engine {
 	if options.HistoryInterval <= 0 {
 		options.HistoryInterval = 5 * time.Minute
 	}
-	return &Engine{accounts: service, fetch: fetch, fetchMT5: options.FetchMT5, fetchMT5History: options.FetchMT5History, interval: options.Interval, timeout: options.Timeout,
+	return &Engine{accounts: service, fetch: fetch, fetchMT5: options.FetchMT5, fetchMT5History: fetchMT5History, interval: options.Interval, timeout: options.Timeout,
 		sem: make(chan struct{}, options.Workers), wake: make(chan struct{}, 1), active: map[string]context.CancelFunc{}, fatal: make(chan error, 1),
 		logger: options.Logger.With("component", "syncer"), historySem: make(chan struct{}, 2), historyInterval: options.HistoryInterval,
 		historyActive: map[string]bool{}, historyYielded: map[string]bool{}}
@@ -237,9 +240,9 @@ func (e *Engine) readSnapshot(ctx context.Context, job *accounts.Job, from time.
 	var mt4Result mt4.Result
 	var mt5Result mt5.Result
 	started := from
-	target := accounts.CollectionTarget{ID: job.Run.EndpointID, MT4: job.Config, MT5: job.MT5Config}
-	endpoint, err := e.collect(ctx, job.Account, &storage.SyncRun{}, job.Run.ID, target, job.Backups,
-		func(attempt context.Context, target accounts.CollectionTarget) error {
+	target := accounts.CollectionTarget{ID: job.Run.EndpointID, Revision: job.EndpointRevision, MT4: job.Config, MT5: job.MT5Config}
+	endpoint, err := e.collect(ctx, job.Account, &storage.SyncRun{}, job.Run.ID, target, job.Backups, false,
+		func(attempt context.Context, target endpointAttempt) error {
 			started = time.Now()
 			var err error
 			if target.MT5 != nil {

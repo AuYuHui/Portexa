@@ -230,3 +230,54 @@ func TestCollectionFailoverForDailyAndHistoryKeepsSnapshotSource(t *testing.T) {
 		t.Fatalf("unexpected snapshot endpoint preference: %v", err)
 	}
 }
+
+func TestMT5DailyRetainsRemainingBudgetForDeals(t *testing.T) {
+	f := testutil.New(t, false)
+	ctx := t.Context()
+	server, _, err := f.Accounts.CreateServer(ctx, accounts.ServerInput{Protocol: "mt5", BrokerName: "Synthetic Broker",
+		ServerName: "Synthetic-MT5-History-Budget", IPAddress: "203.0.113.9", Port: 443})
+	if err != nil {
+		t.Fatal(err)
+	}
+	primary := reviewedCollectionPoint(t, f, server.ID, 443)
+	second := reviewedCollectionPoint(t, f, server.ID, 444)
+	third := reviewedCollectionPoint(t, f, server.ID, 445)
+	a, err := f.Accounts.CreateAccount(ctx, accounts.AccountInput{ServerID: server.ID, EndpointID: primary.ID,
+		BackupEndpointIDs: []string{second.ID, third.ID}, Login: 8104, Label: "Synthetic", Password: testutil.InvestorPassword,
+		ConfirmedCurrency: "USD", ConfirmUnit: true, SyncEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Accounts.ConfirmServerTime(ctx, server.ID, accounts.ServerTimeInput{
+		Mode: "manual", TimeZone: "UTC", EffectiveDate: time.Now().UTC().AddDate(0, 0, -2).Format(time.DateOnly),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	const budget = 1800 * time.Millisecond
+	engine := syncer.New(f.Accounts, nil, syncer.Options{Interval: time.Hour, Timeout: budget,
+		FetchMT5: func(context.Context, mt5.Config) (mt5.Result, error) {
+			return testutil.MT5Snapshot(), nil
+		},
+		FetchMT5History: func(ctx context.Context, cfg mt5.Config, window mt5.HistoryRange) (mt5.HistoryResult, error) {
+			if cfg.Port != primary.Port {
+				t.Errorf("a slow deal request unnecessarily moved to revision with port %d", cfg.Port)
+			}
+			// Simulate a complete reply after the previous per-endpoint budget.
+			timer := time.NewTimer(850 * time.Millisecond)
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+				return testutil.MT5History(window, nil), nil
+			case <-ctx.Done():
+				return mt5.HistoryResult{}, ctx.Err()
+			}
+		}})
+	startEngine(t, engine)
+	var report storage.DailyReport
+	eventually(t, func() bool {
+		return f.Store.Read.First(&report, "account_id = ? AND state = 'succeeded'", a.ID).Error == nil
+	})
+	if report.EndpointID != primary.ID {
+		t.Fatal("the completed daily report did not use the preferred endpoint")
+	}
+}

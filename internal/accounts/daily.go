@@ -16,14 +16,15 @@ const DailySnapshotGuard = 5 * time.Second
 
 // DailyJob contains an investor password and must never be serialized or logged.
 type DailyJob struct {
-	Account        storage.Account
-	Run            storage.DailyReport
-	Config         mt4.Config
-	MT5Config      *mt5.Config
-	Backups        []string
-	Day            ServerDay
-	NativeCurrency string
-	PositionExits  []DailyPositionExit
+	Account          storage.Account
+	Run              storage.DailyReport
+	Config           mt4.Config
+	MT5Config        *mt5.Config
+	Backups          []string
+	EndpointRevision int64
+	Day              ServerDay
+	NativeCurrency   string
+	PositionExits    []DailyPositionExit
 }
 
 type DailyView struct {
@@ -121,6 +122,7 @@ func (s *Service) ClaimDaily(ctx context.Context, id string) (DailyJob, error) {
 			return err
 		}
 		job.Config, job.MT5Config, job.Backups = cfg.MT4, cfg.MT5, cfg.backups
+		job.EndpointRevision = cfg.Revision
 		job.Run = storage.DailyReport{ID: storage.NewID(), AccountID: id, ServerID: a.ServerID, EndpointID: cfg.ID,
 			ConfigVersion: a.ConfigVersion, UnitRevision: a.UnitRevision, TimeRulesetID: job.Day.TimeRulesetID,
 			ReportDate: job.Day.Date, TimeZone: job.Day.TimeZone, WindowStart: job.Day.Start, WindowEnd: job.Day.End,

@@ -8,6 +8,7 @@ import (
 	"portexa/internal/accounts"
 	"portexa/internal/storage"
 	"portexa/mt4"
+	"portexa/mt5"
 )
 
 func (e *Engine) scheduleHistory(ctx context.Context) {
@@ -72,12 +73,12 @@ func (e *Engine) runHistory(ctx context.Context, id string) {
 	logger.Info("history_sync_started")
 	var orders []storage.HistoryOrder
 	var result mt4.Result
-	target := accounts.CollectionTarget{ID: job.Run.EndpointID, MT4: job.Config, MT5: job.MT5Config}
-	job.Run.EndpointID, err = e.collect(fetchCtx, job.Account, &storage.HistoryRun{}, job.Run.ID, target, job.Backups,
-		func(attempt context.Context, target accounts.CollectionTarget) error {
+	target := accounts.CollectionTarget{ID: job.Run.EndpointID, Revision: job.EndpointRevision, MT4: job.Config, MT5: job.MT5Config}
+	job.Run.EndpointID, err = e.collect(fetchCtx, job.Account, &storage.HistoryRun{}, job.Run.ID, target, job.Backups, job.MT5Config != nil,
+		func(attempt context.Context, target endpointAttempt) error {
 			var err error
 			if target.MT5 != nil {
-				orders, err = e.convertMT5History(attempt, job, target.MT5)
+				orders, err = e.convertMT5History(attempt, job, target, logger)
 			} else {
 				result, err = e.fetch(attempt, target.MT4, mt4.Options{History: &mt4.HistoryRange{Start: job.Coverage.StartWall, End: job.Coverage.EndWall}})
 			}
@@ -121,11 +122,16 @@ func (e *Engine) runHistory(ctx context.Context, id string) {
 	}
 	var protocolFailure *mt4.Error
 	historyPhase := job.MT5Config != nil || originalOperation == "history" || !errors.As(err, &protocolFailure) && result.HistoryComplete
+	var mt5Failure *mt5.HistoryError
+	if errors.As(err, &mt5Failure) {
+		historyPhase = mt5Failure.Phase == mt5.HistoryDeals
+	}
 	split := !failure.Canceled && (errors.Is(err, ErrHistoryTooLarge) || historyPhase && (failure.Code == "resource_limit" || failure.Code == "timeout"))
 	if split {
 		failure.Permanent = false
 	}
-	logger.Warn("history_sync_failed", "code", failure.Code, "split", split)
+	logger.Warn("history_sync_failed", "code", failure.Code, "operation", originalOperation,
+		"duration_ms", finished.UnixMilli()-job.Run.StartedAtMS, "split", split)
 	endCtx, endCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer endCancel()
 	if err := e.accounts.FailHistory(endCtx, job, failure, split); err != nil {

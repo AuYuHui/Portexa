@@ -104,6 +104,10 @@ func makeMT5Position(accountID, snapshotID string, position mt5.Position) (stora
 func classifyMT5(err error) accounts.Failure {
 	var network net.Error
 	failure := accounts.Failure{Code: "connection", Operation: "mt5_snapshot"}
+	var history *mt5.HistoryError
+	if errors.As(err, &history) {
+		failure.Operation = string(history.Phase)
+	}
 	switch {
 	case errors.Is(err, context.Canceled), errors.Is(err, storage.ErrConflict), errors.Is(err, accounts.ErrEndpoint):
 		failure.Code, failure.Canceled = "configuration_changed", true

@@ -166,6 +166,8 @@ USC 始终保留美分金额，这两项不会再除以100。时间范围使用�
 
 快照 `sync_started` 包含 `attempt`、`due_at_ms` 和 `schedule_delay_ms`；`sync_failed` 保留错误码、失败阶段、尝试次数和耗时。重试排期成功写入数据库后才记录 `sync_retry_scheduled`，包含 `failure_count`、`retry_delay_ms` 和 `next_retry_at_ms`（UTC Unix 毫秒）；暂停、取消、配置变化或写入失败不记录该事件。成功日志 `sync_completed` 包含 `recovered` 和 `previous_failure_count`，可串联核对失败、排期、实际重试及恢复。
 
+MT5 当日统计和历史回填通过 `mt5_history_phase` 记录 `connect`（TCP 连接）、`handshake`（登录握手）、`account_sync`（账户同步）与 `deals`（成交收取及解析）。每条包含该阶段耗时、采集点修订号、尝试序号、连接准备预算和结果，失败时附错误码。按 `run_id` 可关联 `collection_endpoint_fallback`、`daily_sync_failed` 或 `history_sync_failed`。
+
 保留层按首条日志时间清理当前文件及压缩归档，避免 lumberjack 按归档轮转时间计龄而延长旧记录寿命。空闲时清理也继续运行。该窗口限制保留时间，七天内的日志文件总大小取决于实际日志量。
 
 ## 备份、恢复和重置

@@ -16,11 +16,12 @@ import (
 // Job is an internal capability for one immutable account configuration.
 // It must never be serialized or logged: Config contains the investor password.
 type Job struct {
-	Account   storage.Account
-	Run       storage.SyncRun
-	Config    mt4.Config
-	MT5Config *mt5.Config
-	Backups   []string
+	Account          storage.Account
+	Run              storage.SyncRun
+	Config           mt4.Config
+	MT5Config        *mt5.Config
+	Backups          []string
+	EndpointRevision int64
 }
 
 func (s *Service) Due(ctx context.Context, now int64, limit int) ([]string, error) {
@@ -102,6 +103,7 @@ func (s *Service) Claim(ctx context.Context, id string) (Job, error) {
 			return err
 		}
 		job.Config, job.MT5Config, job.Backups = cfg.MT4, cfg.MT5, cfg.backups
+		job.EndpointRevision = cfg.Revision
 		now := s.Now().UnixMilli()
 		job.Run = storage.SyncRun{ID: storage.NewID(), AccountID: account.ID, ServerID: account.ServerID,
 			EndpointID: cfg.ID, CredentialVersion: account.CredentialVersion, ConfigVersion: account.ConfigVersion,

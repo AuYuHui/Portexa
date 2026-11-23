@@ -6,9 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
+	"io"
 	"math"
 	"net"
+	"slices"
 	"testing"
+	"time"
 
 	"portexa/mt5"
 	"portexa/mt5/internal/protocol"
@@ -351,9 +355,25 @@ func TestNativeMockLoopbackFetchHistory(t *testing.T) {
 		End:   1_795_219_200,
 	}
 
-	hRes, err := mt5.FetchHistory(context.Background(), cfg, window)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	setup := 300 * time.Millisecond
+	var phases []mt5.HistoryPhase
+	hRes, err := mt5.FetchHistoryWithOptions(ctx, cfg, window, mt5.HistoryOptions{
+		SetupTimeout: setup,
+		OnPhase: func(phase mt5.HistoryPhase, _ time.Duration, err error) {
+			phases = append(phases, phase)
+			if err == nil && phase == mt5.HistoryAccountSync {
+				// Drive the next write past the original socket deadline.
+				time.Sleep(setup + 50*time.Millisecond)
+			}
+		},
+	})
 	if err != nil {
 		t.Fatalf("native FetchHistory failed: %v", err)
+	}
+	if !slices.Equal(phases, []mt5.HistoryPhase{mt5.HistoryConnect, mt5.HistoryHandshake, mt5.HistoryAccountSync, mt5.HistoryDeals}) {
+		t.Fatalf("unexpected history phases: %v", phases)
 	}
 
 	if len(hRes.Deals) != 2 {
@@ -372,6 +392,48 @@ func TestNativeMockLoopbackFetchHistory(t *testing.T) {
 	}
 	if hRes.Account.Balance != 99999.0 || hRes.Account.IsInvestor() {
 		t.Fatalf("unexpected account in history result: %+v", hRes.Account)
+	}
+}
+
+func TestNativeHistorySetupTimeoutReportsHandshakePhase(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+		if conn, err := listener.Accept(); err == nil {
+			defer conn.Close()
+			_, _ = io.Copy(io.Discard, conn)
+		}
+	}()
+	addr := listener.Addr().(*net.TCPAddr)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	var phases []mt5.HistoryPhase
+	_, err = mt5.FetchHistoryWithOptions(ctx, mt5.Config{IPAddress: addr.IP.String(), Port: addr.Port,
+		Login: 12345, Password: "Synthetic123!", Server: "Synthetic-Server"},
+		mt5.HistoryRange{Start: 1000, End: 2000}, mt5.HistoryOptions{
+			SetupTimeout: 100 * time.Millisecond,
+			OnPhase: func(phase mt5.HistoryPhase, _ time.Duration, _ error) {
+				phases = append(phases, phase)
+			},
+		})
+	var failure *mt5.HistoryError
+	var network net.Error
+	timeout := errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &network) && network.Timeout())
+	if !errors.As(err, &failure) || failure.Phase != mt5.HistoryHandshake || !timeout || ctx.Err() != nil {
+		t.Fatalf("expected a handshake timeout within the parent deadline, got %v", err)
+	}
+	if !slices.Equal(phases, []mt5.HistoryPhase{mt5.HistoryConnect, mt5.HistoryHandshake}) {
+		t.Fatalf("unexpected phases on handshake timeout: %v", phases)
+	}
+	select {
+	case <-closed:
+	case <-ctx.Done():
+		t.Fatal("timeout left the connection open")
 	}
 }
 
