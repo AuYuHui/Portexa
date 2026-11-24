@@ -310,6 +310,13 @@
   font-size: 12px;
   color: var(--color-muted);
 }
+.server-endpoints > summary {
+  padding: 10px 20px;
+  border-top: 1px solid var(--color-line-subtle);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
 .endpoint-row {
   display: flex;
   align-items: center;

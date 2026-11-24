@@ -144,6 +144,7 @@
     "manualCorrection": "手动校正",
     "automatic": "自动",
     "serverTime": "服务器时间",
+    "collectionPoints": "采集点",
     "addEndpoint": "添加采集点",
     "retiredCredentialsCanNoLongerBeSent": "已停用，不能继续发送凭据",
     "riskAccepted": "已确认风险 · {value1}",

@@ -144,6 +144,7 @@
     "manualCorrection": "Manual correction",
     "automatic": "Automatic",
     "serverTime": "Server time",
+    "collectionPoints": "Collection endpoints",
     "addEndpoint": "Add collection endpoints",
     "retiredCredentialsCanNoLongerBeSent": "Retired; credentials can no longer be sent",
     "riskAccepted": "Risk accepted · {value1}",

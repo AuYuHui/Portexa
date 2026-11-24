@@ -36,7 +36,8 @@ def main():
             expect(dialog).not_to_be_visible()
 
             card = page.locator(".server-card").filter(has=page.get_by_role("heading", name="Synthetic-Browser-MT5"))
-            expect(card).to_contain_text("203.0.113.9:2085")
+            card.locator(".server-endpoints > summary").click()
+            expect(card.get_by_text("203.0.113.9:2085", exact=True)).to_be_visible()
             card.get_by_role("button", name="核验接入点").click()
             dialog.get_by_label("独立核验依据").fill("synthetic-browser-evidence")
             dialog.get_by_label("证据 SHA-256").fill("ab" * 32)
@@ -84,7 +85,8 @@ def main():
             expect(funding).to_contain_text("50.00", timeout=15_000)
             expect(funding).to_contain_text("20.00")
             expect(funding).to_contain_text("synthetic unspecified")
-            expect(page.get_by_text("MT5 胜率按平仓成交笔数统计。", exact=False)).to_be_visible()
+            daily = page.get_by_role("region", name="当日利润与结余", exact=True)
+            expect(daily).to_contain_text(re.compile(r"当日胜率\s*33\.33%"))
 
             page.goto(ORIGIN + "/analytics")
             with page.expect_response(lambda response: "/api/analytics?" in response.url and "account_id=" in response.url) as analysis:

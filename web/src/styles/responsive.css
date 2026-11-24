@@ -303,6 +303,9 @@
   .server-card-title > button {
     margin-left: 38px;
   }
+  .server-endpoints > summary {
+    padding-inline: 12px;
+  }
   .endpoint-row {
     padding: 15px 12px;
     gap: 8px;

@@ -194,35 +194,32 @@ onMounted(() => {
             </button>
           </div>
         </div>
-        <div
-          v-for="endpoint in server.endpoints"
-          :key="endpoint.id"
-          class="endpoint-row"
-        >
-          <span class="revision">v{{ endpoint.revision }}</span>
-          <div class="endpoint-address">
-            <strong class="mono"
-              >{{ endpoint.ip_address }}:{{ endpoint.port }}</strong
-            ><small>{{
-              endpoint.state === "retired"
-                ? t('settings.retiredCredentialsCanNoLongerBeSent')
-                : endpoint.risk_accepted_at_ms
-                  ? t('settings.riskAccepted', { value1: date(endpoint.risk_accepted_at_ms) })
-                  : t('settings.independentVerificationAndAcceptanceOfRemainingRiskAre')
-            }}</small>
+        <details v-if="server.endpoints.length" class="server-endpoints">
+          <summary>
+            {{ t('settings.collectionPoints') }}
+            <span class="count-pill">{{ server.endpoints.length }}</span>
+          </summary>
+          <div v-for="endpoint in server.endpoints" :key="endpoint.id" class="endpoint-row">
+            <span class="revision">v{{ endpoint.revision }}</span>
+            <div class="endpoint-address">
+              <strong class="mono">{{ endpoint.ip_address }}:{{ endpoint.port }}</strong>
+              <small>{{
+                endpoint.state === "retired"
+                  ? t('settings.retiredCredentialsCanNoLongerBeSent')
+                  : endpoint.risk_accepted_at_ms
+                    ? t('settings.riskAccepted', { value1: date(endpoint.risk_accepted_at_ms) })
+                    : t('settings.independentVerificationAndAcceptanceOfRemainingRiskAre')
+              }}</small>
+            </div>
+            <span v-if="endpoint.state === 'reviewed' && endpoint.risk_accepted_at_ms" class="badge badge-good">
+              <ShieldCheck :size="13" />{{ t('settings.verified') }}
+            </span>
+            <button v-else-if="endpoint.state !== 'retired'" class="btn btn-small" @click="review(endpoint)">
+              {{ t('settings.verifyEndpoint') }}
+            </button>
+            <span v-else class="badge badge-neutral">{{ t('settings.retired') }}</span>
           </div>
-          <span
-            v-if="endpoint.state === 'reviewed' && endpoint.risk_accepted_at_ms"
-            class="badge badge-good"
-            ><ShieldCheck :size="13" />{{ t('settings.verified') }}</span
-          ><button
-            v-else-if="endpoint.state !== 'retired'"
-            class="btn btn-small"
-            @click="review(endpoint)"
-          >
-            {{ t('settings.verifyEndpoint') }}</button
-          ><span v-else class="badge badge-neutral">{{ t('settings.retired') }}</span>
-        </div>
+        </details>
       </article>
     </section>
 
