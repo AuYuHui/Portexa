@@ -391,6 +391,7 @@
     "waitingForServerHistoryNoFundEntriesAre": "Waiting for server history. No fund entries are available yet.",
     "noFundEntriesInTheBackfilledPeriod": "No fund entries in the backfilled period.",
     "latestHistorySample": "Latest history sample",
+    "coveredThrough": "History continuously covered through {time}",
     "previous": "Previous",
     "next": "Next",
     "correctFundClassification": "Correct fund classification",

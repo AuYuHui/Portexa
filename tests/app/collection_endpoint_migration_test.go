@@ -14,6 +14,7 @@ import (
 func stripCollectionEndpointSchema(t *testing.T, db *sql.DB) {
 	t.Helper()
 	for _, statement := range []string{
+		"ALTER TABLE history_coverage DROP COLUMN checked_through_wall",
 		"DROP TRIGGER analytics_clock_collection_endpoint",
 		"ALTER TABLE accounts DROP COLUMN last_collection_endpoint_id",
 		"ALTER TABLE accounts DROP COLUMN backup_endpoint_ids",

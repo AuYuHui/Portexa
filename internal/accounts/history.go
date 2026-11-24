@@ -13,17 +13,27 @@ import (
 
 const HistoryPublishLimit = 10000
 const historyRecentWindowSeconds = 2 * 60 * 60
+const mt5HistoryRecentSeconds = 60 * 60
 
 // HistoryJob contains a credential capability and must not be logged/serialized.
 type HistoryJob struct {
 	Account          storage.Account
 	Coverage         storage.HistoryCoverage
+	RequestEndWall   uint32
 	Run              storage.HistoryRun
 	Config           mt4.Config
 	MT5Config        *mt5.Config
 	Backups          []string
 	EndpointRevision int64
 	Day              ServerDay
+}
+
+// HistoryEndWall is the exclusive upper bound sent to the server.
+func (job HistoryJob) HistoryEndWall() uint32 {
+	if job.RequestEndWall != 0 {
+		return job.RequestEndWall
+	}
+	return job.Coverage.EndWall
 }
 
 func (s *Service) HistoryDue(ctx context.Context, now int64, limit int) ([]string, error) {
@@ -97,13 +107,17 @@ func (s *Service) RequestHistory(ctx context.Context, id string) error {
 		// A pending, previously checked window has already been queued for
 		// recheck. Keep the progress of the current sweep on repeated clicks.
 		var queued int64
-		if err := historyScope(tx, account, day).
+		eligible := historyScope(tx, account, day)
+		if server.Protocol == "mt5" {
+			eligible = eligible.Where("start_wall<?", day.CurrentWall)
+		}
+		if err := eligible.Session(&gorm.Session{}).
 			Where("start_wall>=? AND state='pending' AND next_attempt_at_ms=0 AND checked_at_ms IS NOT NULL", day.Start).
 			Count(&queued).Error; err != nil {
 			return err
 		}
 		if queued == 0 || account.HistorySyncPaused {
-			if err := historyScope(tx, account, day).Where("state!='split' AND state!='running'").Updates(map[string]any{
+			if err := eligible.Where("state!='split' AND state!='running'").Updates(map[string]any{
 				"state": "pending", "next_attempt_at_ms": 0, "failure_count": 0,
 			}).Error; err != nil {
 				return err
@@ -156,7 +170,13 @@ func (s *Service) ClaimHistory(ctx context.Context, id string) (HistoryJob, erro
 			return err
 		}
 		day := job.Day
-		recentStart := day.CurrentWall - min(day.CurrentWall-day.Start, historyRecentWindowSeconds)
+		due := historyScope(tx, a, day).Where("state NOT IN ('split','blocked','running') AND next_attempt_at_ms<=?", now.UnixMilli())
+		lookback := uint32(historyRecentWindowSeconds)
+		if job.MT5Config != nil {
+			lookback = mt5HistoryRecentSeconds
+			due = due.Where("start_wall<?", day.CurrentWall)
+		}
+		recentStart := day.CurrentWall - min(day.CurrentWall-day.Start, lookback)
 		const recent = "start_wall>=? AND start_wall<=? AND end_wall>?"
 		// Read the latest activity before replaying older split windows.
 		// Scheduled retries in a priority group still run in due-time order.
@@ -165,7 +185,7 @@ func (s *Service) ClaimHistory(ctx context.Context, id string) (HistoryJob, erro
 				"next_attempt_at_ms, CASE WHEN " + recent + " THEN -start_wall ELSE start_wall END, id",
 			Vars: []any{day.Start, day.CurrentWall, recentStart, day.Start, day.Start, day.CurrentWall, recentStart},
 		}
-		found := historyScope(tx, a, day).Where("state NOT IN ('split','blocked','running') AND next_attempt_at_ms<=?", now.UnixMilli()).
+		found := due.
 			Order(clause.OrderBy{Expression: priority}).
 			Limit(1).Find(&job.Coverage)
 		if found.Error != nil {
@@ -177,6 +197,9 @@ func (s *Service) ClaimHistory(ctx context.Context, id string) (HistoryJob, erro
 				next = job.Day.NextDayUTC
 			}
 			return tx.Model(&a).Update("next_history_sync_at_ms", next.UnixMilli()).Error
+		}
+		if job.MT5Config != nil {
+			job.RequestEndWall = min(job.Coverage.EndWall, day.CurrentWall)
 		}
 		job.Run = storage.HistoryRun{ID: storage.NewID(), AccountID: id, ServerID: a.ServerID, EndpointID: cfg.ID,
 			CoverageID: job.Coverage.ID, ConfigVersion: a.ConfigVersion, UnitRevision: a.UnitRevision,
@@ -249,11 +272,13 @@ func (s *Service) FailHistory(ctx context.Context, job HistoryJob, failure Failu
 			next = s.Now().Add(5 * time.Second).UnixMilli()
 			updates = map[string]any{"state": "pending", "next_attempt_at_ms": next}
 		}
-		if split {
-			if job.Coverage.EndWall-job.Coverage.StartWall <= 2 {
+		requestEnd := job.HistoryEndWall()
+		requestLength := requestEnd - job.Coverage.StartWall
+		if split && (requestLength > 2 || requestEnd == job.Coverage.EndWall) {
+			if requestLength <= 2 {
 				updates["state"] = "blocked"
 			} else {
-				mid := job.Coverage.StartWall + (job.Coverage.EndWall-job.Coverage.StartWall)/2
+				mid := job.Coverage.StartWall + requestLength/2
 				for _, span := range [][2]uint32{{job.Coverage.StartWall, mid + 1}, {mid, job.Coverage.EndWall}} {
 					child := storage.HistoryCoverage{ID: storage.NewID(), AccountID: job.Account.ID, UnitRevision: job.Account.UnitRevision,
 						TimeRulesetID: job.Day.TimeRulesetID, ParentID: &job.Coverage.ID, StartWall: span[0], EndWall: span[1], State: "pending"}

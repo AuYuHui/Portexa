@@ -54,7 +54,7 @@ func (s *Service) historyRevisions(ctx context.Context, job HistoryJob, orders [
 		for _, order := range batch {
 			if order.AccountID != job.Account.ID || order.SourceRunID != job.Run.ID || order.UnitRevision != job.Account.UnitRevision ||
 				order.NativeCurrency != job.Run.NativeCurrency || order.Ticket <= 0 || seen[order.Ticket] || len(order.SourceHash) != 32 ||
-				order.EventTimeWall < job.Coverage.StartWall || order.EventTimeWall >= job.Coverage.EndWall {
+				order.EventTimeWall < job.Coverage.StartWall || order.EventTimeWall >= job.HistoryEndWall() {
 				return nil, &InputError{"历史记录不属于当前采集窗口"}
 			}
 			seen[order.Ticket] = true
@@ -174,6 +174,11 @@ func (s *Service) PublishHistory(ctx context.Context, job HistoryJob, orders []s
 		refresh := 24 * time.Hour
 		if job.Coverage.StartWall >= job.Day.Start {
 			refresh = 5 * time.Minute
+			if job.MT5Config != nil && job.HistoryEndWall() == job.Coverage.EndWall &&
+				job.Day.CurrentWall-job.Day.Start >= mt5HistoryRecentSeconds &&
+				job.Coverage.EndWall <= job.Day.CurrentWall-mt5HistoryRecentSeconds {
+				refresh = time.Hour
+			}
 			if rest, err := restBackgroundRefresh(tx, current, time.UnixMilli(finished)); err != nil {
 				return err
 			} else if rest > refresh {
@@ -184,8 +189,11 @@ func (s *Service) PublishHistory(ctx context.Context, job HistoryJob, orders []s
 		if refresh == marketrest.HistoryInterval {
 			nextAttempt = min(nextAttempt, job.Day.NextDayUTC.UnixMilli(), restRefreshGuard(tx, current, time.UnixMilli(finished)))
 		}
-		if err = tx.Model(&job.Coverage).Updates(map[string]any{"state": "complete", "checked_at_ms": finished, "failure_count": 0,
-			"next_attempt_at_ms": nextAttempt}).Error; err != nil {
+		updates := map[string]any{"state": "complete", "checked_at_ms": finished, "failure_count": 0, "next_attempt_at_ms": nextAttempt}
+		if job.MT5Config != nil {
+			updates["checked_through_wall"] = job.HistoryEndWall()
+		}
+		if err = tx.Model(&job.Coverage).Updates(updates).Error; err != nil {
 			return err
 		}
 		return tx.Model(&current).Updates(map[string]any{"next_history_sync_at_ms": finished + 1000, "history_sync_paused": false}).Error

@@ -60,29 +60,56 @@ func readFundingView(tx *gorm.DB, account storage.Account, server storage.Server
 		return view, err
 	}
 	recentThrough := day.Start
+	mt5 := server.Protocol == "mt5"
+	freshThrough := day.End
+	latestCovered := day.Start
+	if mt5 {
+		freshThrough = day.CurrentWall - min(day.CurrentWall-day.Start, uint32(freshness/time.Second))
+	}
 	for _, window := range coverage {
-		if window.CheckedAtMS != nil {
+		if mt5 && window.StartWall >= day.CurrentWall {
+			continue
+		}
+		end := window.EndWall
+		if mt5 && window.CheckedAtMS != nil {
+			if window.CheckedThroughWall != nil {
+				end = *window.CheckedThroughWall
+			} else if checkedWall, ok := serverWallTime(day.timeRules, *window.CheckedAtMS); ok {
+				// Older versions queried beyond the clock at sample time.
+				end = min(end, checkedWall)
+			} else {
+				end = window.StartWall
+			}
+			end = min(end, day.CurrentWall)
+		}
+		checked := window.CheckedAtMS != nil && end > window.StartWall
+		if checked {
 			known = true
+			latestCovered = max(latestCovered, end)
 			if view.LastSyncAtMS == nil || *window.CheckedAtMS > *view.LastSyncAtMS {
 				value := *window.CheckedAtMS
 				view.LastSyncAtMS = &value
 			}
-			if window.StartWall <= view.CoveredThroughWall && window.EndWall > view.CoveredThroughWall {
-				view.CoveredThroughWall = window.EndWall
+			if window.StartWall <= view.CoveredThroughWall && end > view.CoveredThroughWall {
+				view.CoveredThroughWall = end
 			}
-			if window.StartWall <= recentThrough && window.EndWall > recentThrough && now.UnixMilli()-*window.CheckedAtMS <= freshness.Milliseconds() {
-				recentThrough = window.EndWall
+			if window.StartWall <= recentThrough && end > recentThrough && (mt5 || now.UnixMilli()-*window.CheckedAtMS <= freshness.Milliseconds()) {
+				recentThrough = end
 			}
 		}
 		if window.State == "blocked" {
 			view.BlockedWindows++
 		}
-		if window.CheckedAtMS == nil && window.State != "split" {
+		if !checked && window.State != "split" {
 			view.PendingWindows++
 		}
 	}
-	view.CoverageComplete = len(coverage) > 0 && view.CoveredThroughWall >= day.End
-	view.Stale = known && recentThrough < day.End
+	requiredThrough := day.End
+	if mt5 {
+		requiredThrough = max(freshThrough, latestCovered)
+	}
+	view.CoverageComplete = known && view.CoveredThroughWall >= requiredThrough
+	view.Stale = known && recentThrough < freshThrough
 	query := withClassification(fundingHistory(tx, account, *snapshot)).Where("o.command=6").
 		Select(`o.net_profit,o.revision,o.comment,o.commission,o.swap,o.taxes,
 			o.automatic_category,o.automatic_reason,o.automatic_rule_version,o.mt5_deal_type,o.fee,c.category,c.based_trade_revision`)

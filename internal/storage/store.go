@@ -73,13 +73,16 @@ var dailyClosedTradeExtremesSchema string
 //go:embed migrations/020_collection_endpoints.sql
 var collectionEndpointsSchema string
 
+//go:embed migrations/021_history_checked_through.sql
+var historyCheckedThroughSchema string
+
 var ErrNotFound = gorm.ErrRecordNotFound
 var ErrConflict = errors.New("state conflict")
 var ErrDenied = errors.New("operation denied")
 var ErrClosed = errors.New("store closed")
 
 const ApplicationID = 0x50545841
-const SchemaVersion = 20
+const SchemaVersion = 21
 
 type Priority int
 
@@ -368,6 +371,11 @@ func migrate(db *sql.DB) (result error) {
 	}
 	if version < 20 {
 		if _, err = tx.Exec(collectionEndpointsSchema); err != nil {
+			return err
+		}
+	}
+	if version < 21 {
+		if _, err = tx.Exec(historyCheckedThroughSchema); err != nil {
 			return err
 		}
 	}

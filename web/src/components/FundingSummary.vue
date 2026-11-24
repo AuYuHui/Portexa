@@ -255,7 +255,12 @@ async function sync() {
       }}
     </p>
     <div class="panel-footer">
-      <span>{{ t('fundingSummary.latestHistorySample') }} {{ date(funding.last_sync_at_ms) }}</span>
+      <span>
+        {{ t('fundingSummary.latestHistorySample') }} {{ date(funding.last_sync_at_ms) }}
+        <small v-if="account.protocol === 'mt5' && funding.covered_through_wall" class="muted cell-note">
+          {{ t('fundingSummary.coveredThrough', { time: wallTime(funding.covered_through_wall) }) }}
+        </small>
+      </span>
       <div class="funding-pagination">
         <button
           class="btn btn-small"

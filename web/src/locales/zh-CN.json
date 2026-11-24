@@ -391,6 +391,7 @@
     "waitingForServerHistoryNoFundEntriesAre": "等待服务器历史，尚无可展示的资金流水。",
     "noFundEntriesInTheBackfilledPeriod": "已回填区间内没有资金流水。",
     "latestHistorySample": "最近历史采样",
+    "coveredThrough": "历史连续覆盖至 {time}",
     "previous": "上一页",
     "next": "下一页",
     "correctFundClassification": "校正资金分类",

@@ -7,17 +7,18 @@ import (
 )
 
 type HistoryCoverage struct {
-	ID              string `gorm:"primaryKey"`
-	AccountID       string
-	UnitRevision    int64
-	TimeRulesetID   string
-	ParentID        *string
-	StartWall       uint32
-	EndWall         uint32
-	State           string
-	CheckedAtMS     *int64
-	NextAttemptAtMS int64
-	FailureCount    int64
+	ID                 string `gorm:"primaryKey"`
+	AccountID          string
+	UnitRevision       int64
+	TimeRulesetID      string
+	ParentID           *string
+	StartWall          uint32
+	EndWall            uint32
+	State              string
+	CheckedAtMS        *int64
+	CheckedThroughWall *uint32
+	NextAttemptAtMS    int64
+	FailureCount       int64
 }
 
 func (HistoryCoverage) TableName() string { return "history_coverage" }

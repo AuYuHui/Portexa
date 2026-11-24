@@ -74,6 +74,9 @@ func (s *Service) analyticsSource(ctx context.Context, account storage.Account, 
 	}
 	for _, c := range source.coverage {
 		fmt.Fprintf(source.hash, "coverage:%s:%d:%d:%d|", c.ID, c.StartWall, c.EndWall, c.SourceThroughMS)
+		if c.CheckedThroughWall != nil {
+			fmt.Fprintf(source.hash, "checked_through:%d|", *c.CheckedThroughWall)
+		}
 	}
 	if wall, ok := source.wall(to - 1); ok {
 		through := int64(0)
@@ -121,23 +124,7 @@ func (s *Service) analyticsSource(ctx context.Context, account storage.Account, 
 }
 
 func (source *analyticsSource) wall(stamp int64) (uint32, bool) {
-	for _, entry := range source.entries {
-		if stamp < entry.FromUTCMS || entry.UntilUTCMS != nil && stamp >= *entry.UntilUTCMS {
-			continue
-		}
-		instant := time.UnixMilli(stamp)
-		zone, _, err := serverLocation(entry, instant)
-		if err != nil {
-			return 0, false
-		}
-		_, offset := instant.In(zone).Zone()
-		wall := instant.Unix() + int64(offset)
-		if wall < 0 || wall > 2147483647 {
-			return 0, false
-		}
-		return uint32(wall), true
-	}
-	return 0, false
+	return serverWallTime(source.entries, stamp)
 }
 
 func (source *analyticsSource) covered(from, to int64) bool {
@@ -167,8 +154,12 @@ func (source *analyticsSource) covered(from, to int64) bool {
 		if c.SourceThroughMS < to {
 			continue
 		}
-		if uint64(c.StartWall) <= through && uint64(c.EndWall) > through {
-			through = uint64(c.EndWall)
+		checkedEnd := c.EndWall
+		if c.CheckedThroughWall != nil {
+			checkedEnd = *c.CheckedThroughWall
+		}
+		if uint64(c.StartWall) <= through && uint64(checkedEnd) > through {
+			through = uint64(checkedEnd)
 		}
 		if through >= end {
 			return true
