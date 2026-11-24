@@ -117,8 +117,12 @@ func (e *Engine) runHistory(ctx context.Context, id string) {
 	e.mu.Lock()
 	yielded := e.historyYielded[id]
 	e.mu.Unlock()
-	if yielded || (!finished.Before(deadline) && errors.Is(fetchCtx.Err(), context.DeadlineExceeded)) {
+	dealsTimeout := job.MT5Config != nil && originalOperation == string(mt5.HistoryDeals) && failure.Code == "timeout"
+	deferred := errors.Is(err, errHistoryRetryBudget)
+	if yielded || (!dealsTimeout && !finished.Before(deadline) && errors.Is(fetchCtx.Err(), context.DeadlineExceeded)) {
 		failure = accounts.Failure{Code: "snapshot_deadline", Operation: "history", Canceled: true}
+	} else if deferred {
+		failure.Canceled = true
 	}
 	var protocolFailure *mt4.Error
 	historyPhase := job.MT5Config != nil || originalOperation == "history" || !errors.As(err, &protocolFailure) && result.HistoryComplete
@@ -131,7 +135,7 @@ func (e *Engine) runHistory(ctx context.Context, id string) {
 		failure.Permanent = false
 	}
 	logger.Warn("history_sync_failed", "code", failure.Code, "operation", originalOperation,
-		"duration_ms", finished.UnixMilli()-job.Run.StartedAtMS, "split", split)
+		"duration_ms", finished.UnixMilli()-job.Run.StartedAtMS, "split", split, "retry_deferred", deferred)
 	endCtx, endCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer endCancel()
 	if err := e.accounts.FailHistory(endCtx, job, failure, split); err != nil {

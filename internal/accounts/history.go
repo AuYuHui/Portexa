@@ -172,9 +172,12 @@ func (s *Service) ClaimHistory(ctx context.Context, id string) (HistoryJob, erro
 		day := job.Day
 		due := historyScope(tx, a, day).Where("state NOT IN ('split','blocked','running') AND next_attempt_at_ms<=?", now.UnixMilli())
 		lookback := uint32(historyRecentWindowSeconds)
+		retryPriority := ""
 		if job.MT5Config != nil {
 			lookback = mt5HistoryRecentSeconds
 			due = due.Where("start_wall<?", day.CurrentWall)
+			// Within each group, process deferred jobs and timed-out ranges first.
+			retryPriority = "CASE WHEN state='pending' AND next_attempt_at_ms>0 THEN 0 ELSE 1 END, "
 		}
 		recentStart := day.CurrentWall - min(day.CurrentWall-day.Start, lookback)
 		const recent = "start_wall>=? AND start_wall<=? AND end_wall>?"
@@ -182,7 +185,7 @@ func (s *Service) ClaimHistory(ctx context.Context, id string) (HistoryJob, erro
 		// Scheduled retries in a priority group still run in due-time order.
 		priority := clause.Expr{
 			SQL: "CASE WHEN " + recent + " THEN 0 WHEN start_wall>=? THEN 1 WHEN checked_at_ms IS NULL THEN 2 ELSE 3 END, " +
-				"next_attempt_at_ms, CASE WHEN " + recent + " THEN -start_wall ELSE start_wall END, id",
+				retryPriority + "next_attempt_at_ms, CASE WHEN " + recent + " THEN -start_wall ELSE start_wall END, id",
 			Vars: []any{day.Start, day.CurrentWall, recentStart, day.Start, day.Start, day.CurrentWall, recentStart},
 		}
 		found := due.
@@ -266,15 +269,17 @@ func (s *Service) FailHistory(ctx context.Context, job HistoryJob, failure Failu
 		if err := storage.DiscardUnpublishedHistory(tx); err != nil {
 			return err
 		}
-		next := s.Now().Add(RetryDelay(job.Coverage.FailureCount)).UnixMilli()
+		now := s.Now()
+		next := now.Add(RetryDelay(job.Coverage.FailureCount)).UnixMilli()
 		updates := map[string]any{"state": "failed", "next_attempt_at_ms": next, "failure_count": job.Coverage.FailureCount + 1}
 		if state == "canceled" {
-			next = s.Now().Add(5 * time.Second).UnixMilli()
+			next = now.Add(5 * time.Second).UnixMilli()
 			updates = map[string]any{"state": "pending", "next_attempt_at_ms": next}
 		}
 		requestEnd := job.HistoryEndWall()
 		requestLength := requestEnd - job.Coverage.StartWall
 		if split && (requestLength > 2 || requestEnd == job.Coverage.EndWall) {
+			next = now.Add(time.Second).UnixMilli()
 			if requestLength <= 2 {
 				updates["state"] = "blocked"
 			} else {
@@ -282,13 +287,15 @@ func (s *Service) FailHistory(ctx context.Context, job HistoryJob, failure Failu
 				for _, span := range [][2]uint32{{job.Coverage.StartWall, mid + 1}, {mid, job.Coverage.EndWall}} {
 					child := storage.HistoryCoverage{ID: storage.NewID(), AccountID: job.Account.ID, UnitRevision: job.Account.UnitRevision,
 						TimeRulesetID: job.Day.TimeRulesetID, ParentID: &job.Coverage.ID, StartWall: span[0], EndWall: span[1], State: "pending"}
+					if job.MT5Config != nil && failure.Code == "timeout" {
+						child.NextAttemptAtMS = next
+					}
 					if err = tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&child).Error; err != nil {
 						return err
 					}
 				}
 				updates["state"] = "split"
 			}
-			next = s.Now().Add(time.Second).UnixMilli()
 		}
 		if err = tx.Model(&job.Coverage).Updates(updates).Error; err != nil {
 			return err

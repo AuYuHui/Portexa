@@ -13,6 +13,13 @@ import (
 	"portexa/mt5"
 )
 
+const (
+	mt5HistorySetupLimit  = 5 * time.Second
+	mt5HistoryBackupFloor = 8 * time.Second
+)
+
+var errHistoryRetryBudget = errors.New("insufficient time for a backup history attempt")
+
 func collectionConnectionFailure(err error) bool {
 	var failure *mt4.Error
 	if errors.As(err, &failure) {
@@ -31,6 +38,8 @@ type endpointAttempt struct {
 }
 
 func (e *Engine) collect(ctx context.Context, account storage.Account, run any, runID string, target accounts.CollectionTarget, backups []string, setupOnly bool, fetch func(context.Context, endpointAttempt) error) (string, error) {
+	_, backfill := run.(*storage.HistoryRun)
+	mt5Backfill := backfill && setupOnly
 	var err error
 	for i := 0; i <= len(backups); i++ {
 		if err := ctx.Err(); err != nil {
@@ -47,6 +56,9 @@ func (e *Engine) collect(ctx context.Context, account storage.Account, run any, 
 			}
 			if setupOnly {
 				options.setupTimeout = share
+				if mt5Backfill {
+					options.setupTimeout = min(share, mt5HistorySetupLimit)
+				}
 			} else {
 				attempt, cancel = context.WithTimeout(ctx, share)
 			}
@@ -56,17 +68,29 @@ func (e *Engine) collect(ctx context.Context, account storage.Account, run any, 
 			err = attempt.Err()
 		}
 		cancel()
-		if !collectionConnectionFailure(err) {
+		if err == nil {
+			return target.ID, nil
+		}
+		failure := classify(err)
+		if target.MT5 != nil {
+			failure = classifyMT5(err)
+		}
+		if mt5Backfill && failure.Code == "timeout" && failure.Operation == string(mt5.HistoryDeals) {
+			return target.ID, err
+		}
+		setupTimeout := mt5Backfill && failure.Code == "timeout" && (failure.Operation == string(mt5.HistoryConnect) ||
+			failure.Operation == string(mt5.HistoryHandshake) || failure.Operation == string(mt5.HistoryAccountSync))
+		if !setupTimeout && !collectionConnectionFailure(err) {
 			break
+		}
+		if deadline, ok := ctx.Deadline(); mt5Backfill && i < len(backups) && ok &&
+			!errors.Is(ctx.Err(), context.Canceled) && time.Until(deadline) < mt5HistoryBackupFloor {
+			return target.ID, errors.Join(err, errHistoryRetryBudget)
 		}
 		// Skip a backup that became ineligible after the job was claimed.
 		for i < len(backups) && ctx.Err() == nil {
 			backup, switchErr := e.accounts.SwitchCollectionTarget(ctx, account, run, runID, backups[i])
 			if switchErr == nil {
-				failure := classify(err)
-				if target.MT5 != nil {
-					failure = classifyMT5(err)
-				}
 				e.logger.Info("collection_endpoint_fallback", "run_id", runID, "attempt", i+2, "code", failure.Code, "operation", failure.Operation,
 					"from_endpoint_revision", target.Revision, "to_endpoint_revision", backup.Revision)
 				target = backup
