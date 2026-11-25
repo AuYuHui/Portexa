@@ -90,8 +90,13 @@ def main():
 
             account_id = page.url.split("/accounts/")[-1]
             page.get_by_role("link", name="查看实时持仓", exact=True).click()
-            expect(page.locator("[data-live-position]")).to_have_count(1)
-            expect(page.locator("[data-live-position]")).to_contain_text("0.00123456")
+            position = page.locator("[data-live-position]")
+            expect(position).to_have_count(1)
+            expect(position).to_contain_text("0.00123456")
+            expect(position.get_by_role("cell", name="−0.10 USD", exact=True)).to_be_visible()
+            expect(position.get_by_role("cell", name="−0.20 USD", exact=True)).to_be_visible()
+            expect(position.get_by_role("cell")).to_have_count(10)
+            expect(position.get_by_role("button")).to_have_count(0)
             expect(page.locator("[data-live-total]")).to_contain_text("+4.70")
             page.get_by_role("navigation").get_by_role("link", name="订单历史", exact=True).click()
             expect(page.locator(".order-account-select select")).to_have_value(account_id)

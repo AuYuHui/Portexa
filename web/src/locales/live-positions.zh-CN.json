@@ -13,7 +13,6 @@
     "noAccounts": "尚无账户。",
     "positionSymbol": "持仓编号 / 品种",
     "sideLots": "方向 / 手数",
-    "showDetails": "查看 #{ticket} 持仓明细",
     "stopLoss": "止损价",
     "takeProfit": "止盈价",
     "swap": "隔夜费",
