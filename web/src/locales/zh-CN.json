@@ -1,4 +1,12 @@
 {
+  "orders": {
+    "positions": "实时持仓",
+    "history": "订单历史",
+    "selectAccount": "选择账户",
+    "viewPositions": "查看实时持仓",
+    "viewHistory": "查看订单历史",
+    "historyForTicket": "查看 #{ticket} 的平仓记录"
+  },
   "account": {
     "snapshotCollectionQueued": "快照采集已加入队列。",
     "allAccounts": "全部账户",
@@ -550,6 +558,7 @@
     "networkUnavailable": "无法连接服务，请检查网络后重试。"
   },
   "serverMessages": {
+    "invalidOrderHistoryFilter": "订单历史筛选或页码无效",
     "mt5FeeDeal": "MT5 成交类型为费用",
     "mt5InterestDeal": "MT5 成交类型为利息",
     "mt5DividendDeal": "MT5 成交类型为股息",

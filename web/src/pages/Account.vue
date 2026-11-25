@@ -116,7 +116,7 @@ async function deleteAccount() {
     if (id.value === accountID) await router.replace("/");
     queryClient.removeQueries({
       predicate: (query) => query.queryKey[1] === accountID &&
-        ["account", "snapshots", "funds", "deals", "equity-history"].includes(String(query.queryKey[0])),
+        ["account", "snapshots", "funds", "deals", "equity-history", "live-positions", "order-history"].includes(String(query.queryKey[0])),
     });
     await Promise.all([
       refreshAccounts(),
@@ -148,6 +148,10 @@ async function deleteAccount() {
             {{ data.account.broker_name }} <span class="divider-dot">/</span>
             {{ data.account.server_name }} · {{ data.account.protocol.toUpperCase() }}
           </p>
+          <div class="account-order-links">
+            <RouterLink :to="{ path: '/positions', query: { account: id } }" class="text-button">{{ t('orders.viewPositions') }}</RouterLink>
+            <RouterLink :to="{ path: '/order-history', query: { account: id } }" class="text-button">{{ t('orders.viewHistory') }}</RouterLink>
+          </div>
         </div>
         <div class="page-actions">
           <button class="btn" :disabled="busy || deleting" @click="showDeleteConfirmation">

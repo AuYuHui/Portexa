@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { localizeMessage } from "./i18n";
 import { useI18n } from "vue-i18n";
-import { onMounted, onUnmounted, ref } from "vue";
-import { RouterLink, RouterView, useRouter } from "vue-router";
+import { computed, onMounted, onUnmounted, ref } from "vue";
+import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import {
   LayoutDashboard,
+  ListTree,
+  History,
   SlidersHorizontal,
   LogOut,
   ShieldCheck,
@@ -22,6 +24,11 @@ const { t } = useI18n();
 
 const session = useSession();
 const router = useRouter();
+const route = useRoute();
+const orderAccountQuery = computed(() => {
+  const id = route.params.id || route.query.account;
+  return typeof id === "string" && id ? { account: id } : {};
+});
 const loadError = ref<string | (() => string)>("");
 async function bootstrap() {
   loadError.value = "";
@@ -63,12 +70,10 @@ onUnmounted(() => {
   <Login v-else-if="!session.authenticated" />
   <div v-else class="app-shell">
     <aside class="sidebar">
-      <RouterLink to="/" class="brand" :aria-label="t('app.portexaHome')"
-        ><span class="brand-mark"><Layers3 :size="24" /></span>Portexa<span
-          class="brand-dot"
-          >.</span
-        ></RouterLink
-      >
+      <RouterLink to="/" class="brand" :aria-label="t('app.portexaHome')">
+        <span class="brand-mark"><Layers3 :size="24" /></span>
+        <span class="brand-name">Portexa<span class="brand-dot">.</span></span>
+      </RouterLink>
       <div class="workspace-label">{{ t('app.personalAssetWorkspace') }}</div>
       <nav :aria-label="t('app.mainNavigation')">
         <RouterLink to="/" class="nav-link" exact-active-class="nav-active"
@@ -76,6 +81,12 @@ onUnmounted(() => {
             class="nav-arrow"
             :size="15"
         /></RouterLink>
+        <RouterLink :to="{ path: '/positions', query: orderAccountQuery }" class="nav-link" active-class="nav-active" :title="t('orders.positions')">
+          <ListTree :size="19" />{{ t('orders.positions') }}
+        </RouterLink>
+        <RouterLink :to="{ path: '/order-history', query: orderAccountQuery }" class="nav-link" active-class="nav-active" :title="t('orders.history')">
+          <History :size="19" />{{ t('orders.history') }}
+        </RouterLink>
         <RouterLink to="/analytics" class="nav-link" active-class="nav-active"
           ><ChartNoAxesCombined :size="19" />{{ t('analytics.title') }}</RouterLink>
         <RouterLink to="/settings" class="nav-link" active-class="nav-active"
@@ -95,11 +106,7 @@ onUnmounted(() => {
         <span class="breadcrumb"
           >{{ t('app.workspace') }} <span>/</span>
           <strong>{{
-            $route.path === "/analytics" ? t('analytics.title') : $route.path === "/settings"
-              ? t('settings.connectionsSettings')
-              : $route.path.startsWith("/accounts/")
-                ? t('app.accountDetails')
-                : t('overview.accountOverview')
+            $route.meta.title?.() || t('overview.accountOverview')
           }}</strong></span
         >
         <div class="topbar-actions">

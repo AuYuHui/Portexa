@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import expect, sync_playwright
 
@@ -76,6 +77,18 @@ def check_locale(browser, origin, locale, artifacts):
     for row, event in zip(rows.all(), activity_body["items"]):
         expect(row).to_contain_text("#" + event["order"]["order_ticket"])
         expect(row).to_contain_text(event["symbol"])
+    link = dialog.locator('a[href^="/order-history?"]').first
+    closed = next(event for event in activity_body["items"] if event["kind"] == "trade")
+    ticket = closed["order"].get("deal_ticket") or closed["order"]["order_ticket"]
+    href = link.get_attribute("href")
+    assert parse_qs(urlparse(href).query) == {
+        "account": [closed["account_id"]], "from": [selected["date"]], "to": [selected["date"]], "ticket": [ticket],
+    }
+    history_page = context.new_page()
+    history_page.goto(origin + href)
+    expect(history_page.locator("[data-history-row]")).to_have_count(1)
+    expect(history_page.locator("[data-history-row]")).to_contain_text(ticket)
+    history_page.close()
     expect(dialog.locator('[data-day-metric="realized"] dd')).to_contain_text(result["currency"])
     dialog.screenshot(path=str(artifacts / f"day-{locale}.png"))
     dialog.get_by_role("button", name="Close" if english else "关闭", exact=True).click()

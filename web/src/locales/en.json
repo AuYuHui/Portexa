@@ -1,4 +1,12 @@
 {
+  "orders": {
+    "positions": "Live positions",
+    "history": "Order history",
+    "selectAccount": "Select an account",
+    "viewPositions": "View live positions",
+    "viewHistory": "View order history",
+    "historyForTicket": "View closed trades for #{ticket}"
+  },
   "account": {
     "snapshotCollectionQueued": "Snapshot collection queued.",
     "allAccounts": "All accounts",
@@ -550,6 +558,7 @@
     "networkUnavailable": "Unable to connect. Check your network and retry."
   },
   "serverMessages": {
+    "invalidOrderHistoryFilter": "Invalid order history filters or page number",
     "mt5FeeDeal": "The MT5 deal type records an expense.",
     "mt5InterestDeal": "The MT5 deal type records interest.",
     "mt5DividendDeal": "The MT5 deal type records dividends.",

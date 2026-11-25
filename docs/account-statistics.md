@@ -4,6 +4,14 @@
 
 账户详情的「单笔最大平仓净亏损」和「单笔最大平仓净盈利」使用当日完整成交历史，与同一份日报按交易服务器日期统计。MT4 按已平仓订单比较，MT5 按平仓成交比较（包括部分平仓）。净额包含该笔成交已报告的费用，保持账户原币，显示单号、品种及服务器平仓时间。没有盈利或亏损时，对应指标显示 `—`。
 
+## 实时持仓与订单历史
+
+侧栏和账户详情都可打开这两个独立页面，金额使用所选账户的原币。
+
+- **实时持仓**（`/positions`）展示最近一次成功采集的持仓，按单笔浮动净盈亏从低到高排列。可以按品种、买卖方向和亏损筛选。页首保留该账户全部持仓的净额，筛选结果另计小计。挂单不参与持仓笔数或浮亏。页面显示采集时间，首次采集前金额与笔数均为未知。
+- **订单历史**（`/order-history`）默认显示北京时间今天的 MT4 平仓订单或 MT5 平仓成交。可以选择「全部历史」或指定起止日期，并按品种、方向、盈亏结果和单号筛选。筛选栏下方直接列出每笔订单及其净盈亏，每页固定 50 条，可直接跳页。
+- MT5 部分平仓、反手、对冲平仓按成交分别展示。订单号可找到同一订单关联的平仓成交，成交号可定位到单笔。成交方向取自该笔成交。平仓成交净额包含该笔报告的费用；当日开仓成交入账的费用属于收益日历的当日已实现盈亏。
+
 ## 当日统计
 
 “当日”采用已确认的交易服务器自然日，按服务器墙钟的 `[00:00, 次日00:00)` 归属。MT4 对应每条已平仓买卖订单，包含以前开仓、当日平仓的订单。MT5 按入账的成交统计，详见 [MT5 成交与资金口径](#mt5-成交与资金口径)。下表的费用公式以 MT4 为例。
@@ -53,10 +61,12 @@ DPrime 备注规则根据用户确认的券商含义补充，忽略大小写和�
 | --- | --- |
 | `POST /api/accounts/{id}/history/sync` | 合并回填和重查需求，返回202；不在请求内拨号 |
 | `GET /api/accounts/{id}/funds` | 按服务器墙钟及流水编号倒序分页，包含余额和信用流水 |
+| `GET /api/accounts/{id}/positions` | 最新持仓、账户浮动净盈亏与筛选小计。支持 `symbol`、`side=buy/sell` 和 `loss_only=true` |
+| `GET /api/accounts/{id}/order-history` | 支持 `page`（从 1 开始）、`from`、`to`（北京时间含首尾日期）、`symbol`、`side`、`result=profit/loss/flat` 和 `ticket` |
 | `GET /api/accounts/{id}/deals` | 按服务器墙钟毫秒及成交号倒序分页，返回当前单位版本已发布的 MT5 成交 |
 | `PUT /api/accounts/{id}/funds/{ticket}/classification` | 追加整笔流水人工校正，要求源版本与上次人工校正版本匹配 |
 
-流水和成交查询均支持 `limit`（1–100，默认50）和 `cursor`（取上页响应的 `next_cursor`）。资金流水支持 `unclassified=1`。分类请求含 `trade_revision`、`classification_revision`（首次为0）、`category`、`reason`。分类方向错误或信用金返回400，版本冲突返回409；客户端应重新读取流水核对。读取要求登录，写入还要求 Origin 与 CSRF。
+`/funds` 和 `/deals` 支持 `limit`（1–100，默认 50）和 `cursor`（取上页响应的 `next_cursor`）。订单历史使用 `page` 跳页，每页固定 50 条。资金流水支持 `unclassified=1`。分类请求含 `trade_revision`、`classification_revision`（首次为0）、`category`、`reason`。分类方向错误或信用金返回400，版本冲突返回409；客户端应重新读取流水核对。读取要求登录，写入还要求 Origin 与 CSRF。
 
 版本5迁移建立 `history_coverage`、`history_runs`、`history_order_revisions`、`history_order_heads`、`cash_flow_classifications`，版本6增加备注、自动结果和规则版本。SDK 仅输出224字节记录中 `0x94` 起的32字节备注，依据[已有记录布局研究](research/mt4-mobile-auth-static.md#78-224b-traderecord的可用字段)，业务规则仍在主工程。
 

@@ -1,0 +1,22 @@
+{
+  "livePositions": {
+    "lastSnapshot": "Last snapshot {time} · Beijing time",
+    "positionCount": "Open positions",
+    "symbol": "Symbol",
+    "side": "Side",
+    "allSymbols": "All symbols",
+    "allSides": "All sides",
+    "lossOnly": "Losing positions only",
+    "matches": "{count} matching positions · Net P/L",
+    "noMatches": "No positions match these filters.",
+    "empty": "There were no open positions at the last snapshot.",
+    "noAccounts": "No accounts yet.",
+    "positionSymbol": "Position ID / symbol",
+    "sideLots": "Side / lots",
+    "showDetails": "Position details for #{ticket}",
+    "stopLoss": "Stop loss",
+    "takeProfit": "Take profit",
+    "swap": "Swap",
+    "taxes": "Taxes"
+  }
+}

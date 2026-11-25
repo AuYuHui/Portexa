@@ -100,8 +100,15 @@ const clock = new Intl.DateTimeFormat("en-GB", {
               <td>
                 <strong>{{ event.symbol }}</strong>
                 {{ sides[event.order.side] }} · {{ t("analytics.tradeLots", { lots: event.order.lots }) }}
-                <small v-if="event.order.order_ticket">#{{ event.order.order_ticket }}</small>
-                <small v-if="event.order.deal_ticket">{{ t("analytics.dealNumber", { ticket: event.order.deal_ticket }) }}</small>
+                <small v-if="event.order.order_ticket && (event.order.deal_ticket || event.kind !== 'trade')">#{{ event.order.order_ticket }}</small>
+                <small v-if="event.kind === 'trade'">
+                  <RouterLink
+                    :to="{ path: '/order-history', query: { account: event.account_id, from: day.date, to: day.date, ticket: event.order.deal_ticket || event.order.order_ticket } }"
+                    class="text-button"
+                    :aria-label="t('orders.historyForTicket', { ticket: event.order.deal_ticket || event.order.order_ticket })"
+                  >{{ event.order.deal_ticket ? t("analytics.dealNumber", { ticket: event.order.deal_ticket }) : "#" + event.order.order_ticket }}</RouterLink>
+                </small>
+                <small v-else-if="event.order.deal_ticket">{{ t("analytics.dealNumber", { ticket: event.order.deal_ticket }) }}</small>
                 <RouterLink v-if="!accountId && accountNames[event.account_id]" :to="`/accounts/${event.account_id}`" class="text-button">
                   {{ accountNames[event.account_id] }}
                 </RouterLink>

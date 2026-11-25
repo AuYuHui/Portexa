@@ -88,6 +88,28 @@ def main():
             daily = page.get_by_role("region", name="当日利润与结余", exact=True)
             expect(daily).to_contain_text(re.compile(r"当日胜率\s*33\.33%"))
 
+            account_id = page.url.split("/accounts/")[-1]
+            page.get_by_role("link", name="查看实时持仓", exact=True).click()
+            expect(page.locator("[data-live-position]")).to_have_count(1)
+            expect(page.locator("[data-live-position]")).to_contain_text("0.00123456")
+            expect(page.locator("[data-live-total]")).to_contain_text("+4.70")
+            page.get_by_role("navigation").get_by_role("link", name="订单历史", exact=True).click()
+            expect(page.locator(".order-account-select select")).to_have_value(account_id)
+            expect(page.get_by_role("button", name="今天", exact=True)).to_have_attribute("aria-pressed", "true")
+            page.get_by_role("button", name="全部历史", exact=True).click()
+            rows = page.locator("[data-history-row]")
+            expect(rows.filter(has_text="8000001002")).to_have_count(1)
+            expect(rows.filter(has_text="8000001001")).to_have_count(0)
+            expect(rows.filter(has_text="8000001005")).to_have_count(0)
+            page.locator("[data-history-filter=result]").select_option("loss")
+            page.locator("[data-history-apply]").click()
+            expect(rows).to_have_count(1)
+            rows.first.get_by_role("button").click()
+            expect(dialog).to_contain_text("8000001003")
+            expect(dialog).to_contain_text("8000000022")
+            expect(dialog).to_contain_text("−4.50")
+            dialog.get_by_role("button", name="关闭", exact=True).click()
+
             page.goto(ORIGIN + "/analytics")
             with page.expect_response(lambda response: "/api/analytics?" in response.url and "account_id=" in response.url) as analysis:
                 page.locator("#analytics-account").select_option(label="浏览器 MT5 合成账户 · 7000000001")

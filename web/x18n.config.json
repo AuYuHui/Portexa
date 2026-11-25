@@ -3,7 +3,11 @@
   "sourceLocale": "zh-CN",
   "locales": ["zh-CN", "en"],
   "presets": ["vue-i18n"],
-  "resources": [{ "pattern": "src/locales/{locale}.json" }],
+  "resources": [
+    { "pattern": "src/locales/{locale}.json" },
+    { "pattern": "src/locales/live-positions.{locale}.json" },
+    { "pattern": "src/locales/order-history.{locale}.json" }
+  ],
   "usage": {
     "include": ["src/**/*.vue", "src/**/*.ts"],
     "keysInUse": ["serverMessages.*"]

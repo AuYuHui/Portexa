@@ -168,7 +168,7 @@ func (s *Service) Servers(ctx context.Context) ([]ServerView, error) {
 	return views, err
 }
 
-func (s *Service) readView(tx *gorm.DB, account storage.Account, now int64, settings storage.CollectionSettings) (AccountView, error) {
+func (s *Service) readView(tx *gorm.DB, account storage.Account, now int64, settings storage.CollectionSettings, includeHistory bool) (AccountView, error) {
 	staleAfter := snapshotStaleAfter(settings)
 	view := AccountView{ID: account.ID, ServerID: account.ServerID, EndpointID: account.PinnedEndpointID,
 		BackupEndpointIDs: backupIDs(account),
@@ -238,6 +238,9 @@ func (s *Service) readView(tx *gorm.DB, account storage.Account, now int64, sett
 	} else if view.SyncState != "running" && account.NextSyncAtMS <= now {
 		view.SyncState = "queued"
 	}
+	if !includeHistory {
+		return view, nil
+	}
 	view.Daily, err = readDailyView(tx, account, server, time.UnixMilli(now))
 	if err != nil {
 		return view, err
@@ -266,7 +269,7 @@ func (s *Service) list(ctx context.Context) ([]AccountView, storage.CollectionSe
 		}
 		now := s.Now().UnixMilli()
 		for _, account := range list {
-			view, err := s.readView(tx, account, now, settings)
+			view, err := s.readView(tx, account, now, settings, true)
 			if err != nil {
 				return err
 			}
@@ -278,6 +281,10 @@ func (s *Service) list(ctx context.Context) ([]AccountView, storage.CollectionSe
 }
 
 func (s *Service) Detail(ctx context.Context, id, order string) (AccountDetail, error) {
+	return s.readDetail(ctx, id, order, true)
+}
+
+func (s *Service) readDetail(ctx context.Context, id, order string, includeHistory bool) (AccountDetail, error) {
 	if order == "" {
 		order = "ticket"
 	}
@@ -294,7 +301,7 @@ func (s *Service) Detail(ctx context.Context, id, order string) (AccountDetail, 
 		if err != nil {
 			return err
 		}
-		detail.Account, err = s.readView(tx, account, s.Now().UnixMilli(), settings)
+		detail.Account, err = s.readView(tx, account, s.Now().UnixMilli(), settings, includeHistory)
 		if detail.Account.Daily.TimeZone != "" {
 			detail.ServerTimeStatus = "verified"
 		}

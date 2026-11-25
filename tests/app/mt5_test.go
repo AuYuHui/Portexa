@@ -133,6 +133,20 @@ func TestMT5SnapshotsDealsFundingAndAnalytics(t *testing.T) {
 	if err != nil || len(second.Items) != len(deals)-1 || second.Items[0].Ticket != testutil.MT5UnknownFundingTicket || second.NextCursor != "" {
 		t.Fatalf("deal page cursor lost a wide ticket: %+v, %v", second, err)
 	}
+	closed, err := f.Accounts.OrderHistory(ctx, account.ID, accounts.OrderHistoryFilter{Page: 1, Ticket: 8_000_000_022})
+	if err != nil || closed.Total != 4 || len(closed.Items) != 4 || closed.KnownNetProfit.String() != "22.5" {
+		t.Fatalf("MT5 closing fills/aggregate: %+v, %v", closed, err)
+	}
+	for i, deal := range closed.Items {
+		expected := []string{"8000001004", "8000001003", "8000001002", "8000001014"}
+		if deal.OrderTicket != "8000000022" || deal.DealTicket != expected[i] || deal.OpenPrice != nil || deal.Lots.String() != "0.00123456" || deal.CloseTimeMS == nil {
+			t.Fatal(deal)
+		}
+	}
+	loss, err := f.Accounts.OrderHistory(ctx, account.ID, accounts.OrderHistoryFilter{Page: 1, Ticket: 8_000_001_003, Side: "buy", Result: "loss"})
+	if err != nil || loss.Total != 1 || loss.Items[0].NetProfit.String() != "-4.5" || loss.Items[0].Fee == nil {
+		t.Fatal(loss, err)
+	}
 	unknown, err := f.Accounts.Funds(ctx, account.ID, "", 10, true)
 	if err != nil || len(unknown.Items) != 1 || unknown.Items[0].Ticket != testutil.MT5UnknownFundingTicket {
 		t.Fatalf("unknown funding page: %+v, %v", unknown, err)

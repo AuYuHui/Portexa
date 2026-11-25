@@ -11,6 +11,12 @@ import Settings from "./pages/Settings.vue";
 import { defineAsyncComponent } from "vue";
 import "./style.css";
 
+declare module "vue-router" {
+  interface RouteMeta {
+    title?: () => string;
+  }
+}
+
 const router = createRouter({
   history: createWebHistory(),
   scrollBehavior(to, from, savedPosition) {
@@ -20,20 +26,17 @@ const router = createRouter({
     return { top: 0 };
   },
   routes: [
-    { path: "/", component: Overview },
-    { path: "/accounts/:id", component: Account },
-    { path: "/settings", component: Settings },
-    { path: "/analytics", component: defineAsyncComponent(() => import("./pages/Analytics.vue")) },
+    { path: "/", component: Overview, meta: { title: () => t("overview.accountOverview") } },
+    { path: "/accounts/:id", component: Account, meta: { title: () => t("app.accountDetails") } },
+    { path: "/settings", component: Settings, meta: { title: () => t("settings.connectionsSettings") } },
+    { path: "/analytics", component: defineAsyncComponent(() => import("./pages/Analytics.vue")), meta: { title: () => t("analytics.title") } },
+    { path: "/positions", component: () => import("./pages/LivePositions.vue"), meta: { title: () => t("orders.positions") } },
+    { path: "/order-history", component: () => import("./pages/OrderHistory.vue"), meta: { title: () => t("orders.history") } },
     { path: "/:pathMatch(.*)*", redirect: "/" },
   ],
 });
 watchEffect(() => {
-  const path = router.currentRoute.value.path;
-  const title = path === "/analytics" ? t("analytics.title") : path === "/settings"
-    ? t("settings.connectionsSettings")
-    : path.startsWith("/accounts/")
-      ? t("app.accountDetails")
-      : t("overview.accountOverview");
+  const title = router.currentRoute.value.meta.title?.() || t("overview.accountOverview");
   document.title = `Portexa · ${title}`;
 });
 createApp(App)

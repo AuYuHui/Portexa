@@ -2,6 +2,10 @@ import { watch } from "vue";
 import { createI18n } from "vue-i18n";
 import zhCN from "./locales/zh-CN.json";
 import en from "./locales/en.json";
+import positionsZH from "./locales/live-positions.zh-CN.json";
+import positionsEN from "./locales/live-positions.en.json";
+import historyZH from "./locales/order-history.zh-CN.json";
+import historyEN from "./locales/order-history.en.json";
 
 export type Locale = "zh-CN" | "en";
 const preferenceKey = "portexa.locale";
@@ -24,7 +28,10 @@ export const i18n = createI18n({
   legacy: false,
   locale: initialLocale(),
   fallbackLocale: "zh-CN",
-  messages: { "zh-CN": zhCN, en },
+  messages: {
+    "zh-CN": { ...zhCN, ...positionsZH, ...historyZH },
+    en: { ...en, ...positionsEN, ...historyEN },
+  },
 });
 export const t = i18n.global.t;
 export const locale = i18n.global.locale;

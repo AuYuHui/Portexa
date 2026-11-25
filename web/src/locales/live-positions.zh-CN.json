@@ -1,0 +1,22 @@
+{
+  "livePositions": {
+    "lastSnapshot": "最近采集 {time} · 北京时间",
+    "positionCount": "持仓笔数",
+    "symbol": "品种",
+    "side": "方向",
+    "allSymbols": "全部品种",
+    "allSides": "全部方向",
+    "lossOnly": "只看浮亏",
+    "matches": "筛选结果 {count} 笔，合计",
+    "noMatches": "没有符合筛选条件的持仓。",
+    "empty": "这次采集时账户为空仓。",
+    "noAccounts": "尚无账户。",
+    "positionSymbol": "持仓编号 / 品种",
+    "sideLots": "方向 / 手数",
+    "showDetails": "查看 #{ticket} 持仓明细",
+    "stopLoss": "止损价",
+    "takeProfit": "止盈价",
+    "swap": "隔夜费",
+    "taxes": "税费"
+  }
+}
