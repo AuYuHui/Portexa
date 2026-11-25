@@ -272,13 +272,6 @@
   margin-top: 7px;
   line-height: 1.7;
 }
-.performance-section-no {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--color-text-faint);
-  margin-right: 10px;
-  letter-spacing: 1px;
-}
 .performance-chart-panel,
 .performance-calendar,
 .performance-contributions,
@@ -411,7 +404,7 @@
 .performance-calendar-day {
   border: 1px solid transparent;
   width: 100%;
-  min-height: 78px;
+  min-height: 64px;
   border-radius: 6px;
   text-align: left;
   padding: 9px 11px;
@@ -460,43 +453,8 @@
   font-weight: 600;
   overflow-wrap: anywhere;
 }
-.performance-calendar-day small {
-  font-size: 9px;
-  opacity: 0.7;
-}
-.performance-day-reason,
-.performance-day-floating {
-  font-size: 10px;
-  line-height: 1.5;
-  color: #475569;
-  overflow-wrap: anywhere;
-}
-.performance-day-floating {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 5px;
-}
-.performance-day-status {
+.performance-cell-weekday {
   display: none;
-}
-.performance-month-floating {
-  margin: -5px 24px 14px;
-  color: var(--color-muted);
-  font-size: 10px;
-  overflow-wrap: anywhere;
-}
-.performance-month-floating .num {
-  margin-left: 8px;
-}
-.performance-breakdown-reason {
-  flex-basis: 100%;
-  margin: 0;
-  color: var(--color-muted);
-  font-size: 11px;
-  line-height: 1.6;
-}
-.performance-day-partial {
-  font-size: 12px;
 }
 .performance-calendar-legend {
   display: flex;
@@ -657,40 +615,74 @@
 }
 .performance-day-details {
   display: grid;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
 }
-.performance-breakdown {
+.performance-day-profit {
   margin: 0;
-  display: grid;
-  gap: 10px;
-  padding: 16px;
-  border: 1px solid var(--color-line);
-  border-radius: 7px;
 }
-.performance-breakdown > div {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 6px 20px;
-  font-size: 12px;
+.performance-day-profit dt {
+  color: var(--color-text-secondary);
+  font-size: 13px;
 }
-.performance-breakdown dt {
+.performance-day-profit dd {
+  margin: 4px 0 0;
+  font-size: clamp(28px, 5vw, 38px);
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.performance-day-profit small {
+  color: var(--color-muted);
+  font-size: 14px;
+}
+.performance-day-details .is-positive,
+.performance-month-total .is-positive {
+  color: #06764e;
+}
+.performance-day-details .is-negative,
+.performance-month-total .is-negative {
+  color: #b4493d;
+}
+.performance-day-profit .is-missing {
+  font-size: 22px;
   color: var(--color-muted);
 }
-.performance-breakdown dd {
-  margin: 0;
+.performance-day-details h3 {
+  margin: 8px 0 0;
+  font-size: 15px;
 }
-.performance-breakdown > div:first-child {
-  font-weight: 600;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--color-line);
+.performance-orders-scroll {
+  max-height: 44dvh;
+  overflow: auto;
 }
-.performance-day-details .data-table {
-  min-width: 520px;
+.performance-orders {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
-.performance-day-details td small {
+.performance-orders th {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: 11px;
+}
+.performance-orders th,
+.performance-orders td {
+  border-bottom: 1px solid var(--color-line-subtle);
+  padding: 8px 2px;
+  vertical-align: top;
+}
+.performance-orders :is(th, td):last-child {
+  width: 35%;
+  text-align: right;
+}
+.performance-orders small {
   display: block;
-  font-size: 10px;
   color: var(--color-muted);
 }
 .performance-pagination {
@@ -794,32 +786,12 @@
     gap: 3px;
   }
   .performance-calendar-day {
-    min-height: 65px;
+    min-height: 52px;
     padding: 7px 2px;
     gap: 7px;
   }
   .performance-calendar-day strong {
-    font-size: 8px;
-  }
-  .performance-calendar-day small {
-    display: none;
-  }
-  .performance-day-reason {
-    display: none;
-  }
-  .performance-day-status,
-  .performance-day-floating {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    font-size: 7px;
-    line-height: 1.4;
-    color: #475569;
-    overflow-wrap: anywhere;
-  }
-  .performance-month-floating {
-    margin-left: 16px;
-    margin-right: 16px;
+    font-size: clamp(9px, 2.5vw, 12px);
   }
   .performance-day-number {
     font-size: 9px;
@@ -857,5 +829,26 @@
   }
   .performance-custom label {
     width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .performance-calendar-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .performance-weekday,
+  .performance-calendar-slot.is-padding {
+    display: none;
+  }
+  .performance-cell-weekday {
+    display: inline;
+    font-weight: 400;
+  }
+  .performance-calendar-day {
+    padding: 7px 5px;
+  }
+  .performance-calendar-day strong {
+    font-size: 11px;
   }
 }

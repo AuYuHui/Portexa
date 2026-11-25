@@ -37,7 +37,6 @@ const rows = computed(() =>
   >
     <div class="performance-panel-heading">
       <div>
-        <span class="performance-section-no">03 /</span>
         <h2>{{ t("analytics.contribution") }}</h2>
         <p>{{ t("analytics.comparisonHint") }}</p>
       </div>

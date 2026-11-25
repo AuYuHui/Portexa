@@ -14,7 +14,7 @@ func analyticsInput(r *http.Request, activity bool) (accounts.AnalyticsRequest, 
 	query := r.URL.Query()
 	input := accounts.AnalyticsRequest{Unit: "USD"}
 	for key, values := range query {
-		if len(values) != 1 || key != "from_ms" && key != "to_ms" && key != "account_id" && key != "unit" && !(activity && key == "offset") {
+		if len(values) != 1 || key != "from_ms" && key != "to_ms" && key != "account_id" && key != "unit" && !(activity && (key == "offset" || key == "kind")) {
 			return input, 0, &accounts.InputError{Message: "分析查询参数无效"}
 		}
 	}
@@ -29,6 +29,12 @@ func analyticsInput(r *http.Request, activity bool) (accounts.AnalyticsRequest, 
 	input.AccountID = query.Get("account_id")
 	if query.Has("unit") {
 		input.Unit = query.Get("unit")
+	}
+	if activity && query.Has("kind") {
+		if query.Get("kind") != "trades" {
+			return input, 0, &accounts.InputError{Message: "分析查询参数无效"}
+		}
+		input.TradesOnly = true
 	}
 	offset := 0
 	if activity && query.Has("offset") {

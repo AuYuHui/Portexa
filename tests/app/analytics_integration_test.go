@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -303,5 +304,34 @@ func TestAnalyticsHTTPAuthorizationValidationActivityAndReadFencing(t *testing.T
 	defer f.Store.Read.Callback().Query().Remove(callback)
 	if w := request(s, "GET", base, "", cookie, "", ""); w.Code != 409 {
 		t.Fatal("mixed revision report accepted", w.Code, w.Body)
+	}
+}
+
+func TestAnalyticsTradesFilteredBeforePagination(t *testing.T) {
+	f, a, now, start := analyticsFixture(t)
+	*now = start
+	analyticsSnapshot(t, f, a, *now, 1000, 0)
+	*now = start.Add(2 * time.Minute)
+	wall := uint32(start.Unix()) + 5
+	rows := []mt4.Trade{{Ticket: 1, Command: 6, OpenTime: wall, Comment: "Deposit", Profit: 500}}
+	for i := int32(1); i <= 51; i++ {
+		rows = append(rows, mt4.Trade{Ticket: 100 + i, Command: 1, OpenTime: wall, CloseTime: wall + 1, Symbol: "TESTUSD", VolumeHundredths: 17, Profit: 2, Commission: -0.5})
+	}
+	analyticsHistory(t, f, a, *now, rows)
+	s := apiServer(t, f)
+	cookie, _ := loginHTTP(t, s)
+	url := fmt.Sprintf("/api/analytics/activity?from_ms=%d&to_ms=%d&account_id=%s&kind=trades", start.UnixMilli(), now.UnixMilli(), a.ID)
+	for _, offset := range []int{0, 50} {
+		response := request(s, "GET", fmt.Sprintf("%s&offset=%d", url, offset), "", cookie, "", "")
+		var page accounts.AnalyticsActivity
+		if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &page) != nil || page.Total != 51 || len(page.Items) != min(50, 51-offset) {
+			t.Fatalf("unexpected filtered page at %d: %d %s", offset, response.Code, response.Body)
+		}
+		for index, event := range page.Items {
+			if event.Kind != "trade" || event.Order == nil || event.Order.OrderTicket != fmt.Sprint(101+offset+index) ||
+				event.Order.DealTicket != "" || event.Order.Side != "sell" || event.Order.Lots.String() != "0.17" || event.Amount.String() != "1.5" {
+				t.Fatalf("wrong order on page at %d: %+v", offset, event)
+			}
+		}
 	}
 }

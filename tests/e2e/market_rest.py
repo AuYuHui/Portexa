@@ -112,13 +112,13 @@ def check_locale(browser, origin, locale, artifacts):
     day = data["days"][0]
     page.locator(f'[data-calendar-date="{day["date"]}"]').click()
     dialog = page.get_by_role("dialog")
-    expect(dialog.locator("[data-rest-evidence]")).to_be_visible()
-    expect(dialog.locator(".performance-breakdown > div").first.locator("dd")).to_contain_text("0.00")
+    expect(dialog.locator('[data-day-metric="realized"] dd')).to_contain_text("0.00")
+    expect(dialog).to_contain_text("No trades in this period." if english else "该时段没有交易订单。")
     dialog.screenshot(path=str(artifacts / f"day-{locale}.png"))
     for width in (390, 320):
         page.set_viewport_size({"width": width, "height": 844})
         no_page_overflow(page)
-        expect(dialog.locator("[data-rest-evidence]")).to_be_visible()
+        expect(dialog.locator('[data-day-metric="realized"] dt')).to_have_text("Flat" if english else "持平")
         dialog.screenshot(path=str(artifacts / f"day-{locale}-{width}.png"))
     dialog.get_by_role("button", name="Close" if english else "关闭", exact=True).click()
     no_page_overflow(page)

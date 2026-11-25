@@ -14,10 +14,11 @@ import (
 var ErrAnalyticsChanged = errors.New("分析依据已更新，请刷新后重试")
 
 type AnalyticsRequest struct {
-	FromMS    int64
-	ToMS      int64
-	AccountID string
-	Unit      string
+	TradesOnly bool
+	FromMS     int64
+	ToMS       int64
+	AccountID  string
+	Unit       string
 }
 
 type AnalyticsReport struct {
@@ -82,7 +83,7 @@ func (s *Service) Analytics(ctx context.Context, requested AnalyticsRequest) (An
 	cutoff := input.ToMS
 	readOrders := 0
 	for _, account := range list {
-		source, err := s.analyticsSource(ctx, account, input.FromMS, input.ToMS, input.Unit)
+		source, err := s.analyticsSource(ctx, account, input)
 		if err != nil {
 			return view, err
 		}
@@ -215,12 +216,15 @@ func (s *Service) AnalyticsActivity(ctx context.Context, requested AnalyticsRequ
 	}
 	all := []analytics.Event{}
 	for _, account := range list {
-		source, err := s.analyticsSource(ctx, account, input.FromMS, input.ToMS, input.Unit)
+		source, err := s.analyticsSource(ctx, account, input)
 		if err != nil {
 			return view, err
 		}
 		view.Currency = source.input.Currency
 		for _, event := range source.input.Events {
+			if input.TradesOnly && !event.Trading() {
+				continue
+			}
 			if event.TimeMS >= input.FromMS && event.TimeMS < input.ToMS && (input.AccountID != "" || analyticsMember(account, event.TimeMS)) {
 				all = append(all, event)
 			}

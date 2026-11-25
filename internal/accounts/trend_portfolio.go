@@ -185,7 +185,7 @@ func (s *Service) addPortfolioAccount(ctx context.Context, account storage.Accou
 				// Rest proofs only need the bracketing snapshots' window. Loading
 				// the full chart range needlessly decodes every weekday trade.
 				sourceUntil = min(end.UnixMilli(), input.ToMS+padding)
-				source, err = s.analyticsSource(ctx, account, last.ObservedFromMS-999, sourceUntil, "USD")
+				source, err = s.analyticsSource(ctx, account, AnalyticsRequest{FromMS: last.ObservedFromMS - 999, ToMS: sourceUntil, Unit: "USD"})
 				if err != nil {
 					return err
 				}

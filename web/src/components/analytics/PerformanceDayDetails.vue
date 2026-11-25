@@ -7,7 +7,7 @@ import { api } from "../../api";
 import { signedMoney } from "../../format";
 import { localizeMessage } from "../../i18n";
 import { trendDate } from "../charts/trendFormat";
-import { calendarDayReason, performanceEvent, performanceReasons } from "./performanceFormat";
+import { profitTone } from "./performanceFormat";
 import type {
   PerformanceActivity,
   PerformanceDay,
@@ -15,6 +15,7 @@ import type {
 const props = defineProps<{
   day: PerformanceDay;
   accountId: string;
+  accountNames: Record<string, string>;
   unit: string;
   currency: string;
 }>();
@@ -23,6 +24,7 @@ const offset = ref(0);
 const { data, error, isPending, refetch } = useQuery({
   queryKey: computed(() => [
     "analytics-activity",
+    "trades",
     props.accountId,
     props.unit,
     props.day.from_ms,
@@ -35,6 +37,7 @@ const { data, error, isPending, refetch } = useQuery({
       to_ms: String(props.day.to_ms),
       unit: props.unit,
       offset: String(offset.value),
+      kind: "trades",
     });
     if (props.accountId) params.set("account_id", props.accountId);
     return api<PerformanceActivity>(
@@ -45,102 +48,84 @@ const { data, error, isPending, refetch } = useQuery({
     );
   },
 });
-const breakdown = computed(() => [
-  { key: "realized", label: t("analytics.realized"), metric: props.day.realized },
-  { key: "floating", label: t("analytics.floatingChange"), metric: props.day.floating_change },
-  { key: "other", label: t("analytics.otherIncome"), metric: props.day.other_income },
-  { key: "costs", label: t("analytics.costs"), metric: props.day.costs },
-  { key: "net", label: t("analytics.sampledNetProfit"), metric: props.day.net_profit },
-]);
+const tone = computed(() => profitTone(props.day.realized.value));
+const outcome = computed(() => ({
+  "is-positive": t("analytics.profit"),
+  "is-negative": t("analytics.loss"),
+  "is-flat": t("analytics.flat"),
+  "is-missing": t("analytics.dayDetails"),
+})[tone.value]);
+const sides = computed(() => ({
+  buy: t("mt5.buy"),
+  sell: t("mt5.sell"),
+  buy_canceled: t("mt5.buyCanceled"),
+  sell_canceled: t("mt5.sellCanceled"),
+}));
+const clock = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+});
 </script>
 
 <template>
   <div class="performance-day-details">
-    <p class="muted small">
-      {{ trendDate(day.from_ms) }} — {{ trendDate(day.to_ms) }} ·
-      {{ t("trend.beijing") }}
-    </p>
-    <p class="muted small">{{ t("analytics.realizedFormula") }}</p>
-    <dl class="performance-breakdown">
-      <div v-for="item in breakdown" :key="item.key" :data-day-metric="item.key">
-        <dt>{{ item.label }}</dt>
-        <dd class="num">{{ signedMoney(item.metric.value) }} {{ currency }}</dd>
-        <p v-if="item.metric.value === null && item.key !== 'net'" class="performance-breakdown-reason">{{ performanceReasons(item.metric.reasons) }}</p>
-      </div>
+    <dl class="performance-day-profit" data-day-metric="realized">
+      <dt>{{ outcome }}</dt>
+      <dd class="num" :class="tone">
+        <template v-if="day.realized.value !== null">
+          {{ signedMoney(day.realized.value) }} <small>{{ currency }}</small>
+        </template>
+        <template v-else>{{ t("analytics.calendarUnavailable") }}</template>
+      </dd>
     </dl>
-    <p v-if="day.net_profit.value !== null" class="muted small" data-sampled-valuation>
-      {{ t("analytics.boundaryEstimate", { seconds: Math.ceil(day.boundary_offset_ms / 1000) }) }}
-      <span v-if="day.later_boundary">{{ t("analytics.laterBoundary") }}</span>
-    </p>
-    <p v-if="day.net_profit.reasons.length" class="notice notice-warning">
-      {{ calendarDayReason(day) || performanceReasons(day.net_profit.reasons) }}
-    </p>
-    <p v-if="day.rest_carried_points" class="muted small" data-rest-evidence>
-      {{ t("collectionSettings.restValuations", { count: day.rest_carried_points }) }}
+    <p v-if="day.partial" class="muted small" data-day-window>
+      {{ trendDate(day.from_ms, true) }} – {{ trendDate(day.to_ms, true) }} · {{ t("trend.beijing") }}
     </p>
     <h3>{{ t("analytics.activity") }}</h3>
-    <p class="muted small">{{ t("analytics.activityHint") }}</p>
     <p v-if="error" role="alert" class="notice notice-error">
-      {{ localizeMessage(error.message)
-      }}<button class="text-button" @click="refetch()">
-        {{ t("overview.retry") }}
-      </button>
+      {{ localizeMessage(error.message) }}
+      <button class="text-button" @click="refetch()">{{ t("overview.retry") }}</button>
     </p>
-    <p v-if="isPending" role="status">{{ t("analytics.loading") }}</p>
-    <div v-if="data" class="table-scroll">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>{{ t("analytics.time") }}</th>
-            <th>{{ t("analytics.type") }}</th>
-            <th>{{ t("analytics.ticket") }}</th>
-            <th class="text-right">{{ t("analytics.amount") }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="event in data.items"
-            :key="`${event.account_id}:${event.ticket}:${event.revision}`"
-          >
-            <td class="num">{{ trendDate(event.time_ms) }}</td>
-            <td>
-              {{ performanceEvent(event.kind)
-              }}<small v-if="event.symbol">{{ event.symbol }}</small>
-            </td>
-            <td>
-              <RouterLink
-                :to="`/accounts/${event.account_id}`"
-                class="text-button"
-                >#{{ event.ticket }}</RouterLink
-              >
-            </td>
-            <td class="text-right num">
-              {{ signedMoney(event.amount) }} {{ data.currency }}
-            </td>
-          </tr>
-          <tr v-if="!data.items.length">
-            <td colspan="4" class="muted">{{ t("analytics.noActivity") }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <div v-if="data && data.total > 50" class="performance-pagination">
-      <button
-        class="btn btn-small"
-        :disabled="offset === 0"
-        @click="offset -= 50"
-      >
-        {{ t("trend.previous") }}</button
-      ><span
-        >{{ Math.floor(offset / 50) + 1 }} /
-        {{ Math.ceil(data.total / 50) }}</span
-      ><button
-        class="btn btn-small"
-        :disabled="offset + 50 >= data.total"
-        @click="offset += 50"
-      >
-        {{ t("trend.next") }}
-      </button>
-    </div>
+    <p v-else-if="isPending" role="status">{{ t("analytics.loadingTrades") }}</p>
+    <template v-else-if="data">
+      <div v-if="data.items.length" class="performance-orders-scroll" tabindex="0" role="region" :aria-label="t('analytics.activity')">
+        <table class="performance-orders">
+          <thead>
+            <tr>
+              <th scope="col">{{ t("positionTable.ticketSymbol") }}</th>
+              <th scope="col">{{ t("analytics.amount") }} · {{ data.currency }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="event in data.items" :key="`${event.account_id}:${event.order.deal_ticket || event.order.order_ticket}`">
+              <td>
+                <strong>{{ event.symbol }}</strong>
+                {{ sides[event.order.side] }} · {{ t("analytics.tradeLots", { lots: event.order.lots }) }}
+                <small v-if="event.order.order_ticket">#{{ event.order.order_ticket }}</small>
+                <small v-if="event.order.deal_ticket">{{ t("analytics.dealNumber", { ticket: event.order.deal_ticket }) }}</small>
+                <RouterLink v-if="!accountId && accountNames[event.account_id]" :to="`/accounts/${event.account_id}`" class="text-button">
+                  {{ accountNames[event.account_id] }}
+                </RouterLink>
+              </td>
+              <td>
+                <strong class="num" :class="profitTone(event.amount)">{{ signedMoney(event.amount) }}</strong>
+                <small class="num">{{ clock.format(event.time_ms) }}</small>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-else class="muted small">
+        {{ day.realized.value === null ? t("analytics.noVerifiedOrders") : t("analytics.noActivity") }}
+      </p>
+      <div v-if="data.total > 50" class="performance-pagination">
+        <button class="btn btn-small" :disabled="offset === 0" @click="offset -= 50">
+          {{ t("trend.previous") }}
+        </button>
+        <span>{{ Math.floor(offset / 50) + 1 }} / {{ Math.ceil(data.total / 50) }}</span>
+        <button class="btn btn-small" :disabled="offset + 50 >= data.total" @click="offset += 50">
+          {{ t("trend.next") }}
+        </button>
+      </div>
+    </template>
   </div>
 </template>

@@ -111,8 +111,16 @@ export interface AnalyticsReport {
   events_truncated: boolean;
   stale: boolean;
 }
+export interface PerformanceTrade extends PerformanceEvent {
+  order: {
+    order_ticket?: string;
+    deal_ticket?: string;
+    side: "buy" | "sell" | "buy_canceled" | "sell_canceled";
+    lots: string;
+  };
+}
 export interface PerformanceActivity {
-  items: PerformanceEvent[];
+  items: PerformanceTrade[];
   total: number;
   offset: number;
   currency: string;

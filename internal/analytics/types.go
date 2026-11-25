@@ -37,7 +37,15 @@ type ValuationWindow struct {
 	FromMS, ToMS int64
 }
 
+type TradeDetails struct {
+	OrderTicket string          `json:"order_ticket,omitempty"`
+	DealTicket  string          `json:"deal_ticket,omitempty"`
+	Side        string          `json:"side"`
+	Lots        decimal.Decimal `json:"lots"`
+}
+
 type Event struct {
+	Order           *TradeDetails    `json:"order,omitempty"`
 	TimeMS          int64            `json:"time_ms"`
 	AccountID       string           `json:"account_id"`
 	Ticket          int64            `json:"ticket"`

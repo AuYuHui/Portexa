@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"hash"
 	"sort"
+	"strconv"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 	"portexa/internal/analytics"
 	"portexa/internal/marketrest"
 	"portexa/internal/storage"
+	"portexa/mt5"
 )
 
 type analyticsCoverage struct {
@@ -34,7 +37,8 @@ type analyticsSource struct {
 	restPolicies    map[int64]storage.MarketRestPolicy
 }
 
-func (s *Service) analyticsSource(ctx context.Context, account storage.Account, from, to int64, unit string) (*analyticsSource, error) {
+func (s *Service) analyticsSource(ctx context.Context, account storage.Account, request AnalyticsRequest) (*analyticsSource, error) {
+	from, to, unit := request.FromMS, request.ToMS, request.Unit
 	source := &analyticsSource{account: account, cutoff: to, hash: sha256.New()}
 	source.input = analytics.Input{AccountID: account.ID, Label: account.Label, Currency: "USD", FromMS: from, ToMS: to,
 		Events: []analytics.Event{}, LedgerReasons: []string{}}
@@ -99,7 +103,7 @@ func (s *Service) analyticsSource(ctx context.Context, account storage.Account, 
 	if latest.RowsAffected > 0 {
 		source.cutoff = min(source.cutoff, (last.ObservedToMS+analytics.Minute-1)/analytics.Minute*analytics.Minute)
 	}
-	if err := s.analyticsEvents(ctx, source, from-(marketrest.Interval+marketrest.Grace).Milliseconds()-1000, to+(marketrest.Interval+marketrest.Grace).Milliseconds()+1, unit); err != nil {
+	if err := s.analyticsEvents(ctx, source, from-(marketrest.Interval+marketrest.Grace).Milliseconds()-1000, to+(marketrest.Interval+marketrest.Grace).Milliseconds()+1, request); err != nil {
 		return nil, err
 	}
 	// An already verified historical rest interval can cover a requested end
@@ -183,7 +187,35 @@ func classificationKey(order analyticsOrder) (string, string) {
 	return category, "automatic:" + version
 }
 
-func (s *Service) analyticsEvents(ctx context.Context, source *analyticsSource, from, to int64, unit string) error {
+func analyticsTradeDetails(order storage.HistoryOrder) *analytics.TradeDetails {
+	detail := &analytics.TradeDetails{Side: "buy"}
+	if order.Command == 1 {
+		detail.Side = "sell"
+	}
+	if order.ExactLots != nil {
+		detail.Lots = *order.ExactLots
+	} else {
+		detail.Lots = decimal.New(int64(order.VolumeHundredths), -2)
+	}
+	ticket := strconv.FormatInt(order.Ticket, 10)
+	if order.MT5DealType == nil {
+		detail.OrderTicket = ticket
+		return detail
+	}
+	detail.DealTicket = ticket
+	if order.MT5OrderTicket != nil && *order.MT5OrderTicket > 0 {
+		detail.OrderTicket = strconv.FormatInt(*order.MT5OrderTicket, 10)
+	}
+	switch *order.MT5DealType {
+	case mt5.DealBuyCanceled:
+		detail.Side = "buy_canceled"
+	case mt5.DealSellCanceled:
+		detail.Side = "sell_canceled"
+	}
+	return detail
+}
+
+func (s *Service) analyticsEvents(ctx context.Context, source *analyticsSource, from, to int64, request AnalyticsRequest) error {
 	const batchSize = 1000
 	var stamp uint32
 	var ticket int64
@@ -220,7 +252,7 @@ func (s *Service) analyticsEvents(ctx context.Context, source *analyticsSource, 
 				continue
 			}
 			amount := order.NetProfit
-			if unit == "USD" {
+			if request.Unit == "USD" {
 				if source.account.USDScale == nil {
 					continue
 				}
@@ -243,9 +275,13 @@ func (s *Service) analyticsEvents(ctx context.Context, source *analyticsSource, 
 				}
 			}
 			fmt.Fprintf(source.hash, "effective:%d:%d:%s:%s|", order.Ticket, instant, kind, key)
-			source.input.Events = append(source.input.Events, analytics.Event{TimeMS: instant, AccountID: source.account.ID,
+			event := analytics.Event{TimeMS: instant, AccountID: source.account.ID,
 				Ticket: order.Ticket, Revision: order.Revision, Kind: kind, Amount: amount, Symbol: order.Symbol,
-				Classification: key, SourceRunID: order.SourceRunID})
+				Classification: key, SourceRunID: order.SourceRunID}
+			if request.TradesOnly && event.Trading() {
+				event.Order = analyticsTradeDetails(order.HistoryOrder)
+			}
+			source.input.Events = append(source.input.Events, event)
 		}
 		if len(orders) < batchSize {
 			break

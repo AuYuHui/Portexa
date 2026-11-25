@@ -2,8 +2,8 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { ChevronLeft, ChevronRight } from "@lucide/vue";
-import { signedMoney, positive } from "../../format";
-import { calendarRealizedReason, performanceReasons } from "./performanceFormat";
+import { signedMoney } from "../../format";
+import { profitTone } from "./performanceFormat";
 import type { PerformanceDay, PerformanceResult } from "../../types/analytics";
 const props = defineProps<{
   days: PerformanceDay[];
@@ -11,7 +11,7 @@ const props = defineProps<{
   currency: string;
 }>();
 const emit = defineEmits<{ select: [day: PerformanceDay] }>();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const months = computed(() => [
   ...new Set(props.days.map((day) => day.date.slice(0, 7))),
 ]);
@@ -43,6 +43,7 @@ const cells = computed(() => {
   const count = new Date(
     Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0),
   ).getUTCDate();
+  const weekday = new Intl.DateTimeFormat(locale.value, { weekday: "short", timeZone: "UTC" });
   const byDate = new Map(props.days.map((day) => [day.date, day]));
   return Array.from(
     { length: Math.ceil((padding + count) / 7) * 7 },
@@ -51,27 +52,15 @@ const cells = computed(() => {
       if (number < 1 || number > count)
         return { key: `pad-${index}`, number: 0, day: undefined };
       const key = `${month.value}-${String(number).padStart(2, "0")}`;
-      return { key, number, day: byDate.get(key) };
+      return { key, number, weekday: weekday.format(new Date(`${key}T00:00:00Z`)), day: byDate.get(key) };
     },
   );
 });
-function tone(day?: PerformanceDay) {
-  const value = day?.realized.value;
-  if (value == null) return "is-missing";
-  if (/^-?0(?:\.0+)?$/.test(value)) return "is-flat";
-  return value.startsWith("-") ? "is-negative" : "is-positive";
-}
-function realizedLabel(day: PerformanceDay) {
-  return t("analytics.calendarRealized", {
-    value: signedMoney(day.realized.value),
-    currency: props.currency,
-  });
-}
 function dayLabel(day: PerformanceDay) {
-  return [day.date, realizedLabel(day), calendarRealizedReason(day),
-    `${t("analytics.floatingChange")} ${signedMoney(day.floating_change.value)} ${props.currency}`,
-    performanceReasons(day.floating_change.reasons),
-  ].filter(Boolean).join(" · ");
+  const amount = day.realized.value === null
+    ? t("analytics.calendarUnavailable")
+    : t("analytics.calendarRealized", { value: signedMoney(day.realized.value), currency: props.currency });
+  return [day.date, amount, day.partial && t("analytics.partialDay")].filter(Boolean).join(" · ");
 }
 </script>
 
@@ -82,7 +71,6 @@ function dayLabel(day: PerformanceDay) {
   >
     <div class="performance-panel-heading">
       <div>
-        <span class="performance-section-no">02 /</span>
         <h2>{{ t("analytics.calendar") }}</h2>
         <p>{{ t("analytics.calendarHint") }}</p>
       </div>
@@ -110,20 +98,12 @@ function dayLabel(day: PerformanceDay) {
       {{ t("analytics.monthProfit") }}
       <strong
         class="num"
-        :title="monthValue ? performanceReasons(monthValue.realized.reasons) || undefined : undefined"
-        :class="{
-          positive: monthValue?.realized.value && positive(monthValue.realized.value),
-          negative: monthValue?.realized.value?.startsWith('-'),
-        }"
+        :class="profitTone(monthValue?.realized.value)"
         data-calendar-month-realized
-        >{{ signedMoney(monthValue?.realized.value) }} {{ currency }}</strong
+        >{{ monthValue?.realized.value == null ? t("analytics.calendarUnavailable") : `${signedMoney(monthValue.realized.value)} ${currency}` }}</strong
       ><span v-if="monthValue?.partial">
         · {{ t("analytics.selectedMonthRange") }}</span
       >
-    </p>
-    <p class="performance-month-floating" data-calendar-month-floating>
-      {{ t("analytics.floatingChange") }}
-      <span class="num" :title="monthValue ? performanceReasons(monthValue.floating_change.reasons) || undefined : undefined">{{ signedMoney(monthValue?.floating_change.value) }} {{ currency }}</span>
     </p>
     <div class="performance-calendar-grid">
       <span
@@ -136,12 +116,13 @@ function dayLabel(day: PerformanceDay) {
         v-for="cell in cells"
         :key="cell.key"
         class="performance-calendar-slot"
+        :class="{ 'is-padding': !cell.number }"
       >
         <button
           v-if="cell.number"
           type="button"
           class="performance-calendar-day"
-          :class="tone(cell.day)"
+          :class="profitTone(cell.day?.realized.value)"
           :disabled="!cell.day"
           :aria-label="
             cell.day
@@ -152,31 +133,13 @@ function dayLabel(day: PerformanceDay) {
           :data-calendar-date="cell.key"
           @click="cell.day && emit('select', cell.day)"
         >
-          <span class="performance-day-number num"
-            >{{ cell.number
-            }}<span
-              v-if="cell.day?.partial"
-              class="performance-day-partial"
-              :title="t('analytics.partialDay')"
-              >*</span
-            ></span
-          >
-          <strong class="num" data-calendar-realized>{{
-            cell.day ? signedMoney(cell.day.realized.value) : "—"
-          }}</strong>
-          <template v-if="cell.day && calendarRealizedReason(cell.day)">
-            <span class="performance-day-reason" data-calendar-reason>{{ calendarRealizedReason(cell.day) }}</span>
-            <span class="performance-day-status">{{ t("analytics.calendarUnavailable") }}</span>
-          </template>
-          <span v-if="cell.day" class="performance-day-floating" data-calendar-floating :title="performanceReasons(cell.day.floating_change.reasons) || undefined">
-            <span>{{ t("analytics.calendarFloatingShort") }}</span>
-            <span class="num">{{ signedMoney(cell.day.floating_change.value) }}</span>
+          <span class="performance-day-number num">
+            <span>{{ cell.number }}<span v-if="cell.day?.partial" :title="t('analytics.partialDay')">*</span></span>
+            <span class="performance-cell-weekday">{{ cell.weekday }}</span>
           </span>
-          <small v-if="cell.day">{{
-            cell.day.trades === null
-              ? t("analytics.tradesUnknown")
-              : t("analytics.tradesCount", { count: cell.day.trades })
-          }}</small>
+          <strong v-if="cell.day" class="num" data-calendar-realized>{{
+            cell.day.realized.value === null ? t("analytics.calendarUnavailable") : signedMoney(cell.day.realized.value)
+          }}</strong>
         </button>
       </div>
     </div>

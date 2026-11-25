@@ -154,6 +154,18 @@ func TestMT5SnapshotsDealsFundingAndAnalytics(t *testing.T) {
 		activity.Items[2].Kind != "fee" || activity.Items[3].Kind != "dividend" {
 		t.Fatalf("unexpected MT5 activity: %+v, %v", activity, err)
 	}
+	tradesRequest := interval
+	tradesRequest.TradesOnly = true
+	trades, err := f.Accounts.AnalyticsActivity(ctx, tradesRequest, 0)
+	if err != nil || trades.Total != 2 || len(trades.Items) != 2 {
+		t.Fatalf("unexpected trade-only activity: %+v, %v", trades, err)
+	}
+	opening, closing := trades.Items[0], trades.Items[1]
+	if opening.Order == nil || opening.Order.DealTicket != "8000001013" || opening.Order.OrderTicket != "8000000022" ||
+		opening.Order.Side != "buy" || opening.Order.Lots.String() != "0.00123456" || opening.Amount.String() != "-1" ||
+		closing.Order == nil || closing.Order.Side != "sell" || closing.Amount.String() != "18" {
+		t.Fatalf("MT5 order details or booked fees lost: %+v, %+v", opening, closing)
+	}
 	seedMT5Valuations(t, f, account, interval.FromMS, interval.ToMS)
 	performance, err := f.Accounts.Analytics(ctx, interval)
 	metrics := performance.Result.Metrics

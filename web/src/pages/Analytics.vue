@@ -111,7 +111,6 @@ function openDay(day: PerformanceDay) {
         <span class="eyebrow">PORTEXA ANALYTICS</span>
         <h1>{{ t("analytics.title") }}<span class="title-dot">.</span></h1>
         <p>{{ t("analytics.subtitle") }}</p>
-        <p v-if="account ? currentAccount?.protocol === 'mt5' : accounts?.some((item) => item.protocol === 'mt5')" class="muted small">{{ t("mt5.analyticsEstimate") }}</p>
       </div>
       <button class="btn" :disabled="isFetching || invalid" @click="refetch()">
         <RefreshCw :size="15" :class="{ spin: isFetching }" />{{
@@ -194,6 +193,12 @@ function openDay(day: PerformanceDay) {
       <div v-for="n in 4" :key="n" class="skeleton" />
     </div>
     <template v-if="data && result">
+      <PerformanceCalendar
+        :days="result.days"
+        :months="result.months"
+        :currency="result.currency"
+        @select="openDay"
+      />
       <div class="performance-meta-bar">
         <p class="performance-scope-note">
           {{ trendDate(result.from_ms) }} — {{ trendDate(result.to_ms) }} ·
@@ -240,6 +245,7 @@ function openDay(day: PerformanceDay) {
         <span v-if="result.quality.unknown_cadence">{{ t('analytics.legacySamples', { count: result.quality.unknown_cadence }) }}</span>
         <span v-if="result.quality.rest_carried_points" data-rest-evidence>{{ t('collectionSettings.restValuations', { count: result.quality.rest_carried_points }) }}</span>
       </p>
+      <p v-if="account ? currentAccount?.protocol === 'mt5' : accounts?.some((item) => item.protocol === 'mt5')" class="muted small">{{ t("mt5.analyticsEstimate") }}</p>
       <PerformanceKpis :result="result" />
       <div class="performance-bridge">
         <span>{{ t("analytics.profitBreakdown") }}</span
@@ -261,7 +267,6 @@ function openDay(day: PerformanceDay) {
       >
         <div class="performance-panel-heading">
           <div>
-            <span class="performance-section-no">01 /</span>
             <h2>{{ t("analytics.performance") }}</h2>
             <p>{{ t("analytics.performanceHint") }}</p>
           </div>
@@ -306,12 +311,6 @@ function openDay(day: PerformanceDay) {
           ><small>{{ t("analytics.samplingNote") }}</small>
         </div>
       </section>
-      <PerformanceCalendar
-        :days="result.days"
-        :months="result.months"
-        :currency="result.currency"
-        @select="openDay"
-      />
       <AccountContribution v-if="!account" :accounts="data.accounts" />
       <RouterLink
         v-else
@@ -448,6 +447,7 @@ function openDay(day: PerformanceDay) {
         v-if="selectedDay && result"
         :key="`${account}:${selectedDay.date}`"
         :day="selectedDay"
+        :account-names="names"
         :account-id="account"
         :unit="unit"
         :currency="result.currency"

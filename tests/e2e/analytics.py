@@ -69,9 +69,14 @@ def check_locale(browser, origin, locale, artifacts):
     assert activity_body["total"] == selected["trades"]
     dialog = page.get_by_role("dialog")
     expect(dialog).to_be_visible()
-    expect(dialog).to_contain_text("Trades and fund entries" if english else "交易与资金流水")
-    expect(dialog.locator(".performance-breakdown > div").first.locator("dd")).not_to_contain_text("—")
-    expect(dialog.locator("[data-sampled-valuation]")).to_contain_text("later snapshot" if english else "日界后")
+    expect(dialog.get_by_role("heading", name="Trade orders" if english else "交易订单")).to_be_visible()
+    rows = dialog.locator("tbody tr")
+    expect(rows).to_have_count(len(activity_body["items"]))
+    assert sum(Decimal(event["amount"]) for event in activity_body["items"]) == Decimal(selected["realized"]["value"])
+    for row, event in zip(rows.all(), activity_body["items"]):
+        expect(row).to_contain_text("#" + event["order"]["order_ticket"])
+        expect(row).to_contain_text(event["symbol"])
+    expect(dialog.locator('[data-day-metric="realized"] dd')).to_contain_text(result["currency"])
     dialog.screenshot(path=str(artifacts / f"day-{locale}.png"))
     dialog.get_by_role("button", name="Close" if english else "关闭", exact=True).click()
 
@@ -192,7 +197,7 @@ def main():
                 check_locale(browser, origin, locale, args.artifacts)
         finally:
             browser.close()
-    print("PASS: reconciled KPI/bridge/months, realized calendar with missing midnight valuations, separate floating P/L, curves, activity, USD/USC, URL state, nulls, recovery, bilingual desktop/390/320; synthetic data only")
+    print("PASS: reconciled KPI/bridge/months, realized calendar with missing midnight valuations, daily P/L and individual trade orders, curves, USD/USC, URL state, nulls, recovery, bilingual desktop/390/320; synthetic data only")
 
 
 if __name__ == "__main__":
