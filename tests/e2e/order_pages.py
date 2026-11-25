@@ -33,7 +33,9 @@ def check_order_pages(browser, origin, english):
     account = accounts[100101]["id"]
     # An account omitted from the analytics seed retains its original open position.
     page.goto(origin + "/accounts/" + accounts[100103]["id"])
-    page.get_by_role("link", name="View live positions" if english else "查看实时持仓", exact=True).click()
+    with page.expect_response(lambda response: "/positions?" in response.url and response.request.method == "POST") as viewing:
+        page.get_by_role("link", name="View live positions" if english else "查看实时持仓", exact=True).click()
+    assert viewing.value.ok
     position = page.locator("[data-live-position]")
     expect(position).to_have_count(1)
     expect(position).to_contain_text("EURUSD")

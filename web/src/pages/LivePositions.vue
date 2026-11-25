@@ -48,9 +48,11 @@ const { data, error, isPending, refetch } = useQuery({
     if (instrument) params.set("symbol", instrument);
     if (direction) params.set("side", direction);
     if (losses) params.set("loss_only", "true");
-    return api<LivePositions>(`/accounts/${id}/positions?${params}`, "GET", undefined, signal);
+    const method = document.visibilityState === "visible" ? "POST" : "GET";
+    return api<LivePositions>(`/accounts/${id}/positions?${params}`, method, undefined, signal);
   },
-  refetchInterval: 10_000,
+  refetchInterval: 3_000,
+  refetchOnWindowFocus: "always",
 });
 watch(accountId, () => {
   symbol.value = "";

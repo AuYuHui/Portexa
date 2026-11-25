@@ -5,7 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"gorm.io/gorm"
 	"portexa/internal/accounts"
+	"portexa/internal/storage"
 	"portexa/internal/syncer"
 	"portexa/mt4"
 	"portexa/tests/testutil"
@@ -84,4 +86,90 @@ func TestLivePositionsPublishedSnapshotAndFilters(t *testing.T) {
 	if !late.Stale || *late.ObservedToMS != *all.ObservedToMS || len(late.Items) != 4 {
 		t.Fatal("stale snapshot status or retained positions incorrect")
 	}
+}
+
+func TestWatchingPositionsSchedulesEarlierSnapshot(t *testing.T) {
+	now := time.Now().UTC().Truncate(24 * time.Hour).Add(30 * time.Hour)
+	f, a := dailyFixture(t, &now, "UTC")
+	if err := f.Auth.Initialize(t.Context(), testutil.Password); err != nil {
+		t.Fatal(err)
+	}
+	s := apiServer(t, f)
+	cookie, csrf := loginHTTP(t, s)
+	url := "/api/accounts/" + a.ID + "/positions"
+	checkDue := func(at time.Time, want bool) {
+		t.Helper()
+		ids, err := f.Accounts.Due(t.Context(), at.UnixMilli(), 10)
+		if err != nil || (len(ids) == 1 && ids[0] == a.ID) != want {
+			t.Fatalf("due=%v want=%t error=%v", ids, want, err)
+		}
+	}
+	observed := now
+	now = observed.Add(5 * time.Second)
+	earlier := observed.Add(10 * time.Second)
+	for _, method := range []string{"GET", "POST"} {
+		origin := "https://portexa.test"
+		returned := request(s, method, url, "", cookie, "", origin)
+		if method == "GET" && returned.Code != 200 || method == "POST" && returned.Code != 403 {
+			t.Fatalf("%s returned %d", method, returned.Code)
+		}
+		checkDue(earlier, false)
+	}
+	history, err := f.Accounts.ClaimHistory(t.Context(), a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response := request(s, "POST", url, "", cookie, csrf, "https://portexa.test"); response.Code != 200 {
+		t.Fatalf("watching during history returned %d", response.Code)
+	}
+	checkDue(earlier, false)
+	if err := f.Accounts.FailHistory(t.Context(), history, accounts.Failure{Canceled: true, Code: "synthetic_done"}, false); err != nil {
+		t.Fatal(err)
+	}
+	moveJob := func(column string) {
+		t.Helper()
+		err := f.Store.Write(t.Context(), storage.High, func(tx *gorm.DB) error {
+			return tx.Model(&a).Update(column, observed.Add(5*time.Minute).UnixMilli()).Error
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	moveJob("next_daily_sync_at_ms")
+	if response := request(s, "POST", url, "", cookie, csrf, "https://portexa.test"); response.Code != 200 {
+		t.Fatalf("watching with upcoming history returned %d", response.Code)
+	}
+	// The retry becomes due just as the faster snapshot would start.
+	checkDue(earlier, false)
+	moveJob("next_history_sync_at_ms")
+	for i := 0; i < 2; i++ {
+		response := request(s, "POST", url, "", cookie, csrf, "https://portexa.test")
+		if response.Code != 200 {
+			t.Fatalf("watching returned %d", response.Code)
+		}
+		checkDue(earlier.Add(-time.Millisecond), false)
+		checkDue(earlier, true)
+	}
+	now = earlier
+	job, err := f.Accounts.Claim(t.Context(), a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := testutil.Result("USC")
+	result.Trades[0].Ticket = 10002
+	snapshot, rows, err := syncer.Convert(job, result, now.UnixMilli()-10, now.UnixMilli())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Accounts.Publish(t.Context(), job, snapshot, rows, now.Add(time.Minute).UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
+	response := request(s, "GET", url, "", cookie, "", "")
+	var view accounts.LivePositions
+	if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &view) != nil ||
+		view.ObservedToMS == nil || *view.ObservedToMS != now.UnixMilli() ||
+		len(view.Items) != 1 || view.Items[0].Ticket != 10002 {
+		t.Fatalf("new snapshot not reflected in positions: HTTP %d", response.Code)
+	}
+	checkDue(now.Add(10*time.Second), false)
 }

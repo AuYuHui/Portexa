@@ -20,10 +20,13 @@ func (s *Server) livePositions(w http.ResponseWriter, r *http.Request) {
 	}
 	view, err := s.accounts.LivePositions(r.Context(), r.PathValue("id"), accounts.PositionFilter{
 		Side: query.Get("side"), Symbol: query.Get("symbol"), LossOnly: query.Get("loss_only") == "true",
-	})
+	}, r.Method == http.MethodPost)
 	if err != nil {
 		fail(w, err)
 		return
+	}
+	if r.Method == http.MethodPost && view.SyncState == "queued" {
+		s.scheduler.Wake()
 	}
 	writeJSON(w, http.StatusOK, view)
 }
