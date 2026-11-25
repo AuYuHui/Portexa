@@ -53,6 +53,9 @@ func (s *Service) Recover(ctx context.Context) error {
 		if err := recoverHistory(tx, s.Now().UnixMilli(), "process_restart"); err != nil {
 			return err
 		}
+		if err := resumeMT5HistoryAfterReplyLimit(tx); err != nil {
+			return err
+		}
 		if err := tx.Model(&storage.SyncRun{}).Where("state IN ('running', 'queued')").Updates(map[string]any{
 			"state": "interrupted", "finished_at_ms": s.Now().UnixMilli(), "completion_reason": "process_restart",
 		}).Error; err != nil {

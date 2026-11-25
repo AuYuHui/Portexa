@@ -133,6 +133,9 @@ func (e *Engine) runHistory(ctx context.Context, id string) {
 	split := !failure.Canceled && (errors.Is(err, ErrHistoryTooLarge) || historyPhase && (failure.Code == "resource_limit" || failure.Code == "timeout"))
 	if split {
 		failure.Permanent = false
+		if job.MT5Config != nil && failure.Code == "resource_limit" {
+			failure.Operation = string(mt5.HistoryDeals)
+		}
 	}
 	logger.Warn("history_sync_failed", "code", failure.Code, "operation", originalOperation,
 		"duration_ms", finished.UnixMilli()-job.Run.StartedAtMS, "split", split, "retry_deferred", deferred)

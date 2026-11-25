@@ -120,7 +120,8 @@ func classifyMT5(err error) accounts.Failure {
 	case errors.Is(err, mt5.ErrConfig):
 		failure.Code, failure.Permanent = "invalid_config", true
 	case errors.Is(err, mt5.ErrResourceLimit):
-		failure.Code, failure.Permanent = "resource_limit", true
+		failure.Code = "resource_limit"
+		failure.Permanent = history == nil || history.Phase != mt5.HistoryDeals
 	case errors.Is(err, mt5.ErrConnection):
 		failure.Code = "connection"
 	case errors.Is(err, mt5.ErrProtocol):

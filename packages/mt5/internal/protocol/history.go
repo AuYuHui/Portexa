@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"io"
 	"math"
-	"time"
 )
 
 const (
@@ -39,123 +38,7 @@ func FetchHistoryDeals(conn io.ReadWriter, outState, inState *RollingPayload, se
 		return nil, err
 	}
 
-	var payload []byte
-	deadliner, hasDeadline := conn.(interface{ SetReadDeadline(time.Time) error })
-	for {
-		if hasDeadline {
-			if err := deadliner.SetReadDeadline(time.Now().Add(4 * time.Second)); err != nil {
-				return nil, err
-			}
-		}
-		header, err := ReadHeader(conn)
-		if err != nil {
-			return nil, err
-		}
-		raw, err := ReadFramePayload(conn, header.Length)
-		if err != nil {
-			return nil, err
-		}
-		compressed := header.Flags&FlagCompressed != 0
-		piece := inState.Decode(raw, compressed)
-		// Account updates share the rolling state but are not query replies.
-		if header.Type != TypeHistory || header.Sequence != seq {
-			continue
-		}
-		if compressed {
-			piece, err = DecompressLZO(piece)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if len(piece) > MaxFrameSize-len(payload) {
-			return nil, ErrFrameTooLarge
-		}
-		payload = append(payload, piece...)
-		if header.Flags&FlagFinal != 0 {
-			return parseHistoryReply(payload, login, start, end)
-		}
-	}
-}
-
-func parseHistoryReply(payload []byte, login uint64, start, end uint32) ([]DealRecord, error) {
-	const headerSize = 9
-	const monthHeaderSize = 12
-	if len(payload) < headerSize || payload[0] != dealHistoryCommand {
-		return nil, ErrProtocolMismatch
-	}
-	groups := binary.LittleEndian.Uint32(payload[5:9])
-	payload = payload[headerSize:]
-	if groups > uint32(len(payload)/monthHeaderSize) {
-		return nil, ErrProtocolMismatch
-	}
-	var deals []DealRecord
-	seen := make(map[uint64]struct{})
-	for range groups {
-		if len(payload) < monthHeaderSize+4 {
-			return nil, ErrProtocolMismatch
-		}
-		mode := binary.LittleEndian.Uint32(payload[8:12])
-		payload = payload[monthHeaderSize:]
-		var tickets map[uint64]struct{}
-		var footerSize int
-		switch mode {
-		case 0:
-			// The manifest lists every ticket. With no client cache,
-			// the reply must include a record for each listed ticket.
-			count := binary.LittleEndian.Uint32(payload[:4])
-			payload = payload[4:]
-			footerSize = 16
-			if len(payload) < footerSize+4 || count > uint32((len(payload)-footerSize-4)/(8+DealRecordSize)) {
-				return nil, ErrTruncatedFrame
-			}
-			tickets = make(map[uint64]struct{}, count)
-			for range count {
-				tickets[binary.LittleEndian.Uint64(payload[:8])] = struct{}{}
-				payload = payload[8:]
-			}
-			if len(tickets) != int(count) {
-				return nil, ErrProtocolMismatch
-			}
-		case 2, 3, 4:
-			// Full records without a ticket manifest.
-		default:
-			return nil, ErrProtocolMismatch
-		}
-		rows := binary.LittleEndian.Uint32(payload[:4])
-		payload = payload[4:]
-		if len(payload) < footerSize || rows > uint32((len(payload)-footerSize)/DealRecordSize) {
-			return nil, ErrTruncatedFrame
-		}
-		if tickets != nil && len(tickets) != int(rows) {
-			return nil, ErrProtocolMismatch
-		}
-		for range rows {
-			deal, err := ParseDealRecord(payload[:DealRecordSize], login)
-			payload = payload[DealRecordSize:]
-			if err != nil {
-				return nil, err
-			}
-			if tickets != nil {
-				if _, present := tickets[deal.Ticket]; !present {
-					return nil, ErrProtocolMismatch
-				}
-				delete(tickets, deal.Ticket)
-			}
-			if deal.Time < int64(start)*1000 || deal.Time >= int64(end)*1000 {
-				continue
-			}
-			if _, duplicate := seen[deal.Ticket]; duplicate {
-				return nil, ErrProtocolMismatch
-			}
-			seen[deal.Ticket] = struct{}{}
-			deals = append(deals, deal)
-		}
-		payload = payload[footerSize:]
-	}
-	if len(payload) != 0 {
-		return nil, ErrProtocolMismatch
-	}
-	return deals, nil
+	return parseHistoryReply(&historyReplyReader{conn: conn, state: inState, sequence: seq}, login, start, end)
 }
 
 func ParseDealRecord(row []byte, login uint64) (DealRecord, error) {

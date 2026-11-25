@@ -72,6 +72,8 @@ func TestHistoryRequiresCompleteReplyForRequestedSequence(t *testing.T) {
 	cacheReply := historyReply(nil)[:21]
 	cacheReply[17] = 1
 	manifestReply := historyReplyWithManifest(row)
+	oversizedManifest := bytes.Clone(manifestReply)
+	binary.LittleEndian.PutUint32(oversizedManifest[21:25], math.MaxUint32)
 	missingTicket := bytes.Clone(manifestReply)
 	binary.LittleEndian.PutUint64(missingTicket[25:33], 123)
 	for _, tt := range []struct {
@@ -96,6 +98,8 @@ func TestHistoryRequiresCompleteReplyForRequestedSequence(t *testing.T) {
 		{name: "complete trade", kind: protocol.TypeHistory, seq: seq, flags: protocol.FlagFinal, payload: historyReply(row), want: 1},
 		{name: "complete manifest", kind: protocol.TypeHistory, seq: seq, flags: protocol.FlagFinal, payload: manifestReply, want: 1},
 		{name: "unmatched manifest ticket", kind: protocol.TypeHistory, seq: seq, flags: protocol.FlagFinal, payload: missingTicket, fail: true},
+		{name: "oversized manifest count", kind: protocol.TypeHistory, seq: seq, flags: protocol.FlagFinal, payload: oversizedManifest, fail: true},
+		{name: "trailing bytes after complete records", kind: protocol.TypeHistory, seq: seq, flags: protocol.FlagFinal, payload: append(historyReply(row), 1), fail: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var table [256]byte
@@ -119,5 +123,52 @@ func TestHistoryRequiresCompleteReplyForRequestedSequence(t *testing.T) {
 				t.Fatalf("got %d deals and error %v", len(deals), err)
 			}
 		})
+	}
+}
+
+func TestHistoryReadsLargeMonthlyReplyForShortWindow(t *testing.T) {
+	const login, seq, start, end = 12345, 4, 1000, 1002
+	const count = 25_200
+	const matchingTicket = count
+	reply := historyReply(nil)[:21]
+	binary.LittleEndian.PutUint32(reply[17:21], 0)
+	reply = binary.LittleEndian.AppendUint32(reply, count)
+	for ticket := 1; ticket <= count; ticket++ {
+		reply = binary.LittleEndian.AppendUint64(reply, uint64(ticket))
+	}
+	reply = binary.LittleEndian.AppendUint32(reply, count)
+	row := historyTrade(login, (start-1)*1000)
+	for ticket := 1; ticket <= count; ticket++ {
+		if ticket == matchingTicket {
+			row = historyTrade(login, start*1000+123)
+		}
+		binary.LittleEndian.PutUint64(row[:8], uint64(ticket))
+		reply = append(reply, row...)
+	}
+	reply = append(reply, make([]byte, 16)...)
+	if len(reply) <= protocol.MaxFrameSize {
+		t.Fatal("fixture should exceed the single-frame limit")
+	}
+	var table [256]byte
+	encoder := protocol.NewRollingPayload(table)
+	frames := make([]io.Reader, 0)
+	for len(reply) > 0 {
+		size := min(len(reply), 128*1024)
+		var flags uint16
+		if size == len(reply) {
+			flags = protocol.FlagFinal
+		}
+		encoded := encoder.Encode(reply[:size])
+		header := protocol.PackHeader(protocol.FrameHeader{Type: protocol.TypeHistory, Sequence: seq, Flags: flags, Length: uint32(size)})
+		frames = append(frames, bytes.NewReader(header[:]), bytes.NewReader(encoded))
+		reply = reply[size:]
+	}
+	stream := struct {
+		io.Reader
+		io.Writer
+	}{io.MultiReader(frames...), io.Discard}
+	deals, err := protocol.FetchHistoryDeals(stream, protocol.NewRollingPayload(table), protocol.NewRollingPayload(table), seq, login, start, end)
+	if err != nil || len(deals) != 1 || deals[0].Ticket != matchingTicket {
+		t.Fatalf("want one matching deal from the complete month, got %d deals and error %v", len(deals), err)
 	}
 }
